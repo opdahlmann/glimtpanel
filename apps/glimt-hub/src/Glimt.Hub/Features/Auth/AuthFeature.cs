@@ -29,13 +29,16 @@ public static class AuthFeature
             };
         });
         services.AddAuthorization();
-        // TODO(step 2.2): AuthService, refresh tokens, e-mail confirmation, rate limiting, endpoints.
+        services.AddSingleton<UserStore>();
+        services.AddSingleton<RefreshTokenStore>();
+        services.AddSingleton<EmailTokenStore>();
+        services.AddSingleton<AuthSessions>();
         return services;
     }
 
     public static IEndpointRouteBuilder MapAuthFeature(this IEndpointRouteBuilder app)
     {
-        // TODO(step 2.2): POST /api/auth/register|confirm|login|refresh|logout|forgot|reset|password, GET /api/auth/me
+        app.MapAuthEndpoints();
         return app;
     }
 }

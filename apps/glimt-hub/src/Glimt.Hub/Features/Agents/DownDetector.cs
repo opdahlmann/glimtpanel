@@ -6,11 +6,12 @@ namespace Glimt.Hub.Features.Agents;
 /// <summary>
 /// Every 10 s: servers that are disconnected and not seen within GLIMT_DOWN_AFTER_SECONDS go from up
 /// to down and the change is broadcast. Every minute lastSeenAt of connected servers is persisted so
-/// "last seen" survives a hub restart (IMPLEMENTERINGSPLAN 2.5).
+/// "last seen" survives a hub restart (IMPLEMENTERINGSPLAN 2.5). Uses the injected TimeProvider, so the
+/// e2e clock (POST /api/e2e/advance) and FakeTimeProvider in tests drive it.
 /// </summary>
-internal sealed class DownDetector(
+public sealed class DownDetector(
     AgentRegistry registry,
-    IServerStatusPublisher publisher,
+    ILivePublisher publisher,
     IServerStore store,
     GlimtOptions options,
     TimeProvider clock,
@@ -37,7 +38,8 @@ internal sealed class DownDetector(
         }
     }
 
-    internal async Task SweepAsync(bool persist, CancellationToken cancellationToken)
+    /// <summary>One pass; public so the e2e feature can run it right after moving the clock.</summary>
+    public async Task SweepAsync(bool persist, CancellationToken cancellationToken)
     {
         var cutoff = clock.GetUtcNow() - options.DownAfter;
         foreach (var session in registry.All)
@@ -63,7 +65,7 @@ internal sealed class DownDetector(
             }
 
             logger.LogInformation("server {ServerId} ({Hostname}) is down, last seen {LastSeenAt}", session.ServerId, session.Hostname, session.LastSeenAt);
-            await publisher.PublishAsync(session, cancellationToken);
+            await publisher.StatusAsync(session, cancellationToken);
             await store.TouchAsync(session.ServerId, session.LastSeenAt?.UtcDateTime, session.Status, cancellationToken);
         }
     }

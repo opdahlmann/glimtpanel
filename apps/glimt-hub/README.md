@@ -6,7 +6,10 @@ aldri innom databasen (IMPLEMENTERINGSPLAN kapittel 4).
 
 Dette er «det gående skjelettet» fra steg 0.9, bygget i den formen som skal leve videre (steg 2.1, 2.5, 2.7):
 `hello` → `welcome`, register, `ServerStatus` til oversikten, nede-deteksjon, dev-seed og helsesjekk.
-Auth, buffer, varsler og projeksjoner kommer i fase 2 og 7.
+Fase 2 del A er på plass: auth (steg 2.2), konto og plasser (2.3), servere og nøkler (2.4), tilganger (2.8),
+Ubuntu-støtte, eksport og sletting (2.9). Del B også: agentregister med engangsnøkler, rotasjon og loggrelé (2.5),
+ringbuffer med historikk og lagring (2.6), SignalR-projeksjonene `Card`/`Server` med MessagePack (2.7) og demo-/e2e-modus
+(2.10). Varsler kommer i fase 7.
 
 ## Kjøre
 
@@ -27,17 +30,24 @@ er `unavailable`, dev-brukeren seedes ikke og servere lagres bare i minnet. Tilk
 ## Teste og bygge
 
 ```sh
-dotnet test apps/glimt-hub/Glimt.Hub.slnx                          # xUnit, trenger ikke MongoDB
+dotnet test apps/glimt-hub/Glimt.Hub.slnx                          # xUnit; Auth/Account/Servers/Access-testene trenger Docker (Testcontainers)
 dotnet build apps/glimt-hub/Glimt.Hub.slnx -warnaserror
 dotnet format apps/glimt-hub/Glimt.Hub.slnx --verify-no-changes    # kjøres i CI (lint)
 docker build -f apps/glimt-hub/Dockerfile -t glimt-hub:local .     # fra repo-rot
 ```
 
-Testene starter huben i prosessen med `WebApplicationFactory` og en uoppnåelig Mongo-adresse. De dekker
-`/healthz`, agent-WebSocket (innrullering med dev-nøkkel, gjenoppkobling med token, avvist nøkkel/token,
-snapshot, rammegrense), SignalR (`SubscribeOverview` → `ServerStatus`), at alle eksemplene i
-`packages/protocol/examples/` deserialiseres til riktig record, `PasswordHasher`, `DotEnv`, `GlimtOptions`
-og `vapid-keys`.
+Testene starter huben i prosessen med `WebApplicationFactory`. De uten database bruker en uoppnåelig Mongo-adresse
+og dekker `/healthz`, agent-WebSocket (innrullering med dev-nøkkel, gjenoppkobling med token, avvist nøkkel/token,
+snapshot, rammegrense), rotasjon og sletting via `IServerLifecycle` (`AgentsLifecycleTests`, med `FakeTimeProvider`),
+SignalR (`LiveHubTests`, `LiveProjectionTests`: `Card`/`Server` fra en falsk agent over JSON og MessagePack, abonnentteller,
+`SetInterval`, loggrelé begge veier, 403 for fremmed server), bufferen (`BufferTests`: sirkulær skriving, 1h/24h med hull,
+nedsampling, MessagePack-rundtur, fil-lagring i en temp-mappe, `/history`-endepunktet og en minnetest for 1 000 fulle
+buffere som hoppes over når `CI` eller `GLIMT_SKIP_SLOW_TESTS` er satt), demomodus (`DemoModeTests`: 16 kort på under 2 s,
+demotoken, `/api/e2e/*`), at alle eksemplene i `packages/protocol/examples/` deserialiseres til riktig record,
+`PasswordHasher`, `DotEnv`, `GlimtOptions` og `vapid-keys`. Testfabrikken kjører med `GLIMT_ENV=e2e`, så demomodus
+(16 falske servere) er på i alle testhuber. `AuthTests`, `AccountTests`, `ServersTests` og `AccessTests` kjører mot én delt MongoDB-container
+(`MongoTestServer`, `mongo:8`) med egen database per testklasse (`TestHub`); e-postsenderen og `IServerLifecycle`
+er byttet ut med opptakere, og `TestUsers.RegisterAndConfirmAsync` registrerer og bekrefter brukere gjennom endepunktene.
 
 Docker-imaget kjører som bruker `app` på port 8080 med `GLIMT_HUB_URL=http://0.0.0.0:8080`, volum `/data`
 (buffer i `/data/buffer`) og `HEALTHCHECK` mot `/healthz`.
@@ -49,18 +59,18 @@ Alle har prefiks `GLIMT_` og er beskrevet i `example.env`. Huben bruker:
 | Nøkkel | Påkrevd | Standard | Bruk |
 |---|---|---|---|
 | `GLIMT_MONGO_URI`, `GLIMT_MONGO_DB` | ja | – | MongoDB |
-| `GLIMT_JWT_SECRET` | ja | – | Signering av tilgangstoken (steg 2.2) |
+| `GLIMT_JWT_SECRET` | ja | – | Signering av tilgangstoken (15 min, HS256 med SHA-256 av hemmeligheten) |
 | `GLIMT_ENV` | | `development` | `development`, `e2e` eller `production`. Utenom produksjon: dev-nøkkel godtas, dev-bruker seedes, CORS for web, lesbar logg. I produksjon: JSON-logg |
 | `GLIMT_HUB_URL` | | `http://localhost:5080` | Adressen Kestrel lytter på |
 | `GLIMT_HEARTBEAT_SECONDS` | | `30` | `ping` til agenten når det er stille, og `snapshotInterval` i `welcome` |
 | `GLIMT_DOWN_AFTER_SECONDS` | | `120` | Frakoblet server settes til `down` etter så mange sekunder |
 | `GLIMT_DEV_ENROL_KEY` | | – | Evig innrulleringsnøkkel (kun `development`/`e2e`). Gir serverId `dev-<hostname>` |
-| `GLIMT_DEV_USER_EMAIL`, `GLIMT_DEV_USER_PASSWORD` | | – | Utviklerkonto som seedes i `users` (kun `development`/`e2e`) |
-| `GLIMT_WEB_PUBLIC_URL` | | – | CORS-opprinnelse for SignalR utenom produksjon (web proxyer `/hub` uansett) |
-| `GLIMT_HUB_PUBLIC_URL`, `GLIMT_INSTALL_URL`, `GLIMT_DOCS_URL`, `GLIMT_AGENT_VERSION` | | – | Installasjonsskript og lenker (steg 1.11) |
-| `GLIMT_BUFFER_PATH` | | – | 24-timersbufferen (steg 2.6) |
-| `GLIMT_DEMO_MODE` | | `false` | Demomodus (steg 2.10) |
-| `GLIMT_APPMAIL_URL`, `GLIMT_APPMAIL_API_KEY`, `GLIMT_MAIL_FROM` | | – | E-post (steg 7.2) |
+| `GLIMT_DEV_USER_EMAIL`, `GLIMT_DEV_USER_PASSWORD` | | – | Utviklerkonto som seedes i `users` (kun `development`/`e2e`). Kan logge inn med passordet, og eier servere uten `ownerId` (dev-nøkkelen) |
+| `GLIMT_WEB_PUBLIC_URL` | | – | Lenker i e-post (`/confirm`, `/reset`, `/access/accept`) og CORS-opprinnelse for SignalR utenom produksjon |
+| `GLIMT_HUB_PUBLIC_URL`, `GLIMT_INSTALL_URL`, `GLIMT_DOCS_URL`, `GLIMT_AGENT_VERSION` | | – | Installasjonsskript og lenker; `GLIMT_INSTALL_URL` (standard `GLIMT_HUB_PUBLIC_URL/install`) brukes i kommandoen fra `POST /api/servers/enrol-key` |
+| `GLIMT_BUFFER_PATH` | | – | Mappe for `buffer.bin` (24-timersbufferen). Tom = ingen lagring, bufferen lever bare i minnet |
+| `GLIMT_DEMO_MODE` | | `false` | Demomodus: 16 falske servere på demokontoen og `POST /api/demo/session`. Alltid på når `GLIMT_ENV=e2e` |
+| `GLIMT_APPMAIL_URL`, `GLIMT_APPMAIL_API_KEY`, `GLIMT_MAIL_FROM` | | – | E-post via appmail. Tom URL = `ConsoleEmailSender` (e-posten med lenken logges) |
 | `GLIMT_VAPID_PUBLIC`, `GLIMT_VAPID_PRIVATE`, `GLIMT_VAPID_SUBJECT` | | – | Web Push (steg 7.2) |
 
 Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før noe annet starter.
@@ -69,15 +79,138 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 
 | Sti | Hva |
 |---|---|
-| `GET /healthz` | `{ status, version, env, mongo: "ok" \| "unavailable", agentsConnected, uptimeSec }` |
+| `GET /healthz` | `{ status, version, env, mongo: "ok" \| "unavailable", agentsConnected, uptimeSec, demoMode, buffer: { servers, points, lastSavedAt } }` (`agentsConnected` teller ekte agenter, ikke demoservere) |
 | `GET /install` | Installasjonsskript for agenten (plassholder til steg 1.11), `text/plain` |
-| `WS /agent/ws` | Agentprotokollen v1 (`packages/protocol/agent-hub.schema.json`): første melding må være `hello` innen 10 s, maks 1 MB per ramme, tekstrammer |
-| `SignalR /hub/live` | `SubscribeOverview()` / `UnsubscribeOverview()`; huben sender `ServerStatus(dto)` med `{ id, name, hostname, status, lastSeenAt, connected, agentVersion, os, arch, cores, ramBytes }`. Anonym til steg 2.7 |
+| `WS /agent/ws` | Agentprotokollen v1 (`packages/protocol/agent-hub.schema.json`): første melding må være `hello` innen 10 s, maks 1 MB per ramme, tekstrammer. Se «Sanntid» under |
+| `SignalR /hub/live` | JWT (`access_token` i spørrestrengen eller Bearer). Metoder og klientkall i «Sanntid» under |
+| `GET /api/servers/{id}/snapshot` | Bearer + lesetilgang. Siste `snapshot` flettet med siste `stream` som `Server`-projeksjonen. 404 ukjent server, 204 før noe er mottatt |
+| `GET /api/servers/{id}/history?metric=&range=1h\|24h` | Bearer + lesetilgang. `metric` = `cpu`, `mem`, `swap`, `disk:<sti>`, `net:<grensesnitt>`, `cont:<container-id>`. Svar `{ metric, range, stepMs, from, to, values[] }` (`net:` gir `rx[]`/`tx[]` i stedet for `values`); `null` der bufferen mangler punkt |
+| `POST /api/demo/session` | Kun i demomodus: `{ accessToken (1 t), expiresAt, user }` for `demo@glimtpanel.com` (leser). 404 ellers |
+| `POST /api/dev/token` | Kun `development`/`e2e`: `{ email }` → samme form, for en eksisterende bruker (brukes av `scripts/live-tail.mjs --dev-token`) |
+| `POST /api/e2e/{disconnect-server\|reconnect-server\|fail-service\|advance}` | Kun `GLIMT_ENV=e2e`: `{ serverId?, unit?, seconds? }` styrer de falske serverne; `advance` flytter hubens klokke og kjører nede-deteksjonen |
 
-Agentflyt: `hello` med `enrolKey` (dev-nøkkelen nå, engangsnøkler fra `enrolKeys` i steg 2.4) gir `welcome` med et
-nytt token `agt_…`; bare SHA-256-hashen lagres. `hello` med kjent `token` gir `welcome` uten token. Ellers `authFailed`
-med `invalidKey` eller `invalidToken` og lukking. `pong`, `snapshot` og `stream` oppdaterer «sist sett»; de to siste
-lagres rått på sesjonen til buffer og projeksjoner kommer.
+### REST under `/api` (fase 2 del A)
+
+Alle svar er JSON i camelCase; feil er `ProblemDetails` (400 `errors` per felt fra validering, ellers `title` og evt. `code`).
+Endepunkter som trenger MongoDB svarer 503 når databasen ikke kan nås. «Bearer» = `Authorization: Bearer <accessToken>`.
+Rate limiting: `auth`-policyen (10/min per IP i produksjon) på register/confirm/resend/login/forgot/reset, `api` (300/min per bruker) på resten.
+
+| Endepunkt | Krever | Hva |
+|---|---|---|
+| `POST /api/auth/register` | – | `{ email, password, name }`. Passord ≥ 10 tegn og ikke på listen over vanlige passord; navn 1–80 tegn. 201 med brukeren, 409 `emailTaken`. Sender bekreftelsesmail med `GLIMT_WEB_PUBLIC_URL/confirm?token=…` (24 t). De 100 første kontoene får `earlyAdopter: true` (teller `counters/_id: "users"`). Ventende tilganger til e-posten kobles til kontoen |
+| `POST /api/auth/confirm` | – | `{ token }` → samme svar som login (brukeren lander innlogget). 400 `invalidToken` |
+| `POST /api/auth/resend-confirmation` | – | `{ email }` → alltid 204 |
+| `POST /api/auth/login` | – | `{ email, password }` → `{ accessToken, expiresAt, user: { id, email, name, timezone, language, plan, earlyAdopter, emailConfirmed } }` + cookie `glimt_refresh` (httpOnly, Secure på https, SameSite=Lax, Path `/api/auth`, 30 dager). 401 ved feil, 403 `emailNotConfirmed` |
+| `POST /api/auth/refresh` | cookie | Roterer oppfriskningstokenet (det gamle trekkes tilbake) og gir nytt `accessToken`. Bruk av et rotert token trekker tilbake alle brukerens tokens. 401 når det mangler, er trukket tilbake eller utløpt |
+| `POST /api/auth/logout` | cookie | Trekker tilbake tokenet og sletter cookien. 204 |
+| `POST /api/auth/logout-all` | Bearer | Trekker tilbake alle brukerens oppfriskningstokens. 204 |
+| `POST /api/auth/forgot` | – | `{ email }` → alltid 204; sender `GLIMT_WEB_PUBLIC_URL/reset?token=…` (1 t) når kontoen finnes |
+| `POST /api/auth/reset` | – | `{ token, password }` → nytt passord, alle oppfriskningstokens trekkes tilbake. 204 |
+| `POST /api/auth/password` | Bearer | `{ currentPassword, newPassword }` → 204; andre enheter logges ut |
+| `GET /api/auth/me`, `GET /api/account` | Bearer | Brukeren over pluss `ownsServers` (bool) og `readerOf` (antall aksepterte tilganger mottatt) |
+| `PATCH /api/account` | Bearer | `{ name?, timezone?, language? }` (IANA-tidssone, `en`/`no`) → samme som `GET /api/account` |
+| `GET /api/subscription` | Bearer | `{ slotsUsed, slotsFree: 2, slotsBeta, plan, plannedPricePerSlotUsd: 12, discountPct (50 for earlyAdopter), wouldCostUsd, wouldCostWithDiscountUsd, noticeDays: 60 }`. Beta har ingen grense; modellen bare teller |
+| `GET /api/account/export` | Bearer | Vedlegg `glimtpanel-export.json`: `user` (uten hash), `servers` (med tagger, uten token-hash), `accessGrants` {`given`, `received`}, `alertSettings`, `alerts`, `pushSubscriptions` (kun endpoint/device) |
+| `DELETE /api/account` | Bearer | `{ password }` → sletter servere (agentene får beskjed via `IServerLifecycle`), nøkler, tilganger begge veier, tokens, varselinnstillinger, push-abonnementer og brukeren. 204 |
+| `POST /api/servers/enrol-key` | Bearer, bekreftet e-post | `{ dockerMode: "proxy" \| "simple" \| "none" }` → `{ key: "gp_…" (22 base62-tegn), command, expiresAt (+1 t), dockerMode }`. Kun hashen lagres i `enrolKeys`; agentens `hello` bruker den én gang |
+| `GET /api/servers` | Bearer | Servere brukeren eier eller har lesetilgang til: `{ id, name, hostname, tags, status, lastSeenAt, role: "owner" \| "reader", ownerEmail?, os, kernel, arch, cores, ramBytes, dockerMode, createdAt, supportUntil, eol }`. `supportUntil`/`eol` fra Ubuntu-tabellen (20.04 → 2025-05-31, 22.04 → 2027-04-30, 24.04 → 2029-04-30, 26.04 → 2031-04-30), ellers `null`/`false`. Status og «sist sett» kommer fra registeret når serveren er kjent der |
+| `GET /api/servers/{id}` | Bearer | Samme form; 403 uten tilgang |
+| `PATCH /api/servers/{id}` | eier | `{ name? (1–64), tags? (≤ 10 av `^[a-z0-9-]{1,24}$`, små bokstaver, uten duplikater) }` |
+| `DELETE /api/servers/{id}` | eier | Fjerner dokumentet, kaller `IServerLifecycle.ServerRemovedAsync`, svarer `{ uninstallCommand }` |
+| `POST /api/servers/{id}/rotate-key` | eier | Nytt token `agt_…`; `previousTokenHash` gjelder i 10 min. Tokenet går til agenten over socketen (`IServerLifecycle.TokenRotatedAsync`), aldri til nettleseren. 204 |
+| `POST /api/access` | Bearer | `{ email, scope: "all" \| ["tag", …] }`. Finnes kontoen: `accepted` straks + e-post «du har fått lesetilgang»; ellers `pending` + invitasjon med `GLIMT_WEB_PUBLIC_URL/access/accept?token=…`. 409 når e-posten allerede har tilgang |
+| `GET /api/access` | Bearer | Tilganger gitt av meg: `[ { id, email, scope, status, createdAt, initials } ]` |
+| `DELETE /api/access/{id}` | eier av tilgangen | 204 |
+| `POST /api/access/accept` | Bearer | `{ token }` → kobler tilgangen til kontoen (e-posten må stemme, ellers 403 `emailMismatch`) |
+
+Tilgangskontrollen er samlet i `IAccessService` (`MongoAccessService`): synlig = egne servere ∪ servere hos eiere som har gitt
+meg tilgang (`all`, eller `server.tags ∩ scope ≠ ∅`). Servere uten `ownerId` (rullet inn med dev-nøkkelen) tilhører
+ingen, bortsett fra utenfor produksjon der dev-brukeren (`GLIMT_DEV_USER_EMAIL`) ser og eier dem. Uten database utenfor
+produksjon regnes registeret i minnet som eierløse servere, så skjelettet virker uten Mongo.
+
+### E-post
+
+`IEmailSender` har to implementasjoner: `ConsoleEmailSender` (tom `GLIMT_APPMAIL_URL`; logger e-posten med lenken) og
+`AppmailEmailSender`. Kontrakten mot appmail er **ikke avklart ennå** (IMPLEMENTERINGSPLAN 1.4); adapteren er skrevet mot
+denne antagelsen og merket `TODO(appmail)` i koden:
+
+```
+POST {GLIMT_APPMAIL_URL}
+Authorization: Bearer {GLIMT_APPMAIL_API_KEY}
+Content-Type: application/json
+
+{ "to": "...", "from": "{GLIMT_MAIL_FROM}", "subject": "...", "text": "...", "html": "..." }
+```
+
+Alle 2xx regnes som godtatt. 10 s tidsavbrudd; feil logges som `error` og gir `false` tilbake, aldri et unntak inn i
+forespørselen. Malene (`EmailTemplates`: bekreftelse, tilbakestilling, invitasjon, «du har fått lesetilgang») bygges i
+huben som tekst + enkel HTML på engelsk og norsk etter brukerens språk.
+
+### Sanntid: agenter, buffer, SignalR og demo (fase 2 del B)
+
+**Agenter (`Features/Agents`).** `hello` med `enrolKey` gir `welcome` med et nytt token `agt_…`; bare SHA-256-hashen
+lagres. Dev-nøkkelen (`GLIMT_DEV_ENROL_KEY`, kun utenfor produksjon) gir `dev-<hostname>` med dev-brukeren som eier når
+MongoDB er tilgjengelig; alle andre nøkler går gjennom `IEnrolKeyStore.TryConsumeAsync` (engangsnøkler fra
+`POST /api/servers/enrol-key`) og gir en ny server med tilfeldig 12-tegns id, eierens id fra nøkkelen og `ServerAdded` til
+eieren. Ukjent, utløpt eller brukt nøkkel gir `authFailed invalidKey`. `hello` med `token` gir `welcome` uten token; etter
+`POST /api/servers/{id}/rotate-key` sender huben `rotate { token }` til agenten og godtar det gamle tokenet i 10 minutter
+(`AgentSession.PreviousTokenHash`; etter en omstart av huben finnes bare det nye tokenet i `servers`). `DELETE` gir
+`authFailed serverRemoved` og sesjonen, bufferen og loggstrømmene forsvinner. En ny tilkobling for samme server erstatter den
+forrige (den gamle lukkes). Alt agenten sender går gjennom `AgentIngest`: `snapshot` (hvert 30. s) lagres typet på sesjonen,
+gir ett punkt i ringbufferen og `Card`/`Server` til abonnentene; `stream` (1 eller 5 s) oppdaterer sesjonen og `Server`
+(+ `Card`, høyst én per sekund per server); begge oppdaterer «sist sett». Ugyldige eller ukjente meldinger logges høyst én
+gang per minutt per agent og lukker aldri forbindelsen (rammer over 1 MB gjør det). `DownDetector` setter `down` når en
+frakoblet server ikke er sett på `GLIMT_DOWN_AFTER_SECONDS` og lagrer `lastSeenAt`/`status` i `servers` hvert minutt.
+`SubscriptionCounter` teller nettleserabonnenter per server (serverside og oversikt): 0→1 sender `subscribe { intervalMs:
+laveste blant abonnentene, topProcs: 40 }`, endret minimum sender `subscribe` igjen, 1→0 sender `unsubscribe`, og en agent
+som kobler til igjen får `subscribe` på nytt når noen ser på. `LogRelay` gir hver loggstrøm en `streamId` (GUID) knyttet til
+én SignalR-tilkobling: `logStart`/`logStop` til agenten, `log`/`logEnd` bare tilbake til den tilkoblingen; grenser 4 strømmer
+per tilkobling og 8 per agent (`LogEnded` med `error` «too many streams»); en nettleser som forsvinner stopper sine strømmer,
+en agent som forsvinner avslutter sine med `unavailable`.
+
+**Buffer (`Features/Buffer`).** Én `ServerBuffer` per server: ring på 2 880 punkter (30 s × 24 t) à ca. 1 kB med `ts`,
+cpu, mem (brukt %), swap (%), disk-% per montering, rx/tx byte/s per grensesnitt og cpu/mem-% per container. De dynamiske
+delene er `float[]` indeksert gjennom tabeller per server (montering, grensesnitt, container-id) som bare vokser; en id som
+kommer tilbake beholder plassen, og et punkt uten verdi for en plass er `NaN` → `null` i svaret. `snapshot.ts` mer enn 5
+minutter fra hubens klokke erstattes av hubens tid. Historikk: `1h` = 120 bøtter à 30 s (råpunktene), `24h` = 288 bøtter à
+5 min; prosentmetrikker tar maks per bøtte, byte/s gjennomsnitt; tom bøtte er `null`. Kortets `cpuLastHour`/`memLastHour` er
+den samme 1h-spørringen avrundet til hele prosent (én byte hver i MessagePack). `BufferPersistence` skriver alle bufferne som
+MessagePack til `GLIMT_BUFFER_PATH/buffer.bin` (via `.tmp` + rename, mappen opprettes) hvert 15. minutt og ved
+`ApplicationStopping`, og leser filen ved oppstart (punkter eldre enn 24 t forkastes, ukjent versjon eller ødelagt fil gir
+advarsel og tom start). Tom `GLIMT_BUFFER_PATH` = ingen lagring.
+
+**SignalR (`Features/Live`).** `/hub/live` krever JWT; `Context.UserIdentifier` er bruker-id. JSON er standard, MessagePack
+forhandles av klienter som legger til protokollen (merk: MessagePack bruker DTO-enes egenskapsnavn slik de er, JSON camelCase).
+Klient → hub: `SubscribeOverview()` (gruppe `user:{id}`, sender `ServerStatus` + `Card` for alle synlige servere fra
+`IAccessService.VisibleServerIdsAsync`), `UnsubscribeOverview()`, `SubscribeServer(id)` (`HubException("forbidden")` uten
+tilgang; gruppe `server:{id}`, sender `Server` straks), `UnsubscribeServer(id)`, `SetInterval(1000|5000)` (ellers
+`HubException`), `StartLog({ serverId, source, unit?, container?, priority?, sinceMs?, tail? }) → streamId`,
+`StopLog(streamId)`. Hub → klient: `ServerStatus(dto)` (tilkobling, frakobling, nede), `Card(dto)` (under 600 byte i
+MessagePack: `id, name, hostname, tags, status, connected, lastSeenAt, os, versionId, arch, cores, ramBytes, cpu, mem,
+diskWorst { path, pct }, netRx, netTx, containersRunning, containersTotal, containersBad, updates, securityUpdates,
+rebootRequired, failedServices, activeAlerts (0 til fase 7), cpuLastHour[120], memLastHour[120]`), `Server(dto)` (`id, name,
+hostname, tags, status, connected, lastSeenAt, agentVersion, os, kernel, arch, cores, ramBytes, dockerMode, bootTime,
+uptimeSec, host { cpu, load, mem, mounts[], ifaces[] }, processes[], processTotals, containers[], services, maintenance,
+security, snapshotAt, streamAt` – nyeste `host` vinner, containere fra `snapshot` med cpu/mem/nett/state fra `stream`;
+sendes fullt på hvert `stream` og `snapshot`, TODO: bare snapshot-delene som er nye), `Log(streamId, lines[], dropped?)`,
+`LogEnded(streamId, reason, message?)`, `ServerAdded(card)`, `ServerRemoved(id)`. `Card`, `ServerStatus`, `ServerAdded` og
+`ServerRemoved` går til `user:{id}` for alle med tilgang (`IAccessService.UserIdsWithAccessAsync`, mellomlagret 30 s, pluss
+eieren, dev-brukeren for eierløse servere utenfor produksjon og alle oversiktsabonnenter som ser serveren).
+`scripts/live-tail.mjs` viser alt dette i terminalen (`--dev-token`, `--login`, `--token` eller `--demo`; `--server`, `--log`,
+`--history`).
+
+**Demo og e2e (`Features/Demo`).** `GLIMT_DEMO_MODE=true` eller `GLIMT_ENV=e2e` starter `FakeAgentService`: de 16 serverne
+fra designets `glimtData.js` (navn, tagger, kjerner, RAM, Ubuntu-versjon, monteringer, containere og feilene: `api-prod`
+høy CPU, `db-prod` omstart kreves, `worker-01` feilet `cron-sync.service`, `acme-app` med `acme-worker` i omstartsløkke,
+`nordic-db` nede siden 03:12 lokal tid, `backup` på 20.04; `media` er «pauset» i designet men holdes oppe til pause finnes)
+som `demo-<navn>`, eid av `demo@glimtpanel.com` (opprettes i `users` uten passord når MongoDB er der; i e2e eier
+dev-brukeren dem når den finnes). De skriver `stream` hvert sekund og `snapshot` hvert 30. sekund rett inn i `AgentIngest`
+uten WebSocket, fyller bufferen med 24 timers syntetisk historikk ved start, og loggstrømmer svarer med linjer fra
+`LOGT`/`CLOGT`-tabellene (ca. én per sekund). I e2e er tallene seedet (samme hver kjøring), klokken er en
+`ShiftableTimeProvider` (`POST /api/e2e/advance { seconds }` flytter den og kjører `DownDetector.SweepAsync`), og
+`disconnect-server`/`reconnect-server`/`fail-service` `{ serverId?, unit? }` endrer de falske serverne. Merk: JWT-ene
+valideres mot den ekte klokken, så et token utstedt etter en stor `advance` er «ikke gyldig ennå» til sanntid tar igjen
+(30 s slingringsmonn) – logg inn før du flytter klokken.
 
 ## Struktur
 
@@ -85,10 +218,20 @@ lagres rått på sesjonen til buffer og projeksjoner kommer.
 Glimt.Hub.slnx, Directory.Build.props, Dockerfile
 src/Glimt.Hub/
   Program.cs                 # liten: options, logging, features
-  Infrastructure/            # GlimtOptions, DotEnv, MongoContext, LoggingSetup, PasswordHasher, VapidKeys
-  Features/Health/           # /healthz
-  Features/Agents/           # /agent/ws: Protocol/ (records + JSON), AgentConnection, AgentRegistry, AgentAuthenticator, DownDetector
-  Features/Live/             # SignalR LiveHub, ServerStatusDto, CORS
-  Features/Servers/          # servers/users-dokumenter, MongoServerStore, MongoIndexes, DevSeeder, /install
+  Infrastructure/            # GlimtOptions, DotEnv, MongoContext, RequireDatabase (503-filter), UbuntuSupport, LoggingSetup, PasswordHasher, RateLimiting, VapidKeys
+  Infrastructure/Auth/       # JwtTokens, CurrentUser
+  Infrastructure/Email/      # IEmailSender, ConsoleEmailSender, AppmailEmailSender, EmailTemplates
+  Infrastructure/Access/     # IAccessService
+  Infrastructure/Servers/    # IServerLifecycle (Servers/Account → Agents)
+  Features/Health/           # /healthz (mongo, agenter, demoMode, buffer)
+  Features/Auth/             # /api/auth: UserStore, RefreshTokenStore, EmailTokenStore, AuthSessions (cookie + JWT), Passwords, Validation
+  Features/Account/          # /api/account, /api/subscription: Subscription, AccountExport (eksport + kaskade)
+  Features/Access/           # /api/access: AccessGrantDocument/Store, MongoAccessService
+  Features/Agents/           # /agent/ws: Protocol/ (records + JSON), AgentConnection (IAgentLink), AgentRegistry, AgentSession, AgentAuthenticator,
+                             #   AgentIngest, SubscriptionCounter, LogRelay, AgentLifecycle (IServerLifecycle), DownDetector, Projections (Card/Server), UserDirectory, /api/servers/{id}/snapshot
+  Features/Buffer/           # ServerBuffer (ring 2 880 × Point), BufferStore, HistoryQuery, BufferFile (MessagePack), BufferPersistence, /api/servers/{id}/history
+  Features/Live/             # SignalR LiveHub (JWT, MessagePack), ILiveClient, LiveConnections, LivePublisher (ILivePublisher + ILogReceiver), ServerStatusDto, CORS
+  Features/Demo/             # FakeAgentService + FakeServer + DemoData (glimtData.js), ShiftableTimeProvider, /api/demo/session, /api/dev/token, /api/e2e/*
+  Features/Servers/          # /api/servers: servers/users-dokumenter, MongoServerStore, MongoEnrolKeyStore, ServerDtos, MongoIndexes, DevSeeder, /install
 tests/Glimt.Hub.Tests/       # xUnit + WebApplicationFactory
 ```

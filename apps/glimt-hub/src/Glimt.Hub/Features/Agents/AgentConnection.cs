@@ -2,41 +2,46 @@ using System.Buffers;
 using System.Net.WebSockets;
 using System.Text.Json;
 using Glimt.Hub.Features.Agents.Protocol;
-using Glimt.Hub.Features.Servers;
 using Glimt.Hub.Infrastructure;
 
 namespace Glimt.Hub.Features.Agents;
 
 /// <summary>
 /// One instance per agent socket. Reads text frames (max 1 MB), requires a hello within 10 s,
-/// authenticates, answers welcome/authFailed and then keeps the session alive with pings.
+/// authenticates, answers welcome/authFailed, feeds every later frame to <see cref="AgentIngest"/> and
+/// keeps the session alive with pings. Also the session's <see cref="IAgentLink"/> for outbound messages.
 /// </summary>
 public sealed class AgentConnection(
     AgentAuthenticator authenticator,
-    IServerStatusPublisher publisher,
-    IServerStore store,
+    AgentIngest ingest,
     GlimtOptions options,
     TimeProvider clock,
     IHostApplicationLifetime lifetime,
-    ILogger<AgentConnection> logger)
+    ILogger<AgentConnection> logger) : IAgentLink
 {
     public const int MaxMessageBytes = 1024 * 1024;
     public const int MaintenanceIntervalMs = 600_000;
 
     private static readonly TimeSpan HelloTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CloseTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan WarnEvery = TimeSpan.FromMinutes(1);
 
     private readonly string _connectionId = Guid.NewGuid().ToString("N")[..12];
     private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private readonly Dictionary<string, long> _lastWarned = new(StringComparer.Ordinal);
+    private WebSocket? _socket;
     private DateTimeOffset _lastActivity;
+
+    public string ConnectionId => _connectionId;
 
     public async Task RunAsync(WebSocket socket, string remote, CancellationToken requestAborted)
     {
+        _socket = socket;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, lifetime.ApplicationStopping);
         var cancellation = cts.Token;
         // Cancelling a pending ReceiveAsync aborts the socket, so shutdown is done by closing the
         // output side instead; the peer's close frame then ends the receive loop cleanly.
-        using var shutdown = cancellation.Register(() => _ = ShutdownAsync(socket));
+        using var shutdown = cancellation.Register(() => _ = ShutdownAsync(socket, WebSocketCloseStatus.EndpointUnavailable, "hub shutting down"));
 
         AgentSession? session = null;
         _lastActivity = clock.GetUtcNow();
@@ -73,14 +78,19 @@ public sealed class AgentConnection(
             }
 
             session = auth.Session;
-            session.Attach(_connectionId, hello, clock.GetUtcNow());
+            var replaced = session.Attach(this, hello, clock.GetUtcNow());
+            if (replaced is not null)
+            {
+                logger.LogInformation("agent {ServerId} reconnected; closing the previous connection {Previous}", session.ServerId, replaced.ConnectionId);
+                _ = replaced.CloseAsync("replaced by a newer connection", CancellationToken.None);
+            }
+
             await SendAsync(socket, new Welcome(session.ServerId, auth.NewToken, options.HeartbeatSeconds * 1000, MaintenanceIntervalMs), cancellation);
             logger.LogInformation(
                 "agent {ServerId} ({Hostname}, v{AgentVersion}) connected from {Remote}{Enrolled}",
                 session.ServerId, session.Hostname, session.AgentVersion, remote, auth.NewToken is null ? "" : " (enrolled)");
 
-            await publisher.PublishAsync(session, cancellation);
-            await store.UpsertAsync(session.ToDocument(), cancellation);
+            await ingest.ConnectedAsync(session, auth.IsNew, cancellation);
 
             using var pingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
             var pingLoop = PingLoopAsync(socket, session, pingCts.Token);
@@ -88,13 +98,23 @@ public sealed class AgentConnection(
             {
                 while (true)
                 {
-                    var envelope = await ReceiveAsync(socket, null);
+                    Envelope? envelope;
+                    try
+                    {
+                        envelope = await ReceiveAsync(socket, null);
+                    }
+                    catch (Exception ex) when (ex is JsonException or ProtocolException)
+                    {
+                        Warn("invalid", session, "sent an invalid message: " + ex.Message);
+                        continue;
+                    }
+
                     if (envelope is null)
                     {
                         break;
                     }
 
-                    Handle(session, envelope);
+                    await HandleAsync(session, envelope, cancellation);
                 }
             }
             finally
@@ -111,11 +131,6 @@ public sealed class AgentConnection(
         {
             logger.LogInformation("agent connection {ConnectionId} ({ServerId}) lost: {Error}", _connectionId, session?.ServerId ?? "-", ex.Message);
         }
-        catch (Exception ex) when (ex is JsonException or ProtocolException)
-        {
-            logger.LogWarning("agent connection {ConnectionId} ({ServerId}) sent invalid JSON: {Error}", _connectionId, session?.ServerId ?? "-", ex.Message);
-            await CloseAsync(socket, WebSocketCloseStatus.InvalidPayloadData, "invalid message");
-        }
         catch (Exception ex)
         {
             logger.LogError(ex, "agent connection {ConnectionId} ({ServerId}) failed", _connectionId, session?.ServerId ?? "-");
@@ -125,15 +140,14 @@ public sealed class AgentConnection(
             if (session is not null && session.Detach(_connectionId))
             {
                 logger.LogInformation("agent {ServerId} ({Hostname}) disconnected", session.ServerId, session.Hostname);
-                await SafePublishAsync(session);
-                await store.TouchAsync(session.ServerId, session.LastSeenAt?.UtcDateTime, session.Status, CancellationToken.None);
+                await ingest.DisconnectedAsync(session);
             }
 
             await CloseAsync(socket, WebSocketCloseStatus.NormalClosure, "bye");
         }
     }
 
-    private void Handle(AgentSession session, Envelope envelope)
+    private async Task HandleAsync(AgentSession session, Envelope envelope, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow();
         _lastActivity = now;
@@ -142,29 +156,52 @@ public sealed class AgentConnection(
             case Pong:
                 session.Touch(now);
                 break;
-            case Snapshot:
-                // TODO(steps 2.6, 7.1, 2.7): ring buffer, alert engine and Card projection.
-                session.StoreSnapshot(envelope.Raw, now);
+            case Snapshot snapshot:
+                await ingest.SnapshotAsync(session, snapshot, cancellationToken);
                 break;
-            case Protocol.Stream:
-                // TODO(step 2.7): Server projection to subscribers.
-                session.StoreStream(envelope.Raw, now);
+            case Protocol.Stream stream:
+                await ingest.StreamAsync(session, stream, cancellationToken);
                 break;
-            case Log or LogEnd:
-                // TODO(step 2.7): route to the SignalR connection that owns the streamId.
-                logger.LogDebug("agent {ServerId} sent {Type} before log streaming is implemented", session.ServerId, envelope.Type);
+            case Log log:
+                session.Touch(now);
+                await ingest.LogAsync(session, log, cancellationToken);
+                break;
+            case LogEnd end:
+                session.Touch(now);
+                await ingest.LogEndAsync(session, end, cancellationToken);
                 break;
             case Hello:
-                logger.LogWarning("agent {ServerId} sent a second hello; ignored", session.ServerId);
+                Warn("hello", session, "sent a second hello; ignored");
                 break;
             case null:
-                logger.LogWarning("agent {ServerId} sent unknown message type {Type}; ignored", session.ServerId, envelope.Type);
+                Warn("unknown:" + envelope.Type, session, "sent unknown message type '" + envelope.Type + "'; ignored");
                 break;
             default:
-                logger.LogWarning("agent {ServerId} sent hub-to-agent message type {Type}; ignored", session.ServerId, envelope.Type);
+                Warn("direction:" + envelope.Type, session, "sent hub-to-agent message type '" + envelope.Type + "'; ignored");
                 break;
         }
     }
+
+    /// <summary>Logs at most once per minute per key per agent so a chatty agent cannot flood the log.</summary>
+    private void Warn(string key, AgentSession session, string text)
+    {
+        var now = Environment.TickCount64;
+        if (_lastWarned.TryGetValue(key, out var last) && now - last < WarnEvery.TotalMilliseconds)
+        {
+            return;
+        }
+
+        _lastWarned[key] = now;
+        logger.LogWarning("agent {ServerId} {Message}", session.ServerId, text);
+    }
+
+    // ---- IAgentLink ---------------------------------------------------------------------------
+
+    public Task SendAsync(AgentMessage message, CancellationToken cancellationToken = default) =>
+        _socket is { } socket ? SendAsync(socket, message, cancellationToken) : Task.CompletedTask;
+
+    public Task CloseAsync(string reason, CancellationToken cancellationToken = default) =>
+        _socket is { } socket ? ShutdownAsync(socket, WebSocketCloseStatus.PolicyViolation, reason) : Task.CompletedTask;
 
     private async Task PingLoopAsync(WebSocket socket, AgentSession session, CancellationToken cancellationToken)
     {
@@ -285,8 +322,11 @@ public sealed class AgentConnection(
         }
     }
 
-    /// <summary>On hub shutdown or request abort: send a close frame, then abort if the peer does not answer.</summary>
-    private async Task ShutdownAsync(WebSocket socket)
+    /// <summary>
+    /// Close from outside the receive loop (hub shutdown, request abort, server removed, replaced by a
+    /// newer connection): send a close frame, then abort if the peer does not answer.
+    /// </summary>
+    private async Task ShutdownAsync(WebSocket socket, WebSocketCloseStatus status, string description)
     {
         try
         {
@@ -296,7 +336,7 @@ public sealed class AgentConnection(
                 try
                 {
                     using var timeoutCts = new CancellationTokenSource(CloseTimeout);
-                    await socket.CloseOutputAsync(WebSocketCloseStatus.EndpointUnavailable, "hub shutting down", timeoutCts.Token);
+                    await socket.CloseOutputAsync(status, description, timeoutCts.Token);
                 }
                 finally
                 {
@@ -314,18 +354,6 @@ public sealed class AgentConnection(
         if (socket.State is not (WebSocketState.Closed or WebSocketState.Aborted))
         {
             socket.Abort();
-        }
-    }
-
-    private async Task SafePublishAsync(AgentSession session)
-    {
-        try
-        {
-            await publisher.PublishAsync(session, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug("status broadcast for {ServerId} failed: {Error}", session.ServerId, ex.Message);
         }
     }
 }

@@ -1,5 +1,4 @@
 using System.Net.WebSockets;
-using System.Text.Json;
 using Glimt.Hub.Features.Agents;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -112,8 +111,9 @@ public sealed class AgentWebSocketTests(HubFactory factory) : IClassFixture<HubF
         }
 
         Assert.NotNull(session.LastSnapshot);
-        Assert.Equal(1757405640000, session.LastSnapshot.Value.GetProperty("ts").GetInt64());
-        Assert.Equal(JsonValueKind.Object, session.LastSnapshot.Value.GetProperty("host").ValueKind);
+        Assert.Equal(1757405640000, session.LastSnapshot.Ts);
+        Assert.Equal(48.2, session.LastSnapshot.Host.Cpu.Total);
+        Assert.NotNull(session.SnapshotAt);
         Assert.True(session.Connected, "unknown message types must not drop the connection");
     }
 

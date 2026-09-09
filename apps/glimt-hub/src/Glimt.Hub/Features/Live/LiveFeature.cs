@@ -9,9 +9,13 @@ public static class LiveFeature
 
     public static IServiceCollection AddLiveFeature(this IServiceCollection services, GlimtOptions options)
     {
-        // TODO(step 2.7): MessagePack protocol with JSON fallback.
-        services.AddSignalR().AddJsonProtocol();
-        services.AddSingleton<IServerStatusPublisher, LiveStatusPublisher>();
+        // JSON is the default for the web app; MessagePack (smaller Card/Server payloads) is negotiated by
+        // clients that add the msgpack protocol. Note: MessagePack uses the DTOs' property names as-is.
+        services.AddSignalR().AddJsonProtocol().AddMessagePackProtocol();
+        services.AddSingleton<LiveConnections>();
+        services.AddSingleton<LivePublisher>();
+        services.AddSingleton<ILivePublisher>(sp => sp.GetRequiredService<LivePublisher>());
+        services.AddSingleton<ILogReceiver>(sp => sp.GetRequiredService<LivePublisher>());
 
         if (WebOrigin(options) is { } origin)
         {

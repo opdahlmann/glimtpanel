@@ -1,3 +1,5 @@
+using Glimt.Hub.Infrastructure.Servers;
+
 namespace Glimt.Hub.Features.Agents;
 
 public static class AgentsFeature
@@ -7,9 +9,15 @@ public static class AgentsFeature
     public static IServiceCollection AddAgentsFeature(this IServiceCollection services)
     {
         services.AddSingleton<AgentRegistry>();
+        services.AddSingleton<UserDirectory>();
         services.AddSingleton<AgentAuthenticator>();
+        services.AddSingleton<AgentIngest>();
+        services.AddSingleton<SubscriptionCounter>();
+        services.AddSingleton<LogRelay>();
+        services.AddSingleton<IServerLifecycle, AgentLifecycle>();
         services.AddTransient<AgentConnection>();
-        services.AddHostedService<DownDetector>();
+        services.AddSingleton<DownDetector>();
+        services.AddHostedService(sp => sp.GetRequiredService<DownDetector>());
         return services;
     }
 
@@ -17,6 +25,7 @@ public static class AgentsFeature
     {
         app.UseWebSockets();
         app.MapGet(WebSocketPath, HandleAsync);
+        app.MapSnapshot();
         return app;
     }
 

@@ -1,41 +1,130 @@
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Buffer;
+using Glimt.Hub.Infrastructure.Access;
+using Glimt.Hub.Infrastructure.Auth;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Glimt.Hub.Features.Live;
 
-/// <summary>Methods the hub calls on the browser (IMPLEMENTERINGSPLAN 4.3). More arrive in steps 2.7 and 7.1.</summary>
-public interface ILiveClient
-{
-    Task ServerStatus(ServerStatusDto status);
-}
-
 /// <summary>
-/// SignalR hub at /hub/live. Anonymous for now.
-/// TODO(step 2.7): JWT authentication from the access_token query string, user:{id} groups, access checks,
-/// SubscribeServer/SetInterval/StartLog and the Card/Server projections.
+/// SignalR hub at /hub/live (IMPLEMENTERINGSPLAN 4.3). JWT from the access_token query string (or the
+/// Authorization header); Context.UserIdentifier is the user id. Overview subscribers sit in user:{id},
+/// server-page subscribers in server:{id}; the SubscriptionCounter turns that into subscribe/unsubscribe
+/// to the agents, and the LogRelay binds log streams to this connection.
 /// </summary>
-public sealed class LiveHub(AgentRegistry registry) : Hub<ILiveClient>
+[Authorize]
+public sealed class LiveHub(
+    AgentRegistry registry,
+    LiveConnections connections,
+    SubscriptionCounter subscriptions,
+    LogRelay logs,
+    BufferStore buffers,
+    IAccessService access,
+    TimeProvider clock) : Hub<ILiveClient>
 {
     public const string Path = "/hub/live";
-    public const string OverviewGroup = "overview";
 
-    /// <summary>Joins the overview group and immediately sends the status of every known server.</summary>
+    public static string UserGroup(string userId) => "user:" + userId;
+
+    public static string ServerGroup(string serverId) => "server:" + serverId;
+
+    private string UserId => Context.UserIdentifier ?? Context.User?.GetUserId() ?? throw new HubException("unauthenticated");
+
+    public override Task OnConnectedAsync()
+    {
+        connections.Connected(Context.ConnectionId, UserId);
+        return base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        connections.Disconnected(Context.ConnectionId);
+        await logs.StopAllAsync(Context.ConnectionId, CancellationToken.None);
+        await subscriptions.RemoveConnectionAsync(Context.ConnectionId, CancellationToken.None);
+        await base.OnDisconnectedAsync(exception);
+    }
+
+    /// <summary>Joins user:{id} and immediately sends a Card (and ServerStatus) for every server the user may see.</summary>
     public async Task SubscribeOverview()
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, OverviewGroup, Context.ConnectionAborted);
-        foreach (var session in registry.All)
+        var userId = UserId;
+        var ct = Context.ConnectionAborted;
+        await Groups.AddToGroupAsync(Context.ConnectionId, UserGroup(userId), ct);
+        var visible = await access.VisibleServerIdsAsync(userId, ct);
+        connections.SetOverview(Context.ConnectionId, visible);
+        await subscriptions.SubscribeOverviewAsync(Context.ConnectionId, visible, ct);
+
+        var now = clock.GetUtcNow();
+        foreach (var id in visible)
         {
-            await Clients.Caller.ServerStatus(ServerStatusDto.From(session));
+            if (registry.TryGet(id, out var session))
+            {
+                await Clients.Caller.ServerStatus(ServerStatusDto.From(session));
+                await Clients.Caller.Card(Projections.Card(session, buffers.Get(id), now));
+            }
         }
     }
 
-    public Task UnsubscribeOverview() =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, OverviewGroup, Context.ConnectionAborted);
-}
+    public async Task UnsubscribeOverview()
+    {
+        var ct = Context.ConnectionAborted;
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, UserGroup(UserId), ct);
+        connections.ClearOverview(Context.ConnectionId);
+        await subscriptions.UnsubscribeOverviewAsync(Context.ConnectionId, ct);
+    }
 
-/// <summary>Broadcasts status changes from the agent side to the overview group.</summary>
-internal sealed class LiveStatusPublisher(IHubContext<LiveHub, ILiveClient> hub) : IServerStatusPublisher
-{
-    public Task PublishAsync(AgentSession session, CancellationToken cancellationToken = default) =>
-        hub.Clients.Group(LiveHub.OverviewGroup).ServerStatus(ServerStatusDto.From(session));
+    /// <summary>Joins server:{id} after an access check and sends the current Server projection.</summary>
+    public async Task SubscribeServer(string id)
+    {
+        var ct = Context.ConnectionAborted;
+        await RequireReadAsync(id, ct);
+        await Groups.AddToGroupAsync(Context.ConnectionId, ServerGroup(id), ct);
+        await subscriptions.SubscribeServerAsync(Context.ConnectionId, id, ct);
+        if (registry.TryGet(id, out var session))
+        {
+            await Clients.Caller.Server(Projections.Server(session));
+        }
+    }
+
+    public async Task UnsubscribeServer(string id)
+    {
+        var ct = Context.ConnectionAborted;
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, ServerGroup(id), ct);
+        await subscriptions.UnsubscribeServerAsync(Context.ConnectionId, id, ct);
+    }
+
+    /// <summary>1000 while the page is active, 5000 after two minutes without interaction.</summary>
+    public Task SetInterval(int ms)
+    {
+        if (!SubscriptionCounter.AllowedIntervals.Contains(ms))
+        {
+            throw new HubException("interval must be 1000 or 5000");
+        }
+
+        return subscriptions.SetIntervalAsync(Context.ConnectionId, ms, Context.ConnectionAborted);
+    }
+
+    /// <summary>Opens a log stream on the server; lines arrive as Log(streamId, …) on this connection only.</summary>
+    public async Task<string> StartLog(LogRequest request)
+    {
+        if (request is null || string.IsNullOrEmpty(request.ServerId) || string.IsNullOrEmpty(request.Source))
+        {
+            throw new HubException("serverId and source are required");
+        }
+
+        var ct = Context.ConnectionAborted;
+        await RequireReadAsync(request.ServerId, ct);
+        return await logs.StartAsync(Context.ConnectionId, request, ct);
+    }
+
+    public Task StopLog(string streamId) => logs.StopAsync(Context.ConnectionId, streamId, Context.ConnectionAborted);
+
+    private async Task RequireReadAsync(string serverId, CancellationToken ct)
+    {
+        if (!await access.CanReadAsync(UserId, serverId, ct))
+        {
+            throw new HubException("forbidden");
+        }
+    }
 }

@@ -1,5 +1,4 @@
 using Glimt.Hub.Features.Live;
-using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Glimt.Hub.Tests;
@@ -13,7 +12,7 @@ public sealed class LiveHubTests(HubFactory factory) : IClassFixture<HubFactory>
         var hello = Repo.Hello();
         hello["hostname"] = "live-host";
 
-        await using var connection = BuildConnection();
+        await using var connection = LiveTestSupport.Connect(factory, LiveTestSupport.Token(factory));
         var up = new TaskCompletionSource<ServerStatusDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.On<ServerStatusDto>("ServerStatus", dto =>
         {
@@ -54,7 +53,7 @@ public sealed class LiveHubTests(HubFactory factory) : IClassFixture<HubFactory>
         await agent.SendAsync(hello, ct);
         Assert.NotNull(await agent.ReceiveAsync(ct));
 
-        await using var connection = BuildConnection();
+        await using var connection = LiveTestSupport.Connect(factory, LiveTestSupport.Token(factory));
         var seen = new TaskCompletionSource<ServerStatusDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         connection.On<ServerStatusDto>("ServerStatus", dto =>
         {
@@ -73,11 +72,19 @@ public sealed class LiveHubTests(HubFactory factory) : IClassFixture<HubFactory>
         await connection.InvokeAsync("UnsubscribeOverview", ct);
     }
 
-    private HubConnection BuildConnection() => new HubConnectionBuilder()
-        .WithUrl(new Uri(factory.Server.BaseAddress, "hub/live"), options =>
-        {
-            options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
-            options.Transports = HttpTransportType.LongPolling;
-        })
-        .Build();
+    [Fact]
+    public async Task Anonymous_connection_is_rejected()
+    {
+        var ct = Repo.Timeout(15);
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl(new Uri(factory.Server.BaseAddress, "hub/live"), options =>
+            {
+                options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+            })
+            .Build();
+
+        var ex = await Assert.ThrowsAnyAsync<Exception>(() => connection.StartAsync(ct));
+        Assert.Contains("401", ex.Message);
+    }
 }

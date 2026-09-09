@@ -6,13 +6,15 @@ public static class BufferFeature
 {
     public static IServiceCollection AddBufferFeature(this IServiceCollection services, GlimtOptions options)
     {
-        // TODO(step 2.6): ring buffer per server (2 880 points), persistence to GLIMT_BUFFER_PATH, history queries.
+        services.AddSingleton<BufferStore>();
+        services.AddSingleton<BufferPersistence>();
+        services.AddHostedService(sp => sp.GetRequiredService<BufferPersistence>());
         return services;
     }
 
     public static IEndpointRouteBuilder MapBufferFeature(this IEndpointRouteBuilder app)
     {
-        // TODO(step 2.6): GET /api/servers/{id}/history?metric=&range=1h|24h
+        app.MapHistory();
         return app;
     }
 }

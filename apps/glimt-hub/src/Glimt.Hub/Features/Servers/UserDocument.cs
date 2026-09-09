@@ -2,7 +2,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Glimt.Hub.Features.Servers;
 
-/// <summary>Collection `users` (IMPLEMENTERINGSPLAN 4.4). Only the fields the skeleton needs; Auth (step 2.2) extends it.</summary>
+/// <summary>Collection `users` (IMPLEMENTERINGSPLAN 4.4). Written by Auth (register), read by Account and Access.</summary>
 public sealed class UserDocument
 {
     public const string Collection = "users";
@@ -18,6 +18,9 @@ public sealed class UserDocument
     public DateTime? EmailConfirmedAt { get; set; }
     public string Plan { get; set; } = "beta";
     public SlotsDocument Slots { get; set; } = new();
+    /// <summary>True for the first 100 accounts (counter "users" in the counters collection).</summary>
+    public bool EarlyAdopter { get; set; }
+
     public string Timezone { get; set; } = "Europe/Oslo";
     public string Language { get; set; } = "en";
     public DateTime CreatedAt { get; set; }
