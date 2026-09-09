@@ -1,0 +1,8 @@
+<Solution>
+    <Folder Name="/src/">
+        <Project Path="src/Glimt.Hub/Glimt.Hub.csproj" />
+    </Folder>
+    <Folder Name="/tests/">
+        <Project Path="tests/Glimt.Hub.Tests/Glimt.Hub.Tests.csproj" />
+    </Folder>
+</Solution>

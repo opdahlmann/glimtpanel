@@ -1,0 +1,27 @@
+{
+  "name": "glimtpanel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ett nettleservindu som viser hva alle serverne dine gjør akkurat nå.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "workspaces": ["packages/*", "apps/glimt-web", "apps/glimt-site", "e2e"],
+  "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:stop": "node scripts/dev.mjs --stop",
+    "dev:hub": "node scripts/env.mjs --require GLIMT_MONGO_URI -- dotnet watch --project apps/glimt-hub/src/Glimt.Hub --non-interactive",
+    "dev:web": "node scripts/web-config.mjs && npm --workspace apps/glimt-web run start",
+    "dev:site": "npm --workspace apps/glimt-site run dev",
+    "dev:agent": "node scripts/agent-container.mjs --start",
+    "test": "npm run test:web && npm run test:hub && npm run test:agent",
+    "test:web": "npm --workspace apps/glimt-web test -- --watch=false",
+    "test:hub": "dotnet test apps/glimt-hub/Glimt.Hub.slnx",
+    "test:agent": "node scripts/agent-container.mjs --test",
+    "test:e2e": "npm --workspace e2e test",
+    "lint": "npm --workspace apps/glimt-web run lint && dotnet format apps/glimt-hub/Glimt.Hub.slnx --verify-no-changes",
+    "build": "npm --workspace apps/glimt-web run build && dotnet build apps/glimt-hub/Glimt.Hub.slnx -c Release && npm --workspace apps/glimt-site run build",
+    "build:images": "node scripts/build-images.mjs",
+    "web-config": "node scripts/web-config.mjs"
+  }
+}

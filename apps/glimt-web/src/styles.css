@@ -1,0 +1,7 @@
+/* Globale stiler for glimt-web. Tokens, resett og Inter kommer fra packages/design-tokens (IMPLEMENTERINGSPLAN 6.1). */
+@import "@glimt/design-tokens/tokens.css";
+@import "@glimt/design-tokens/fonts.css";
+
+html, body { min-height: 100%; }
+body { background: var(--color-ink); color: var(--w-100); }
+gp-root { display: block; min-height: 100dvh; }

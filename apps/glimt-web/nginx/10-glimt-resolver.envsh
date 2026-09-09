@@ -1,0 +1,11 @@
+#!/bin/sh
+# Sources av nginx-imagets entrypoint (*.envsh) før 20-envsubst-on-templates.sh, så eksporten når malen.
+# Setter GLIMT_DNS_RESOLVER (brukt av `resolver` i default.conf.template) til containerens egne navnetjenere fra
+# /etc/resolv.conf når den ikke er satt eksplisitt: 127.0.0.11 på brukerdefinerte Docker-nettverk (Dokploy),
+# vertens DNS på standard bridge. Kun IPv4-adresser, siden nginx ikke godtar resolv.conf-formatet for IPv6.
+if [ -z "${GLIMT_DNS_RESOLVER:-}" ]; then
+  GLIMT_DNS_RESOLVER=$(awk '/^nameserver[[:space:]]+[0-9.]+[[:space:]]*$/ { printf "%s ", $2 }' /etc/resolv.conf 2>/dev/null | sed 's/ *$//')
+  [ -n "$GLIMT_DNS_RESOLVER" ] || GLIMT_DNS_RESOLVER=127.0.0.11
+  export GLIMT_DNS_RESOLVER
+fi
+echo "glimt-web: hub lookups use DNS resolver ${GLIMT_DNS_RESOLVER} (hub=${GLIMT_HUB_INTERNAL_URL:-unset})"

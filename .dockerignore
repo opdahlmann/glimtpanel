@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/.angular
+**/bin
+**/obj
+**/out
+.git
+.local
+design
+e2e/test-results
+e2e/playwright-report
+.env
+.env.*
+*.md
+!README.md

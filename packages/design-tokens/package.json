@@ -1,0 +1,7 @@
+{
+  "name": "@glimt/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Delte designtokens og Inter-fonter for glimt-web og glimt-site",
+  "files": ["tokens.css", "fonts.css", "fonts/"]
+}

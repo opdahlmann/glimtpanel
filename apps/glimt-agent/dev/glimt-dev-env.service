@@ -1,0 +1,12 @@
+[Unit]
+Description=Glimtpanel dev container: write /etc/glimt-agent/env from the container environment
+Before=glimt-agent.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/glimt-dev-env.sh
+
+[Install]
+WantedBy=multi-user.target

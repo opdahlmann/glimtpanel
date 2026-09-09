@@ -1,0 +1,69 @@
+/* Glimtpanel designtokens. Delt av glimt-web og glimt-site. Kilde: DESIGN.md kap. 2–5 og det endelige designet.
+   Regel: en farge betyr én ting. Ingen egne gråtoner, bruk hvitt i opasitetstrinn. */
+:root {
+  /* flater */
+  --color-ink: #0f1013;        /* sidebakgrunn */
+  --color-ink-2: #16171b;      /* sidepanel, bunnlinje, select-meny */
+  --color-glass: #282a30eb;    /* serverkort, dialoger, auth-kort */
+  --color-line: #ffffff14;     /* kantlinjer 8 % */
+
+  /* målinger */
+  --color-cpu: #0a84ff;
+  --color-ram: #30d158;
+  --color-disk: #64d2ff;
+  --color-net: #bf5af2;
+  --color-swap: #ffd60a;       /* også containere */
+  --color-warn: #ff9f0a;       /* 80 %+, advarsel, omstart kreves */
+  --color-crit: #ff453a;       /* 90 %+, nede, kritisk, destruktive knapper */
+  --color-neutral: rgba(255, 255, 255, .35); /* pauset, ukjent */
+  --color-info: rgba(255, 255, 255, .5);     /* info-varsler */
+  --color-brand: #e04726;      /* kun i «by Kodetank», aldri i data */
+
+  /* hvitt i opasitetstrinn */
+  --w-100: #ffffff; --w-90: #ffffffe6; --w-85: #ffffffd9; --w-80: #ffffffcc; --w-70: #ffffffb3;
+  --w-65: #ffffffa6; --w-60: #ffffff99; --w-55: #ffffff8c; --w-50: #ffffff80; --w-45: #ffffff73;
+  --w-40: #ffffff66; --w-35: #ffffff59;
+  --s-14: #ffffff24; --s-10: #ffffff1a; --s-9: #ffffff17; --s-8: #ffffff14; --s-6: #ffffff0f;
+  --s-5: #ffffff0d; --s-4: #ffffff0a; --s-3: #ffffff09;
+
+  /* skrift */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* radius */
+  --radius-window: 14px; --radius-card: 10px; --radius-row: 9px; --radius-chip: 8px;
+  --radius-badge: 4px; --radius-pill: 999px;
+
+  /* skygger */
+  --shadow-window: inset 0 0 0 .5px #ffffff24, 0 0 0 1px #00000080, 0 24px 60px #00000080;
+  --hairline-card: inset 0 0 0 .5px #ffffff0f;
+  --glow-primary: 0 10px 30px -10px #ffffff59;
+
+  /* bevegelse */
+  --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
+  --t-hover: .15s; --t-segment: .2s; --t-panel: .25s; --t-data: .6s;
+
+  /* layout */
+  --bp-mobile: 760px; --sidebar-w: 220px; --page-max: 72rem; --card-min: 340px; --nav-count: 4;
+}
+
+html { background: var(--color-ink); color: #fff; -webkit-font-smoothing: antialiased; }
+body { margin: 0; font-family: var(--font-sans); font-feature-settings: "cv11", "ss01"; font-size: 12px; }
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--color-disk); text-decoration: none; }
+a:hover { color: #fff; }
+input, button, select, textarea { font-family: inherit; font-feature-settings: inherit; }
+input::placeholder { color: var(--w-40); }
+select option { background: var(--color-ink-2); color: #fff; }
+.num { font-variant-numeric: tabular-nums; }
+::selection { background: #0a84ff99; }
+:focus-visible { outline: 2px solid var(--color-cpu); outline-offset: 2px; }
+::-webkit-scrollbar { height: 6px; width: 6px; }
+::-webkit-scrollbar-thumb { background: var(--s-14); border-radius: 3px; }
+
+@keyframes pdIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

@@ -1,0 +1,46 @@
+# Markdown: kun README.md sjekkes inn (regel fra eier)
+*.md
+!README.md
+!**/README.md
+
+# Miljø: kun example.env sjekkes inn
+.env
+.env.*
+!example.env
+
+# Design: ikke besluttet om mappen skal inn (IMPLEMENTERINGSPLAN 1.4)
+design/
+
+# Node
+node_modules/
+dist/
+.angular/
+*.tsbuildinfo
+npm-debug.log*
+.astro/
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Go
+apps/glimt-agent/bin/
+apps/glimt-agent/out/
+
+# Generert lokalt
+apps/glimt-web/public/config.json
+.local/
+
+# Playwright
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
+
+# OS og editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

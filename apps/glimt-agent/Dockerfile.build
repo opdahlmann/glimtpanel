@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+# Cross-compiles the agent for linux/amd64 and linux/arm64 and writes checksums.
+# Build context is the repo root:
+#   docker build -f apps/glimt-agent/Dockerfile.build --build-arg VERSION=0.1.0 \
+#     --output type=local,dest=apps/glimt-agent/out .
+# → out/glimt-agent-linux-amd64, out/glimt-agent-linux-arm64, out/SHA256SUMS
+
+FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+ARG VERSION=0.0.0-dev
+WORKDIR /src
+COPY apps/glimt-agent/go.mod apps/glimt-agent/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY apps/glimt-agent/ ./
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    set -eu; mkdir -p /out; \
+    for arch in amd64 arm64; do \
+      CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
+        -ldflags "-s -w -X main.version=${VERSION}" \
+        -o /out/glimt-agent-linux-$arch ./cmd/glimt-agent; \
+    done; \
+    cd /out && sha256sum glimt-agent-linux-amd64 glimt-agent-linux-arm64 > SHA256SUMS && cat SHA256SUMS
+
+FROM scratch
+COPY --from=build /out/ /

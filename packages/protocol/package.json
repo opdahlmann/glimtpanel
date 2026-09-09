@@ -1,0 +1,9 @@
+{
+  "name": "@glimt/protocol",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JSON Schema for agent ↔ hub-protokollen (v1) med eksempelmeldinger",
+  "type": "module",
+  "scripts": { "test": "node validate.mjs" },
+  "devDependencies": { "ajv": "^8.17.1", "ajv-formats": "^3.0.1" }
+}

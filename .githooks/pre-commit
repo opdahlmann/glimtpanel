@@ -1,0 +1,3 @@
+#!/bin/sh
+# Nekter commit av markdown (utenom README.md) og env-filer (utenom example.env).
+exec node "$(git rev-parse --show-toplevel)/scripts/precommit.mjs"

@@ -1,0 +1,54 @@
+using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Infrastructure;
+
+namespace Glimt.Hub.Features.Live;
+
+public static class LiveFeature
+{
+    public const string CorsPolicy = "web";
+
+    public static IServiceCollection AddLiveFeature(this IServiceCollection services, GlimtOptions options)
+    {
+        // TODO(step 2.7): MessagePack protocol with JSON fallback.
+        services.AddSignalR().AddJsonProtocol();
+        services.AddSingleton<IServerStatusPublisher, LiveStatusPublisher>();
+
+        if (WebOrigin(options) is { } origin)
+        {
+            services.AddCors(cors => cors.AddPolicy(CorsPolicy, policy => policy
+                .WithOrigins(origin)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()));
+        }
+
+        return services;
+    }
+
+    /// <summary>The web app proxies /hub in every environment; CORS is only a convenience outside production.</summary>
+    public static WebApplication UseLiveCors(this WebApplication app, GlimtOptions options)
+    {
+        if (WebOrigin(options) is not null)
+        {
+            app.UseCors(CorsPolicy);
+        }
+
+        return app;
+    }
+
+    public static IEndpointRouteBuilder MapLiveFeature(this IEndpointRouteBuilder app)
+    {
+        app.MapHub<LiveHub>(LiveHub.Path);
+        return app;
+    }
+
+    private static string? WebOrigin(GlimtOptions options)
+    {
+        if (options.IsProduction || string.IsNullOrWhiteSpace(options.WebPublicUrl))
+        {
+            return null;
+        }
+
+        return Uri.TryCreate(options.WebPublicUrl, UriKind.Absolute, out var uri) ? uri.GetLeftPart(UriPartial.Authority) : null;
+    }
+}

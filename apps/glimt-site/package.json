@@ -1,0 +1,16 @@
+{
+  "name": "glimt-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port 4321",
+    "build": "astro build",
+    "preview": "astro preview --port 4321",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@glimt/design-tokens": "*",
+    "astro": "^7.3.2"
+  }
+}

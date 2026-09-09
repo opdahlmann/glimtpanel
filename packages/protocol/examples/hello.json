@@ -1,0 +1,3 @@
+{ "type": "hello", "v": 1, "enrolKey": "gp_dev_local", "hostname": "ubuntu-dev", "agentVersion": "0.1.0",
+  "os": { "id": "ubuntu", "versionId": "24.04", "prettyName": "Ubuntu 24.04.2 LTS" }, "kernel": "6.8.0-45-generic",
+  "arch": "arm64", "cores": 4, "ramBytes": 8589934592, "bootTime": 1757395200000, "dockerMode": "socket" }

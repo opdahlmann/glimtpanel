@@ -1,0 +1,12 @@
+[Unit]
+Description=Dev noise: journal lines and a CPU burst every 60 s
+After=systemd-journald.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/glimt-noise.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

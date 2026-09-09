@@ -1,0 +1,6 @@
+[Unit]
+Description=Dev noise: a unit that fails on demand (systemctl start noise-fail)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/false

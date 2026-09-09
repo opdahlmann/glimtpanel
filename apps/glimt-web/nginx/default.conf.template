@@ -1,0 +1,84 @@
+# glimt-web: nginx-oppsett. ${GLIMT_HUB_INTERNAL_URL} og ${GLIMT_DNS_RESOLVER} fylles inn av envsubst ved oppstart
+# (NGINX_ENVSUBST_FILTER=GLIMT_ gjør at $uri, $host osv. står urørt). Ingen skråstrek på slutten av hub-URL-en.
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Huben slås opp ved kjøretid, ikke bare ved oppstart: web starter selv om hub-containeren ikke finnes ennå,
+  # og følger med når huben får ny IP etter en utrulling. GLIMT_DNS_RESOLVER settes av 10-glimt-resolver.envsh.
+  resolver ${GLIMT_DNS_RESOLVER} valid=30s ipv6=off;
+  set $glimt_hub ${GLIMT_HUB_INTERNAL_URL};
+
+  gzip on;
+  gzip_vary on;
+  gzip_min_length 1024;
+  gzip_types text/plain text/css application/json application/javascript text/javascript image/svg+xml;
+
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+  # REST til huben. Request-URI sendes uendret (/api/... -> hub /api/...).
+  location /api/ {
+    proxy_pass $glimt_hub;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  # SignalR (/hub/live): WebSocket-oppgradering, lange timeouts, ingen buffering (SSE-fallback).
+  location /hub/ {
+    proxy_pass $glimt_hub;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+    proxy_cache off;
+  }
+
+  # Kjøretidskonfigurasjon skrives av /docker-entrypoint.d/40-glimt-config.sh og må aldri caches.
+  location = /config.json {
+    add_header Cache-Control "no-store" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    try_files $uri =404;
+  }
+
+  location = /index.html {
+    add_header Cache-Control "no-cache" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  }
+
+  # Hashede bygg-artefakter (main-XXXX.js, styles-XXXX.css, chunk-*.js, media/*): evig cache.
+  location ~* \.(js|css|woff2)$ {
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    try_files $uri =404;
+  }
+  location ^~ /media/ {
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    try_files $uri =404;
+  }
+
+  # SPA: alt annet går til index.html og Angular-ruteren.
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}

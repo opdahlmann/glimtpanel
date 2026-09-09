@@ -1,0 +1,36 @@
+---
+// Blank forside. Nettsiden (landingsside, demo, dokumentasjon) utvikles senere av eier.
+import '@glimt/design-tokens/tokens.css';
+import '@glimt/design-tokens/fonts.css';
+const title = 'Glimtpanel';
+---
+<!doctype html>
+<html lang="no">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{title}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main>
+      <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3f4b"/><stop offset="1" stop-color="#23252b"/></linearGradient></defs>
+        <rect width="64" height="64" rx="14" fill="url(#g)"/>
+        <g fill="none" stroke-width="4.5" stroke-linecap="round" transform="rotate(-90 32 32)">
+          <circle cx="32" cy="32" r="16.5" stroke="rgba(255,255,255,.14)"/>
+          <circle cx="32" cy="32" r="16.5" stroke="#0a84ff" stroke-dasharray="28 75.7"/>
+          <circle cx="32" cy="32" r="16.5" stroke="#30d158" stroke-dasharray="28 75.7" stroke-dashoffset="-34.6"/>
+          <circle cx="32" cy="32" r="16.5" stroke="#64d2ff" stroke-dasharray="28 75.7" stroke-dashoffset="-69.1"/>
+        </g>
+      </svg>
+      <h1>Velkommen til Glimtpanel</h1>
+    </main>
+  </body>
+</html>
+
+<style>
+  main { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+  h1 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.6rem); font-weight: 700; letter-spacing: -.035em; line-height: 1.05; }
+</style>

@@ -1,0 +1,13 @@
+{ "type": "snapshot", "ts": 1757405640000,
+  "host": { "cpu": { "total": 48.2, "user": 34.1, "system": 10.6, "iowait": 3.5, "steal": 0, "perCore": [51, 44, 49, 48] }, "load": [1.9, 1.7, 1.6],
+    "mem": { "total": 8589934592, "used": 5239000000, "free": 900000000, "buffers": 120000000, "cached": 2100000000, "swapTotal": 2147483648, "swapUsed": 0 },
+    "uptimeSec": 3548000,
+    "mounts": [{ "path": "/", "fs": "ext4", "device": "sda1", "total": 85899345920, "used": 79000000000, "inodesTotal": 5242880, "inodesUsed": 629145, "readBps": 3355443, "writeBps": 11534336 }],
+    "ifaces": [{ "name": "eth0", "ips": ["10.0.1.12"], "rxBps": 15518924, "txBps": 1258291 }] },
+  "containers": [{ "id": "a1b2c3", "name": "web-web", "image": "nginx:1.27", "imageCreated": 1754000000000, "state": "running", "health": "healthy", "restartCount": 0, "startedAt": 1757100000000, "cpuPct": 2.1, "memBytes": 432013312, "memLimit": 1073741824, "rxBps": 1048576, "txBps": 204800, "ports": ["80→8080", "443→8443"], "mounts": ["./nginx → /etc/nginx/conf.d"], "compose": "web" }],
+  "services": { "units": [{ "name": "nginx.service", "state": "running", "needsRestart": false }, { "name": "cron-sync.service", "state": "failed", "needsRestart": false }], "failed": ["cron-sync.service"], "needsRestart": [] },
+  "maintenance": { "rebootRequired": true, "rebootPkgs": ["linux-image-6.8.0-45-generic", "libssl3"], "updates": 12, "securityUpdates": 4, "checkedAt": 1757405000000, "needrestartAvailable": true },
+  "security": { "listeningPorts": [{ "port": 22, "proto": "tcp", "process": "sshd", "pid": 812 }, { "port": 443, "proto": "tcp", "process": "nginx", "pid": 1182 }],
+    "loggedIn": [{ "user": "ole", "from": "10.0.0.12", "tty": "pts/0", "since": 1757404860000 }],
+    "sshFailed": { "hour": 14, "day": 231, "last": [{ "user": "root", "from": "45.33.12.9", "at": 1757405512000 }] },
+    "firewall": { "ufw": "active", "fail2ban": "active", "banned": 42, "blocked": 118 } } }
