@@ -64,6 +64,19 @@ func runUninstall(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
+	// The static system user created by install.sh (best effort; ignore when absent).
+	if userdel, err := exec.LookPath("userdel"); err == nil {
+		if *dry {
+			p("would remove user glimt-agent")
+		} else {
+			cmd := exec.Command(userdel, "glimt-agent")
+			cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+			if cmd.Run() == nil {
+				p("removed user glimt-agent")
+			}
+		}
+	}
+
 	paths := []string{unitPath, dropInDir, "/etc/systemd/system/multi-user.target.wants/glimt-agent.service", configDir, defaultStateDir, binaryPath}
 	removed := 0
 	for _, path := range paths {

@@ -132,7 +132,13 @@ main() {
 	mv -f "$env_tmp" "$env_file"
 	umask 022
 
-	# 3. systemd unit and docker drop-in
+	# 3. static system user: systemctl does not work under DynamicUser (dbus rejects dynamic uids),
+	#    so the services list needs a real user. No home, no login shell, writes only to StateDirectory.
+	if ! id -u glimt-agent >/dev/null 2>&1; then
+		useradd --system --no-create-home --home-dir /var/lib/glimt-agent --shell /usr/sbin/nologin --user-group glimt-agent
+	fi
+
+	# 4. systemd unit and docker drop-in
 	unit_tmp="$unit.tmp"
 	cat > "$unit_tmp" <<'UNIT'
 [Unit]
@@ -145,7 +151,8 @@ Wants=network-online.target
 Type=notify
 ExecStart=/usr/local/bin/glimt-agent run
 EnvironmentFile=-/etc/glimt-agent/env
-DynamicUser=yes
+User=glimt-agent
+Group=glimt-agent
 StateDirectory=glimt-agent
 SupplementaryGroups=systemd-journal adm
 ProtectSystem=strict
@@ -167,7 +174,7 @@ RestrictRealtime=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
 SystemCallArchitectures=native
-MemoryMax=64M
+MemoryMax=192M
 Restart=always
 RestartSec=5
 
@@ -186,7 +193,7 @@ UNIT
 		rmdir "$dropin_dir" 2>/dev/null || true
 	fi
 
-	# 4. Enable and start
+	# 5. Enable and start
 	if [ "$systemd_running" -eq 1 ]; then
 		systemctl daemon-reload
 		systemctl enable glimt-agent.service >/dev/null 2>&1
@@ -200,7 +207,7 @@ UNIT
 		echo "systemd is not running here; glimt-agent.service is enabled and starts at boot."
 	fi
 
-	# 5. Docker advice
+	# 6. Docker advice
 	case "$docker" in
 	proxy)
 		cat <<'PROXY'

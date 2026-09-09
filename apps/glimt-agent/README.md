@@ -2,7 +2,7 @@
 
 Glimtpanel-agenten: én statisk Go-binær som leser CPU, minne, disk, nettverk, prosesser, containere og logger fra en
 Ubuntu-server og sender dem til huben over én WebSocket. **Den kan ikke endre noe på serveren.** Løftet er teknisk:
-agenten kjører som `DynamicUser=yes` med `ProtectSystem=strict`, den har ingen skrivekommandoer i protokollen, og
+agenten kjører som systembrukeren `glimt-agent` med `ProtectSystem=strict`, den har ingen skrivekommandoer i protokollen, og
 Docker leses anbefalt gjennom en socket-proxy med `POST=0`.
 
 Status: fase 1 er levert. Agenten sender `hello`, tar imot `welcome`, svarer `pong` på `ping`, lagrer og roterer
@@ -210,7 +210,7 @@ and logs. It cannot change anything on this server.*
 
 ### systemd-enheten (`install/glimt-agent.service`)
 
-`Type=notify`, `DynamicUser=yes`, `StateDirectory=glimt-agent` (gir `STATE_DIRECTORY=/var/lib/glimt-agent`),
+`Type=notify`, `User=glimt-agent` (fast systembruker), `StateDirectory=glimt-agent` (gir `STATE_DIRECTORY=/var/lib/glimt-agent`),
 `SupplementaryGroups=systemd-journal adm`, `ProtectSystem=strict`, `ProtectHome=yes`, `NoNewPrivileges=yes`,
 `PrivateTmp=yes`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK`, `CapabilityBoundingSet=CAP_SYS_PTRACE`
 og `AmbientCapabilities=CAP_SYS_PTRACE` (for å se hvilken prosess som eier en port), `MemoryMax=64M`, `Restart=always`,
@@ -250,16 +250,7 @@ docker exec glimt-agent-dev glimt-agent logs --source container --container <nav
 Begrensninger i dev-containeren: den har eget pid-namespace, så container-nettverk hentes via `stats`-API-et
 (fallbacken over).
 
-**Kjent problem – `systemctl` under `DynamicUser=yes`.** systemd starter `dbus.service` med
-`SYSTEMD_NSS_DYNAMIC_BYPASS=1` (for å unngå vranglås mot PID 1), så `dbus-daemon` kan ikke slå opp dynamiske brukere
-og avviser tilkoblingen: `systemctl list-units` og `systemctl show` fra tjenesten feiler med «Transport endpoint is
-not connected». Dermed mangler `services` i det tjenesten sender, og `firewall.ufw`/`fail2ban` blir `notFound`,
-mens `glimt-agent snapshot` som root viser alt. Dette gjelder Ubuntu generelt (dbus-daemon, ikke dbus-broker), ikke
-bare dev-containeren. Verifisert med `systemd-run -p DynamicUser=yes systemctl list-units` (feiler) mot
-`systemd-run -p User=nobody systemctl list-units` (virker). Løsningen ligger i enheten (fast systembruker fra
-`install.sh` i stedet for `DynamicUser`, eller en annen kilde for enhetsstatus) og er ikke gjort her.
-Filene ligger i `dev/`: `glimt-dev-env.sh`, `glimt-dev-env.service`, `glimt-noise.sh`, `noise.service`,
-`noise-fail.service`.
+**Løst:** enheten bruker en fast systembruker i stedet for `DynamicUser` (se «Kjente begrensninger»).
 
 ## Protokoll
 
@@ -288,6 +279,12 @@ dev/                  filer til Dockerfile.dev
 Dockerfile.build      kryss-kompilering + SHA256SUMS
 Dockerfile.dev        Ubuntu 24.04 + systemd + sshd + agent
 ```
+
+## Kjente begrensninger
+
+- **Tjenester krever fast bruker.** `systemctl` virker ikke under `DynamicUser=yes` (dbus avviser dynamiske uid-er), så enheten kjører som systembrukeren `glimt-agent` som `install.sh` oppretter (`useradd --system`, ingen hjemmekatalog, ingen innlogging). `uninstall` fjerner brukeren.
+- **Eierprosess på lyttende porter** krever at agenten kan lese `/proc/<pid>/fd` for andre brukeres prosesser. Enheten gir `CAP_SYS_PTRACE` som ambient-kapabilitet, men i dev-containeren på Docker Desktop avvises lesingen likevel (`Permission denied` selv med `CapEff` satt). Portene vises da uten prosessnavn. Verifiseres på en ekte Ubuntu-server i fase 11; uten kapabiliteten viser dashbordet porten uten prosess.
+- **`MemoryMax=192M`** dekker også `apt-get -s dist-upgrade` som kjøres hvert 10. minutt når `updates-available` mangler. Den gamle grensen på 64 M ble nådd i containeren.
 
 ## Målt ressursbruk
 
