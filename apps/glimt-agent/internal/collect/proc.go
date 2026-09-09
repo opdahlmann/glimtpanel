@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -25,9 +26,11 @@ func (c CPUTimes) Total() uint64 {
 
 // Stat is the parsed /proc/stat.
 type Stat struct {
-	CPU      CPUTimes
-	PerCore  []CPUTimes
-	BootTime int64 // Unix seconds (btime)
+	CPU          CPUTimes
+	PerCore      []CPUTimes
+	BootTime     int64 // Unix seconds (btime)
+	ProcsRunning int   // procs_running
+	ProcsBlocked int   // procs_blocked
 }
 
 // ParseStat parses /proc/stat.
@@ -56,6 +59,10 @@ func ParseStat(r io.Reader) (Stat, error) {
 			st.PerCore = append(st.PerCore, t)
 		case fields[0] == "btime" && len(fields) > 1:
 			st.BootTime, _ = strconv.ParseInt(fields[1], 10, 64)
+		case fields[0] == "procs_running" && len(fields) > 1:
+			st.ProcsRunning, _ = strconv.Atoi(fields[1])
+		case fields[0] == "procs_blocked" && len(fields) > 1:
+			st.ProcsBlocked, _ = strconv.Atoi(fields[1])
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -199,8 +206,21 @@ func ParseUptime(text string) (int64, error) {
 }
 
 // ReadStat reads and parses /proc/stat.
-func ReadStat() (Stat, error) {
-	f, err := os.Open("/proc/stat")
+func ReadStat() (Stat, error) { return readStat(defaultProcRoot) }
+
+// ReadMeminfo reads and parses /proc/meminfo.
+func ReadMeminfo() (protocol.Mem, error) { return readMeminfo(defaultProcRoot) }
+
+// ReadLoadavg reads and parses /proc/loadavg.
+func ReadLoadavg() ([]float64, error) { return readLoadavg(defaultProcRoot) }
+
+// ReadUptime reads and parses /proc/uptime.
+func ReadUptime() (int64, error) { return readUptime(defaultProcRoot) }
+
+const defaultProcRoot = "/proc"
+
+func readStat(procRoot string) (Stat, error) {
+	f, err := os.Open(filepath.Join(procRoot, "stat"))
 	if err != nil {
 		return Stat{}, err
 	}
@@ -208,9 +228,8 @@ func ReadStat() (Stat, error) {
 	return ParseStat(f)
 }
 
-// ReadMeminfo reads and parses /proc/meminfo.
-func ReadMeminfo() (protocol.Mem, error) {
-	f, err := os.Open("/proc/meminfo")
+func readMeminfo(procRoot string) (protocol.Mem, error) {
+	f, err := os.Open(filepath.Join(procRoot, "meminfo"))
 	if err != nil {
 		return protocol.Mem{}, err
 	}
@@ -218,18 +237,16 @@ func ReadMeminfo() (protocol.Mem, error) {
 	return ParseMeminfo(f)
 }
 
-// ReadLoadavg reads and parses /proc/loadavg.
-func ReadLoadavg() ([]float64, error) {
-	data, err := os.ReadFile("/proc/loadavg")
+func readLoadavg(procRoot string) ([]float64, error) {
+	data, err := os.ReadFile(filepath.Join(procRoot, "loadavg"))
 	if err != nil {
 		return nil, err
 	}
 	return ParseLoadavg(string(data))
 }
 
-// ReadUptime reads and parses /proc/uptime.
-func ReadUptime() (int64, error) {
-	data, err := os.ReadFile("/proc/uptime")
+func readUptime(procRoot string) (int64, error) {
+	data, err := os.ReadFile(filepath.Join(procRoot, "uptime"))
 	if err != nil {
 		return 0, err
 	}

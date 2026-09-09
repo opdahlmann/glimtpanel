@@ -258,17 +258,25 @@ func TestInvalidTokenClearsStoreWhenKeyConfigured(t *testing.T) {
 	}
 }
 
-type fakeCollector struct{}
+type fakeSystem struct{}
 
-func (fakeCollector) Host() (protocol.Host, error) {
+func (fakeSystem) Host(context.Context) (protocol.Host, error) {
 	return protocol.Host{CPU: protocol.CPU{Total: 1}, Mem: protocol.Mem{Total: 3, Used: 1, Free: 2}}, nil
 }
+func (fakeSystem) Processes(context.Context, int) ([]protocol.Process, protocol.ProcessTotals, error) {
+	return nil, protocol.ProcessTotals{}, nil
+}
+func (fakeSystem) Services(context.Context) (*protocol.Services, error)       { return nil, nil }
+func (fakeSystem) Maintenance(context.Context) (*protocol.Maintenance, error) { return nil, nil }
+func (fakeSystem) Security(context.Context) (*protocol.Security, error)       { return nil, nil }
 
 // scaled shrinks the subscribe interval so the test runs fast (1000 ms → 10 ms).
 type scaled struct{ s *sched.Scheduler }
 
 func (x scaled) Subscribe(d time.Duration, top int) { x.s.Subscribe(d/100, top) }
 func (x scaled) Unsubscribe()                       { x.s.Unsubscribe() }
+func (x scaled) LogStart(protocol.LogStart)         {}
+func (x scaled) LogStop(string)                     {}
 
 func TestSubscribeStreamsUntilUnsubscribe(t *testing.T) {
 	type event struct {
@@ -321,7 +329,7 @@ func TestSubscribeStreamsUntilUnsubscribe(t *testing.T) {
 	})
 	stop := runClient(t, newTestClient(t, url, state.New(t.TempDir()), func(cfg *Config) {
 		cfg.NewSession = func(ctx context.Context, w *protocol.Welcome, out Sender) Session {
-			s := sched.New(sched.Config{SnapshotInterval: time.Hour, MaintenanceInterval: time.Hour, Collector: fakeCollector{}, Sink: out})
+			s := sched.New(sched.Config{SnapshotInterval: time.Hour, MaintenanceInterval: time.Hour, System: fakeSystem{}, Sink: out})
 			go s.Run(ctx)
 			return scaled{s}
 		}
@@ -386,5 +394,95 @@ func TestStreamDroppedWhenQueueFullButSnapshotWaits(t *testing.T) {
 	}
 	if time.Since(start) < 25*time.Millisecond {
 		t.Error("snapshot should wait for room instead of being dropped")
+	}
+}
+
+// logSession records log routing and answers each logStart with a logEnd.
+type logSession struct {
+	out    Sender
+	mu     sync.Mutex
+	starts []protocol.LogStart
+	stops  []string
+}
+
+func (l *logSession) Subscribe(time.Duration, int) {}
+func (l *logSession) Unsubscribe()                 {}
+func (l *logSession) LogStart(req protocol.LogStart) {
+	l.mu.Lock()
+	l.starts = append(l.starts, req)
+	l.mu.Unlock()
+	l.out.Send(&protocol.Log{StreamID: req.StreamID, Lines: []protocol.LogLine{{TS: 1, Message: "hi"}}})
+}
+func (l *logSession) LogStop(id string) {
+	l.mu.Lock()
+	l.stops = append(l.stops, id)
+	l.mu.Unlock()
+	l.out.Send(&protocol.LogEnd{StreamID: id, Reason: protocol.LogEndStopped})
+}
+
+func TestLogStartAndStopAreRoutedToSession(t *testing.T) {
+	var ls *logSession
+	var lsMu sync.Mutex
+	got := make(chan protocol.Message, 8)
+	url := fakeHub(t, func(ctx context.Context, c *websocket.Conn) {
+		if _, ok := readMsg(t, ctx, c).(*protocol.Hello); !ok {
+			return
+		}
+		// Before welcome: refused with logEnd error.
+		writeMsg(t, ctx, c, &protocol.LogStart{StreamID: "early", Source: "journal"})
+		got <- readUntil(t, ctx, c, protocol.TypeLogEnd)
+		writeMsg(t, ctx, c, &protocol.Welcome{ServerID: "srv1", SnapshotInterval: 30000, MaintenanceInterval: 600000})
+		writeMsg(t, ctx, c, &protocol.LogStart{StreamID: "s1", Source: "container", Container: "web", Tail: 50})
+		got <- readUntil(t, ctx, c, protocol.TypeLog)
+		writeMsg(t, ctx, c, &protocol.LogStop{StreamID: "s1"})
+		got <- readUntil(t, ctx, c, protocol.TypeLogEnd)
+		<-ctx.Done()
+	})
+	stop := runClient(t, newTestClient(t, url, state.New(t.TempDir()), func(cfg *Config) {
+		cfg.NewSession = func(ctx context.Context, w *protocol.Welcome, out Sender) Session {
+			lsMu.Lock()
+			defer lsMu.Unlock()
+			ls = &logSession{out: out}
+			return ls
+		}
+	}))
+	defer stop()
+	next := func() protocol.Message {
+		select {
+		case m := <-got:
+			return m
+		case <-time.After(3 * time.Second):
+			t.Fatal("timeout")
+			return nil
+		}
+	}
+	if e, ok := next().(*protocol.LogEnd); !ok || e.StreamID != "early" || e.Reason != protocol.LogEndError {
+		t.Errorf("early logStart: %+v", e)
+	}
+	if l, ok := next().(*protocol.Log); !ok || l.StreamID != "s1" || len(l.Lines) != 1 {
+		t.Errorf("log: %+v", l)
+	}
+	if e, ok := next().(*protocol.LogEnd); !ok || e.StreamID != "s1" || e.Reason != protocol.LogEndStopped {
+		t.Errorf("logEnd: %+v", e)
+	}
+	lsMu.Lock()
+	defer lsMu.Unlock()
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	if len(ls.starts) != 1 || ls.starts[0].Container != "web" || ls.starts[0].Tail != 50 || len(ls.stops) != 1 || ls.stops[0] != "s1" {
+		t.Errorf("session saw starts=%+v stops=%v", ls.starts, ls.stops)
+	}
+}
+
+func TestLogDroppedWhenQueueFull(t *testing.T) {
+	s := &session{client: &Client{cfg: Config{QueueSize: 1}, log: discardLogger()}, out: make(chan []byte, 1), ctx: context.Background()}
+	if !s.Send(&protocol.Log{StreamID: "x"}) {
+		t.Fatal("first log should queue")
+	}
+	if s.Send(&protocol.Log{StreamID: "x"}) {
+		t.Error("second log should be dropped when the queue is full")
+	}
+	if s.dropped.Load() != 1 {
+		t.Errorf("dropped = %d", s.dropped.Load())
 	}
 }

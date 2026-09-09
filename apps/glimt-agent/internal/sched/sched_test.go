@@ -3,6 +3,7 @@ package sched
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -13,14 +14,12 @@ import (
 type recorder struct {
 	mu   sync.Mutex
 	msgs []protocol.Message
-	at   []time.Time
 }
 
 func (r *recorder) Send(m protocol.Message) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.msgs = append(r.msgs, m)
-	r.at = append(r.at, time.Now())
 	return true
 }
 
@@ -36,116 +35,410 @@ func (r *recorder) count(typ string) int {
 	return n
 }
 
-func (r *recorder) firstAt(typ string) (time.Time, bool) {
+func (r *recorder) last(typ string) protocol.Message {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for i, m := range r.msgs {
-		if m.MessageType() == typ {
-			return r.at[i], true
+	for i := len(r.msgs) - 1; i >= 0; i-- {
+		if r.msgs[i].MessageType() == typ {
+			return r.msgs[i]
 		}
 	}
-	return time.Time{}, false
+	return nil
 }
 
-type fakeCollector struct{ fail bool }
+type fakeSystem struct {
+	mu           sync.Mutex
+	hostCalls    int
+	procCalls    int
+	topN         []int
+	services     int
+	maintenance  int
+	security     int
+	failServices bool
+	failHost     bool
+}
 
-func (f fakeCollector) Host() (protocol.Host, error) {
+func (f *fakeSystem) Host(context.Context) (protocol.Host, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hostCalls++
 	h := protocol.Host{CPU: protocol.CPU{Total: 12.5}, Mem: protocol.Mem{Total: 100, Used: 50, Free: 50}}
-	if f.fail {
+	if f.failHost {
 		return h, errors.New("loadavg unreadable")
 	}
 	return h, nil
 }
 
-func waitFor(t *testing.T, timeout time.Duration, cond func() bool) bool {
+func (f *fakeSystem) Processes(_ context.Context, topN int) ([]protocol.Process, protocol.ProcessTotals, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.procCalls++
+	f.topN = append(f.topN, topN)
+	return []protocol.Process{{PID: 1, Name: "systemd", User: "root"}}, protocol.ProcessTotals{Total: 42, Running: 1}, nil
+}
+
+func (f *fakeSystem) Services(context.Context) (*protocol.Services, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.services++
+	if f.failServices {
+		return nil, errors.New("systemctl missing")
+	}
+	return &protocol.Services{Failed: []string{"x.service"}, NeedsRestart: []string{}}, nil
+}
+
+func (f *fakeSystem) Maintenance(context.Context) (*protocol.Maintenance, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.maintenance++
+	return &protocol.Maintenance{Updates: f.maintenance}, nil
+}
+
+func (f *fakeSystem) Security(context.Context) (*protocol.Security, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.security++
+	return &protocol.Security{ListeningPorts: []protocol.ListeningPort{{Port: 22, Proto: "tcp"}}}, nil
+}
+
+func (f *fakeSystem) get(field *int) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return *field
+}
+
+type fakeContainers struct {
+	mu    sync.Mutex
+	lists int
+	stats int
+}
+
+func (f *fakeContainers) List(context.Context) ([]protocol.Container, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lists++
+	return []protocol.Container{{ID: "abc", Name: "web", Image: "nginx", State: "running"}, {ID: "def", Name: "db", Image: "pg", State: "stopped"}}, nil
+}
+
+func (f *fakeContainers) Stats(_ context.Context, cs []protocol.Container) ([]protocol.ContainerStats, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stats++
+	out := make([]protocol.ContainerStats, len(cs))
+	for i, c := range cs {
+		out[i] = protocol.ContainerStats{ID: c.ID, State: c.State}
+		if c.State == "running" {
+			out[i].CPUPct, out[i].MemBytes = 5, 1000
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeContainers) get(field *int) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return *field
+}
+
+type fakePeriodic struct {
+	mu       sync.Mutex
+	refreshs int
+	at       time.Time
+	now      func() time.Time
+}
+
+func (p *fakePeriodic) Refresh(context.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.refreshs++
+	p.at = p.now()
+	return nil
+}
+
+func (p *fakePeriodic) RefreshedAt() time.Time {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.at
+}
+
+func (p *fakePeriodic) count() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.refreshs
+}
+
+// countingHandler counts slog records at or above Warn.
+type countingHandler struct {
+	mu    sync.Mutex
+	warns int
+}
+
+func (h *countingHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *countingHandler) Handle(_ context.Context, r slog.Record) error {
+	if r.Level >= slog.LevelWarn {
+		h.mu.Lock()
+		h.warns++
+		h.mu.Unlock()
+	}
+	return nil
+}
+func (h *countingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *countingHandler) WithGroup(string) slog.Handler      { return h }
+func (h *countingHandler) count() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.warns
+}
+
+func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
+	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		if cond() {
-			return true
+			return
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
-	return cond()
+	t.Fatal("condition not met in time")
 }
 
-func TestSnapshotImmediatelyThenPeriodic(t *testing.T) {
-	rec := &recorder{}
-	maint := 0
-	var mmu sync.Mutex
-	s := New(Config{
-		SnapshotInterval:    30 * time.Millisecond,
-		MaintenanceInterval: 25 * time.Millisecond,
-		Collector:           fakeCollector{},
-		Sink:                rec,
-		OnMaintenance:       func() { mmu.Lock(); maint++; mmu.Unlock() },
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	start := time.Now()
-	go s.Run(ctx)
+type fixture struct {
+	clock  *fakeClock
+	sys    *fakeSystem
+	docker *fakeContainers
+	per    *fakePeriodic
+	rec    *recorder
+	cache  *MaintenanceCache
+	logs   *countingHandler
+	s      *Scheduler
+	cancel context.CancelFunc
+}
 
-	if !waitFor(t, time.Second, func() bool { return rec.count(protocol.TypeSnapshot) >= 1 }) {
-		t.Fatal("no snapshot")
+func newFixture(t *testing.T, tweak func(*Config)) *fixture {
+	t.Helper()
+	f := &fixture{clock: newFakeClock(), sys: &fakeSystem{}, docker: &fakeContainers{}, rec: &recorder{}, logs: &countingHandler{}}
+	f.per = &fakePeriodic{now: f.clock.Now}
+	f.cache = NewMaintenanceCache(f.sys, f.clock.Now)
+	cfg := Config{
+		SnapshotInterval: 30 * time.Second, MaintenanceInterval: 10 * time.Minute,
+		System: f.sys, Containers: f.docker, Maintenance: f.cache, Periodics: []Periodic{f.per},
+		Sink: f.rec, Clock: f.clock, Logger: slog.New(f.logs),
 	}
-	if at, _ := rec.firstAt(protocol.TypeSnapshot); at.Sub(start) > 15*time.Millisecond {
-		t.Errorf("first snapshot came after %v, want immediately", at.Sub(start))
+	if tweak != nil {
+		tweak(&cfg)
 	}
-	if !waitFor(t, time.Second, func() bool { return rec.count(protocol.TypeSnapshot) >= 3 }) {
-		t.Errorf("only %d snapshots", rec.count(protocol.TypeSnapshot))
+	f.s = New(cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.cancel = cancel
+	t.Cleanup(cancel)
+	go f.s.Run(ctx)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 1 })
+	waitFor(t, func() bool { n, _ := f.clock.counts(); return n >= 2 })
+	return f
+}
+
+func TestSnapshotCadenceAndMaintenance(t *testing.T) {
+	f := newFixture(t, nil)
+	snap := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
+	if snap.TS != f.clock.Now().UnixMilli() || snap.Host.CPU.Total != 12.5 {
+		t.Errorf("snapshot payload %+v", snap)
 	}
-	if !waitFor(t, time.Second, func() bool { mmu.Lock(); defer mmu.Unlock(); return maint >= 2 }) {
-		t.Errorf("maintenance ran %d times", maint)
+	if snap.Maintenance == nil || snap.Maintenance.Updates != 1 || snap.Services == nil || snap.Security == nil {
+		t.Errorf("sections missing: maintenance=%+v services=%+v security=%+v", snap.Maintenance, snap.Services, snap.Security)
 	}
-	if rec.count(protocol.TypeStream) != 0 {
-		t.Error("stream sent without subscription")
+	if len(snap.Containers) != 2 || snap.Containers[0].CPUPct != 5 || snap.Containers[0].MemBytes != 1000 || snap.Containers[1].CPUPct != 0 {
+		t.Errorf("containers %+v", snap.Containers)
 	}
-	snap := rec.msgs[0].(*protocol.Snapshot)
-	if snap.TS == 0 || snap.Host.CPU.Total != 12.5 {
-		t.Errorf("snapshot payload: %+v", snap)
+	if f.per.count() != 1 || f.sys.get(&f.sys.maintenance) != 1 {
+		t.Errorf("periodic=%d maintenance=%d at start", f.per.count(), f.sys.get(&f.sys.maintenance))
 	}
+
+	f.clock.Advance(30 * time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
+	f.clock.Advance(30 * time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 3 })
+	if f.sys.get(&f.sys.maintenance) != 1 || f.docker.get(&f.docker.lists) != 3 || f.sys.get(&f.sys.services) != 3 {
+		t.Errorf("maintenance=%d lists=%d services=%d after two ticks", f.sys.get(&f.sys.maintenance), f.docker.get(&f.docker.lists), f.sys.get(&f.sys.services))
+	}
+	if f.rec.count(protocol.TypeStream) != 0 {
+		t.Error("stream without subscription")
+	}
+
+	// The maintenance tick at 10 min refreshes the cache and the periodic.
+	f.clock.Advance(9 * time.Minute)
+	waitFor(t, func() bool { return f.sys.get(&f.sys.maintenance) == 2 && f.per.count() == 2 })
+	f.clock.Advance(30 * time.Second)
+	waitFor(t, func() bool {
+		s, _ := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
+		return s != nil && s.Maintenance != nil && s.Maintenance.Updates == 2
+	})
 }
 
 func TestStreamOnlyWhileSubscribed(t *testing.T) {
-	rec := &recorder{}
-	s := New(Config{SnapshotInterval: time.Hour, MaintenanceInterval: time.Hour, Collector: fakeCollector{}, Sink: rec})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go s.Run(ctx)
-
-	time.Sleep(20 * time.Millisecond)
-	if rec.count(protocol.TypeStream) != 0 {
-		t.Fatal("stream before subscribe")
+	f := newFixture(t, nil)
+	f.s.Subscribe(time.Second, 10)
+	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 3 })
+	f.clock.Advance(time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 1 })
+	f.clock.Advance(time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 2 })
+	st := f.rec.last(protocol.TypeStream).(*protocol.Stream)
+	if len(st.Processes) != 1 || st.ProcessTotals == nil || st.ProcessTotals.Total != 42 || len(st.Containers) != 2 || st.Containers[0].CPUPct != 5 || st.Host.CPU.Total != 12.5 {
+		t.Errorf("stream payload %+v", st)
 	}
-	s.Subscribe(5*time.Millisecond, 40)
-	if !waitFor(t, time.Second, func() bool { return rec.count(protocol.TypeStream) >= 3 }) {
-		t.Fatalf("only %d streams after subscribe", rec.count(protocol.TypeStream))
-	}
-	s.Unsubscribe()
-	time.Sleep(20 * time.Millisecond)
-	n := rec.count(protocol.TypeStream)
-	time.Sleep(40 * time.Millisecond)
-	if rec.count(protocol.TypeStream) != n {
-		t.Errorf("stream continued after unsubscribe: %d → %d", n, rec.count(protocol.TypeStream))
+	f.sys.mu.Lock()
+	topN := append([]int(nil), f.sys.topN...)
+	f.sys.mu.Unlock()
+	if len(topN) != 2 || topN[0] != 10 {
+		t.Errorf("topN %v", topN)
 	}
 
-	// Re-subscribe with a new interval works.
-	s.Subscribe(5*time.Millisecond, 10)
-	if !waitFor(t, time.Second, func() bool { return rec.count(protocol.TypeStream) >= n+2 }) {
-		t.Error("stream did not resume")
+	f.s.Unsubscribe()
+	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 2 })
+	f.clock.Advance(time.Second)
+	f.clock.Advance(time.Second)
+	time.Sleep(20 * time.Millisecond)
+	if f.rec.count(protocol.TypeStream) != 2 {
+		t.Errorf("stream continued after unsubscribe: %d", f.rec.count(protocol.TypeStream))
+	}
+
+	// Re-subscribe without topProcs uses the default 40.
+	f.s.Subscribe(5*time.Second, 0)
+	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 3 })
+	f.clock.Advance(5 * time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 3 })
+	f.sys.mu.Lock()
+	lastTop := f.sys.topN[len(f.sys.topN)-1]
+	f.sys.mu.Unlock()
+	if lastTop != 40 {
+		t.Errorf("default topProcs = %d", lastTop)
 	}
 }
 
-func TestCollectorErrorIsRateLimited(t *testing.T) {
-	rec := &recorder{}
-	s := New(Config{SnapshotInterval: 5 * time.Millisecond, MaintenanceInterval: time.Hour, Collector: fakeCollector{fail: true}, Sink: rec})
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
-	defer cancel()
-	s.Run(ctx)
-	if rec.count(protocol.TypeSnapshot) < 3 {
-		t.Errorf("failing collector must not stop snapshots, got %d", rec.count(protocol.TypeSnapshot))
+func TestMeasurementReusedWhenSnapshotAndStreamCoincide(t *testing.T) {
+	f := newFixture(t, nil)
+	f.s.Subscribe(time.Second, 40)
+	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 3 })
+	f.clock.Advance(time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 1 })
+	hostCalls := f.sys.get(&f.sys.hostCalls)
+	// A snapshot at the same instant reuses the stream's reading.
+	snap := f.s.Snapshot(context.Background())
+	if f.sys.get(&f.sys.hostCalls) != hostCalls || snap.Containers[0].CPUPct != 5 {
+		t.Errorf("host calls %d → %d; snapshot should reuse the measurement", hostCalls, f.sys.get(&f.sys.hostCalls))
 	}
-	if s.lastErrLog.IsZero() {
-		t.Error("error should have been logged once")
+	// Half a second later (stream interval 1 s → window 500 ms) it measures again.
+	f.clock.Advance(500 * time.Millisecond)
+	f.s.Snapshot(context.Background())
+	if f.sys.get(&f.sys.hostCalls) != hostCalls+1 {
+		t.Errorf("host calls %d, want %d", f.sys.get(&f.sys.hostCalls), hostCalls+1)
+	}
+}
+
+func TestCollectorErrorsAreRateLimitedAndSectionsOmitted(t *testing.T) {
+	f := newFixture(t, func(c *Config) { c.System.(*fakeSystem).failServices = true; c.System.(*fakeSystem).failHost = true })
+	snap := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
+	if snap.Services != nil || snap.Security == nil || snap.Host.CPU.Total != 12.5 {
+		t.Errorf("services should be omitted, the rest kept: %+v", snap)
+	}
+	if f.logs.count() != 2 {
+		t.Errorf("%d warnings after the first snapshot, want 2 (host, services)", f.logs.count())
+	}
+	f.clock.Advance(30 * time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
+	f.clock.Advance(30 * time.Second)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 3 })
+	if f.logs.count() != 2 {
+		t.Errorf("%d warnings after three snapshots, want still 2", f.logs.count())
+	}
+	f.clock.Advance(time.Hour)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) >= 4 })
+	waitFor(t, func() bool { return f.logs.count() == 4 })
+}
+
+func TestDockerEventDebounce(t *testing.T) {
+	f := newFixture(t, nil)
+	if f.docker.get(&f.docker.lists) != 1 {
+		t.Fatalf("lists = %d", f.docker.get(&f.docker.lists))
+	}
+	// settled waits until the run loop has consumed the pending events (each
+	// one creates a timer) and returns the number of timers so far.
+	settled := func(min int) int {
+		t.Helper()
+		waitFor(t, func() bool { _, timers := f.clock.counts(); return timers >= min })
+		time.Sleep(20 * time.Millisecond)
+		_, timers := f.clock.counts()
+		return timers
+	}
+	f.s.DockerChanged()
+	f.s.DockerChanged()
+	f.s.DockerChanged()
+	n := settled(1)
+	f.clock.Advance(time.Second)
+	time.Sleep(20 * time.Millisecond)
+	if f.rec.count(protocol.TypeSnapshot) != 1 {
+		t.Errorf("snapshot before the debounce elapsed")
+	}
+	// Another event restarts the debounce: due 2 s from now, not 1 s.
+	f.s.DockerChanged()
+	settled(n + 1)
+	f.clock.Advance(1500 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	if f.rec.count(protocol.TypeSnapshot) != 1 {
+		t.Errorf("snapshot before the restarted debounce elapsed")
+	}
+	f.clock.Advance(500 * time.Millisecond)
+	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
+	if f.docker.get(&f.docker.lists) != 2 {
+		t.Errorf("lists = %d after the event snapshot", f.docker.get(&f.docker.lists))
+	}
+}
+
+func TestMaintenanceCacheSurvivesReconnect(t *testing.T) {
+	clock := newFakeClock()
+	sys := &fakeSystem{}
+	cache := NewMaintenanceCache(sys, clock.Now)
+	if cache.Value() != nil || !cache.RefreshedAt().IsZero() {
+		t.Fatal("empty cache should have no value")
+	}
+	if err := cache.Refresh(context.Background()); err != nil || cache.Value().Updates != 1 {
+		t.Fatalf("refresh: %v %+v", err, cache.Value())
+	}
+	// A new connection one minute later does not re-run the check.
+	clock.Advance(time.Minute)
+	rec := &recorder{}
+	s := New(Config{System: sys, Maintenance: cache, Sink: rec, Clock: clock})
+	ctx, cancel := context.WithCancel(context.Background())
+	go s.Run(ctx)
+	waitFor(t, func() bool { return rec.count(protocol.TypeSnapshot) == 1 })
+	cancel()
+	if sys.get(&sys.maintenance) != 1 {
+		t.Errorf("maintenance re-run on reconnect: %d", sys.get(&sys.maintenance))
+	}
+	// Ten minutes later it is stale and refreshed before the first snapshot.
+	clock.Advance(10 * time.Minute)
+	rec2 := &recorder{}
+	s2 := New(Config{System: sys, Maintenance: cache, Sink: rec2, Clock: clock})
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	go s2.Run(ctx2)
+	waitFor(t, func() bool { return rec2.count(protocol.TypeSnapshot) == 1 })
+	if sys.get(&sys.maintenance) != 2 || rec2.last(protocol.TypeSnapshot).(*protocol.Snapshot).Maintenance.Updates != 2 {
+		t.Errorf("stale cache not refreshed: %d", sys.get(&sys.maintenance))
+	}
+}
+
+func TestPrimeAndStreamWithoutContainers(t *testing.T) {
+	clock := newFakeClock()
+	sys := &fakeSystem{}
+	s := New(Config{System: sys, Sink: &recorder{}, Clock: clock})
+	s.Prime(context.Background())
+	clock.Advance(time.Second)
+	st := s.Stream(context.Background(), 0)
+	if st.Host.CPU.Total != 12.5 || len(st.Containers) != 0 || st.ProcessTotals == nil {
+		t.Errorf("stream %+v", st)
+	}
+	if sys.get(&sys.hostCalls) != 2 {
+		t.Errorf("host calls %d", sys.get(&sys.hostCalls))
 	}
 }

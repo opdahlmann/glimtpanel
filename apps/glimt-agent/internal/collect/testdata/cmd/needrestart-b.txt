@@ -1,0 +1,9 @@
+NEEDRESTART-VER: 3.6
+NEEDRESTART-KCUR: 6.8.0-45-generic
+NEEDRESTART-KEXP: 6.8.0-45-generic
+NEEDRESTART-KSTA: 1
+NEEDRESTART-SVC: ssh.service
+NEEDRESTART-SVC: cron.service
+NEEDRESTART-SVC: ssh.service
+NEEDRESTART-SESS: ole @ session #3
+NEEDRESTART-SESS: ole @ user manager service

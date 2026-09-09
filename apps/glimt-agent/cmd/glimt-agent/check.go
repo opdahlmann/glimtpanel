@@ -12,6 +12,7 @@ import (
 
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/collect"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/docker"
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/journal"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/state"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/sysinfo"
 )
@@ -24,13 +25,7 @@ const configFile = "/etc/glimt-agent/env"
 // process environment, so the output reflects the installed configuration.
 func runCheck(args []string, stdout, stderr io.Writer) int {
 	fileEnv := readEnvFile(configFile)
-	lookup := func(name string) string {
-		if v := os.Getenv(name); v != "" {
-			return v
-		}
-		return fileEnv[name]
-	}
-	o, code, ok := parseOptions("check", args, stderr, lookup)
+	o, code, ok := parseOptions("check", args, stderr, fileLookup())
 	if !ok {
 		return code
 	}
@@ -61,11 +56,18 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	}
 
 	p("systemd:         %s", map[bool]string{true: "running", false: "not running"}[dirExists("/run/systemd/system")])
-	journal := fileExists("/run/systemd/journal/socket") || dirExists("/run/log/journal") || dirExists("/var/log/journal")
+	haveJournal := fileExists("/run/systemd/journal/socket") || dirExists("/run/log/journal") || dirExists("/var/log/journal")
 	if path, err := exec.LookPath("journalctl"); err == nil {
-		p("journald:        %s (journalctl at %s)", yes(journal), path)
+		p("journald:        %s (journalctl at %s)", yes(haveJournal), path)
+		p("journal counts:  %s", journalCounts())
 	} else {
-		p("journald:        %s (journalctl not in PATH)", yes(journal))
+		p("journald:        %s (journalctl not in PATH)", yes(haveJournal))
+		p("journal counts:  unavailable (sshFailed, ufw and fail2ban counts need journalctl)")
+	}
+	if web := journal.ReadablePaths(journal.WebLogPaths); len(web) > 0 {
+		p("web logs:        %s", strings.Join(web, ", "))
+	} else {
+		p("web logs:        none readable (%s)", strings.Join(journal.WebLogPaths, ", "))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -125,6 +127,20 @@ func readEnvFile(path string) map[string]string {
 	return out
 }
 
+// journalCounts runs the security counters once (bounded to five seconds).
+func journalCounts() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c := journal.NewCounter(nil, nil, nil)
+	err := c.Refresh(ctx)
+	n := c.SecurityCounts(ctx)
+	summary := fmt.Sprintf("sshd failed logins 24h %d (last hour %d), ufw blocks %d, fail2ban bans %d", n.SSHFailedDay, n.SSHFailedHour, n.UFWBlocked, n.Fail2banBanned)
+	if err != nil {
+		return summary + " – partly failed: " + shortErr(err)
+	}
+	return summary
+}
+
 func probeDocker(ctx context.Context, endpoint string) string {
 	ep, err := docker.ParseEndpoint(endpoint)
 	if err != nil {
@@ -135,7 +151,8 @@ func probeDocker(ctx context.Context, endpoint string) string {
 			return fmt.Sprintf("%s: not present", ep)
 		}
 	}
-	api, err := docker.NewClient(ep, 2*time.Second).Ping(ctx)
+	client := docker.NewClient(ep, 2*time.Second)
+	api, err := client.Ping(ctx)
 	if err != nil {
 		if errors.Is(err, os.ErrPermission) {
 			return fmt.Sprintf("%s: present, permission denied", ep)
@@ -145,7 +162,22 @@ func probeDocker(ctx context.Context, endpoint string) string {
 	if api == "" {
 		api = "unknown"
 	}
-	return fmt.Sprintf("%s: reachable, API %s", ep, api)
+	v, err := client.Negotiate(ctx)
+	if err != nil {
+		return fmt.Sprintf("%s: reachable, API %s, but %v", ep, api, shortErr(err))
+	}
+	engine := docker.NewEngine(docker.Options{Client: client})
+	list, err := engine.List(ctx)
+	if err != nil {
+		return fmt.Sprintf("%s: reachable, API %s (Docker %s, min %s), container list failed: %v", ep, v.APIVersion, v.Version, v.MinAPIVersion, shortErr(err))
+	}
+	running := 0
+	for _, c := range list {
+		if c.State == "running" {
+			running++
+		}
+	}
+	return fmt.Sprintf("%s: reachable, API %s (Docker %s, min %s), %d containers (%d running)", ep, v.APIVersion, v.Version, v.MinAPIVersion, len(list), running)
 }
 
 func shortErr(err error) string {

@@ -2,11 +2,15 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/protocol"
 )
 
 func TestVersionAndHelp(t *testing.T) {
@@ -93,7 +97,7 @@ func TestCheckRuns(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("check: code=%d err=%q", code, errb.String())
 	}
-	for _, want := range []string{"hostname:", "journald:", "docker socket:", "docker proxy:", "needrestart:", "state dir:"} {
+	for _, want := range []string{"hostname:", "journald:", "journal counts:", "web logs:", "docker socket:", "docker proxy:", "needrestart:", "state dir:"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("check output lacks %q:\n%s", want, out.String())
 		}
@@ -170,5 +174,92 @@ func TestInstallScriptMatchesUnit(t *testing.T) {
 	}
 	if !strings.HasSuffix(strings.TrimSpace(s), "main \"$@\"") {
 		t.Error("install.sh must end with main \"$@\"")
+	}
+}
+
+func TestSnapshotAndStreamPrintJSON(t *testing.T) {
+	t.Setenv("GLIMT_AGENT_DOCKER", "none")
+	var out, errb bytes.Buffer
+	if code := run([]string{"snapshot", "--wait", "20ms", "--docker", "none"}, &out, &errb); code != 0 {
+		t.Fatalf("snapshot: code=%d err=%q", code, errb.String())
+	}
+	var snap map[string]any
+	if err := json.Unmarshal(out.Bytes(), &snap); err != nil {
+		t.Fatalf("snapshot is not JSON: %v\n%s", err, out.String())
+	}
+	if snap["type"] != "snapshot" || snap["host"] == nil || snap["security"] == nil {
+		t.Errorf("snapshot keys: %v", snap)
+	}
+	if !strings.HasPrefix(out.String(), "{\n  \"type\": \"snapshot\"") {
+		t.Errorf("snapshot should be pretty-printed with type first:\n%.80s", out.String())
+	}
+
+	out.Reset()
+	errb.Reset()
+	if code := run([]string{"stream", "--wait", "20ms", "--top", "3", "--docker", "none"}, &out, &errb); code != 0 {
+		t.Fatalf("stream: code=%d err=%q", code, errb.String())
+	}
+	var st map[string]any
+	if err := json.Unmarshal(out.Bytes(), &st); err != nil {
+		t.Fatalf("stream is not JSON: %v", err)
+	}
+	if st["type"] != "stream" || st["host"] == nil {
+		t.Errorf("stream keys: %v", st)
+	}
+	if _, err := os.Stat("/proc/self/stat"); err == nil {
+		if procs, _ := st["processes"].([]any); len(procs) == 0 {
+			t.Errorf("stream without processes on Linux: %v", st["processTotals"])
+		}
+	}
+}
+
+func TestLogsCommand(t *testing.T) {
+	t.Setenv("GLIMT_AGENT_DOCKER", "none")
+	var out, errb bytes.Buffer
+	// "file" is reserved: unavailable, exit 1.
+	if code := run([]string{"logs", "--source", "file", "--docker", "none"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "unavailable") {
+		t.Errorf("file source: code=%d err=%q", code, errb.String())
+	}
+	errb.Reset()
+	// A container without docker access is unavailable too.
+	if code := run([]string{"logs", "--source", "container", "--container", "web", "--docker", "none"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "docker access is off") {
+		t.Errorf("container without docker: code=%d err=%q", code, errb.String())
+	}
+	errb.Reset()
+	if code := run([]string{"logs", "--source", "web", "--docker", "none"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "unavailable") {
+		t.Errorf("web without files: code=%d err=%q", code, errb.String())
+	}
+	errb.Reset()
+	// Without journalctl the journal sources are unavailable; with it the tail prints and exits 0.
+	code := run([]string{"logs", "--source", "auth", "--tail", "3", "--docker", "none"}, &out, &errb)
+	if _, err := exec.LookPath("journalctl"); err != nil {
+		if code != 1 || !strings.Contains(errb.String(), "unavailable") {
+			t.Errorf("auth without journalctl: code=%d err=%q", code, errb.String())
+		}
+	} else if code != 0 {
+		t.Errorf("auth with journalctl: code=%d err=%q", code, errb.String())
+	}
+	errb.Reset()
+	if code := run([]string{"logs", "--source", "journal", "--priority", "loud", "--docker", "none"}, &out, &errb); code != 1 {
+		t.Errorf("bad priority should end the stream with an error: code=%d err=%q", code, errb.String())
+	}
+}
+
+func TestPrintSinkFormatsLines(t *testing.T) {
+	var buf bytes.Buffer
+	s := &printSink{w: &buf, done: make(chan struct{})}
+	s.Send(&protocol.Log{StreamID: "x", Dropped: 2, Lines: []protocol.LogLine{
+		{TS: 0, Unit: "nginx", Priority: "err", Message: "boom"},
+		{TS: 0, Container: "web", Message: "hello"},
+	}})
+	s.Send(&protocol.LogEnd{StreamID: "x", Reason: "eof"})
+	got := buf.String()
+	if !strings.Contains(got, "... 2 lines dropped") || !strings.Contains(got, "err  nginx: boom") || !strings.Contains(got, " web: hello") {
+		t.Errorf("output:\n%s", got)
+	}
+	select {
+	case <-s.done:
+	default:
+		t.Error("done not closed after logEnd")
 	}
 }

@@ -1,0 +1,11 @@
+Name:	my (weird) proc
+Umask:	0022
+State:	R (running)
+Tgid:	42
+Ngid:	0
+Pid:	42
+PPid:	1
+TracerPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+Threads:	3

@@ -30,15 +30,19 @@ type TokenStore interface {
 
 // Sender is the outbound queue handed to the session.
 type Sender interface {
-	// Send queues a message. Stream messages are dropped when the queue is
-	// full; everything else waits. Returns false if not queued.
+	// Send queues a message. Stream and log messages are dropped when the
+	// queue is full; everything else (snapshot, logEnd, pong) waits.
+	// Returns false if not queued.
 	Send(protocol.Message) bool
 }
 
-// Session is what a connection drives after welcome (internal/sched).
+// Session is what a connection drives after welcome: the scheduler and the
+// log stream manager. It ends with the context given to NewSession.
 type Session interface {
 	Subscribe(interval time.Duration, topProcs int)
 	Unsubscribe()
+	LogStart(req protocol.LogStart)
+	LogStop(streamID string)
 }
 
 // Config for the client.
@@ -368,10 +372,21 @@ func (c *Client) readLoop(internalCtx, sessCtx context.Context, s *session) (out
 			}
 			sessMu.Unlock()
 		case *protocol.LogStart:
-			c.log.Info("logStart not supported yet", "streamId", m.StreamID, "source", m.Source)
-			s.Send(&protocol.LogEnd{StreamID: m.StreamID, Reason: protocol.LogEndUnavailable, Message: "log streaming is not implemented in this agent version"})
+			sessMu.Lock()
+			if sess != nil {
+				sess.LogStart(*m)
+			} else {
+				c.log.Warn("logStart before welcome", "streamId", m.StreamID)
+				s.Send(&protocol.LogEnd{StreamID: m.StreamID, Reason: protocol.LogEndError, Message: "logStart before welcome"})
+			}
+			sessMu.Unlock()
 		case *protocol.LogStop:
 			c.log.Debug("logStop", "streamId", m.StreamID)
+			sessMu.Lock()
+			if sess != nil {
+				sess.LogStop(m.StreamID)
+			}
+			sessMu.Unlock()
 		default:
 			c.log.Warn("unexpected message from hub", "type", msg.MessageType())
 		}
@@ -395,7 +410,7 @@ func (s *session) Send(m protocol.Message) bool {
 		s.client.log.Error("cannot encode message", "type", m.MessageType(), "err", err)
 		return false
 	}
-	if m.MessageType() == protocol.TypeStream {
+	if t := m.MessageType(); t == protocol.TypeStream || t == protocol.TypeLog {
 		select {
 		case s.out <- data:
 			return true
@@ -421,7 +436,7 @@ func (s *session) writeLoop() {
 			return
 		case <-report.C:
 			if n := s.dropped.Swap(0); n > 0 {
-				s.client.log.Warn("stream messages dropped (send queue full)", "count", n, "interval", s.client.cfg.DropLogInterval)
+				s.client.log.Warn("stream/log messages dropped (send queue full)", "count", n, "interval", s.client.cfg.DropLogInterval)
 			}
 		case data := <-s.out:
 			wctx, cancel := context.WithTimeout(s.ctx, s.client.cfg.WriteTimeout)

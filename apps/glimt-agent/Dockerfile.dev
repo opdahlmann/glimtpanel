@@ -19,13 +19,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       systemd systemd-sysv dbus ca-certificates curl iproute2 procps util-linux bsdutils \
+      openssh-server libnss-systemd \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* /var/log/*.log /var/cache/apt/* \
  # Units that make no sense inside a container.
  && systemctl mask getty.target console-getty.service systemd-udevd.service \
       systemd-udev-trigger.service systemd-modules-load.service systemd-logind.service \
       apt-daily.timer apt-daily-upgrade.timer e2scrub_all.timer fstrim.timer motd-news.timer \
-      systemd-timesyncd.service >/dev/null 2>&1
+      systemd-timesyncd.service >/dev/null 2>&1 \
+ # sshd listens on 22 so the security section shows a real port and real sshd
+ # journal lines exist (no root login, keys only; nobody is meant to log in).
+ && printf 'PermitRootLogin no\nPasswordAuthentication no\n' >/etc/ssh/sshd_config.d/glimt-dev.conf \
+ && systemctl disable ssh.socket >/dev/null 2>&1 || true \
+ && systemctl enable ssh.service >/dev/null 2>&1
 
 COPY --from=build /out/glimt-agent /usr/local/bin/glimt-agent
 COPY apps/glimt-agent/install/ /opt/glimt-agent/install/
@@ -33,8 +39,9 @@ COPY apps/glimt-agent/dev/ /opt/glimt-agent/dev/
 
 # install.sh runs without systemd here (build time); it enables the unit for boot.
 # glimt-dev-env.service rewrites /etc/glimt-agent/env from the container env at boot.
-RUN sh /opt/glimt-agent/install/install.sh --local --key placeholder \
-      --hub ws://host.docker.internal:5080/agent/ws --docker none \
+RUN groupadd --system docker \
+ && sh /opt/glimt-agent/install/install.sh --local --key placeholder \
+      --hub ws://host.docker.internal:5080/agent/ws --docker simple \
  && install -m 0755 /opt/glimt-agent/dev/glimt-dev-env.sh /usr/local/bin/glimt-dev-env.sh \
  && install -m 0755 /opt/glimt-agent/dev/glimt-noise.sh /usr/local/bin/glimt-noise.sh \
  && install -m 0644 /opt/glimt-agent/dev/glimt-dev-env.service \

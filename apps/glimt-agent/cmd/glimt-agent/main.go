@@ -1,7 +1,8 @@
 // Command glimt-agent is the Glimtpanel agent: a read-only collector that
-// sends host metrics to the hub over one WebSocket.
+// sends host metrics, containers, services, security state and logs to the
+// hub over one WebSocket.
 //
-// Subcommands: run (default), version, check, uninstall.
+// Subcommands: run (default), check, snapshot, stream, logs, version, uninstall.
 package main
 
 import (
@@ -16,10 +17,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/collect"
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/logs"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/protocol"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/sched"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/sdnotify"
@@ -157,13 +159,18 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, `glimt-agent %s – Glimtpanel agent (read-only)
 
 Usage:
-  glimt-agent [run] [flags]   connect to the hub and keep reporting (default)
-  glimt-agent check [flags]   show what this machine offers the agent
-  glimt-agent version         print the version
+  glimt-agent [run] [flags]      connect to the hub and keep reporting (default)
+  glimt-agent check [flags]      show what this machine offers the agent
+  glimt-agent snapshot [flags]   print one snapshot message as JSON (no hub needed)
+  glimt-agent stream [flags]     print one stream message as JSON (no hub needed)
+  glimt-agent logs [flags]       print a log source: --source journal|auth|kernel|packages|web|firewall|container
+                                 [--unit X] [--container Y] [--priority err|warn|info] [--tail N] [--since 1h] [--follow]
+  glimt-agent version            print the version
   glimt-agent uninstall [--dry-run]
-                              stop the service and remove unit, config, state and binary (root)
+                                 stop the service and remove unit, config, state and binary (root)
 
-Run "glimt-agent run -h" or "glimt-agent check -h" for flags.
+Run "glimt-agent <command> -h" for flags. snapshot, stream and logs read
+/etc/glimt-agent/env for --docker when installed.
 `, version)
 }
 
@@ -184,6 +191,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "check":
 		return runCheck(args, stdout, stderr)
+	case "snapshot", "stream":
+		return runOnce(cmd, args, stdout, stderr)
+	case "logs":
+		return runLogs(args, stdout, stderr)
 	case "uninstall":
 		return runUninstall(args, stdout, stderr)
 	case "help", "-h", "--help":
@@ -251,8 +262,13 @@ func runAgent(args []string, stderr io.Writer) int {
 		"kernel", info.Kernel, "arch", info.Arch, "cores", info.Cores, "docker", o.docker, "stateDir", o.stateDir,
 		"auth", map[bool]string{true: "token", false: "enrolKey"}[token != ""])
 
-	host := collect.NewHost()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	d := buildDeps(ctx, o, log)
 	heartbeat := time.Duration(o.heartbeat) * time.Second
+	// current is the scheduler of the live connection; Docker events reach it.
+	var current atomic.Pointer[sched.Scheduler]
 
 	client, err := ws.New(ws.Config{
 		HubURL:    o.hub,
@@ -263,7 +279,7 @@ func runAgent(args []string, stderr io.Writer) int {
 		Hello: func() protocol.Hello {
 			return protocol.Hello{
 				Hostname: info.Hostname, AgentVersion: version, OS: info.OS, Kernel: info.Kernel, Arch: info.Arch,
-				Cores: info.Cores, RAMBytes: info.RAMBytes, BootTime: info.BootTime, DockerMode: o.docker,
+				Cores: info.Cores, RAMBytes: info.RAMBytes, BootTime: info.BootTime, DockerMode: d.dockerMode(),
 			}
 		},
 		NewSession: func(ctx context.Context, w *protocol.Welcome, out ws.Sender) ws.Session {
@@ -275,24 +291,44 @@ func runAgent(args []string, stderr io.Writer) int {
 			if w.MaintenanceInterval >= 60000 {
 				maint = time.Duration(w.MaintenanceInterval) * time.Millisecond
 			}
-			s := sched.New(sched.Config{SnapshotInterval: snap, MaintenanceInterval: maint, Collector: host, Sink: out, Logger: log})
+			s := sched.New(d.schedConfig(out, snap, maint))
+			lm := logs.New(d.logsConfig(out))
+			current.Store(s)
 			go s.Run(ctx)
-			return s
+			go func() {
+				<-ctx.Done()
+				current.CompareAndSwap(s, nil)
+				lm.StopAll()
+			}()
+			return &session{sched: s, logs: lm, ctx: ctx}
 		},
 	})
 	if err != nil {
 		log.Error("invalid configuration", "err", err)
 		return 2
 	}
+	if d.engine != nil {
+		go d.engine.WatchEvents(ctx, func() {
+			if s := current.Load(); s != nil {
+				s.DockerChanged()
+			}
+		})
+	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
 	if err := sdnotify.Ready(); err != nil {
 		log.Warn("sd_notify READY failed", "err", err)
 	}
 	_ = sdnotify.Status("connecting to " + o.hub)
+	// Child processes (systemctl, journalctl, apt-get) must not inherit the
+	// notify socket: systemd logs a warning for every message from a non-main
+	// PID. The variable comes back for STOPPING=1.
+	notifySocket := os.Getenv("NOTIFY_SOCKET")
+	_ = os.Unsetenv("NOTIFY_SOCKET")
 
 	err = client.Run(ctx)
+	if notifySocket != "" {
+		_ = os.Setenv("NOTIFY_SOCKET", notifySocket)
+	}
 	_ = sdnotify.Stopping()
 	if err != nil {
 		log.Error("agent stopped with error", "err", err)
@@ -301,3 +337,17 @@ func runAgent(args []string, stderr io.Writer) int {
 	log.Info("glimt-agent stopped")
 	return 0
 }
+
+// session is one connection's scheduler and log streams (ws.Session).
+type session struct {
+	sched *sched.Scheduler
+	logs  *logs.Manager
+	ctx   context.Context
+}
+
+func (s *session) Subscribe(interval time.Duration, topProcs int) {
+	s.sched.Subscribe(interval, topProcs)
+}
+func (s *session) Unsubscribe()                   { s.sched.Unsubscribe() }
+func (s *session) LogStart(req protocol.LogStart) { s.logs.Start(s.ctx, req) }
+func (s *session) LogStop(id string)              { s.logs.Stop(id) }
