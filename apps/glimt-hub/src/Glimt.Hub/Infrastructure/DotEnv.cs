@@ -17,6 +17,11 @@ public static class DotEnv
 
     public static LoadResult LoadIfNeeded()
     {
+        if (string.Equals(Environment.GetEnvironmentVariable("GLIMT_DOTENV"), "off", StringComparison.OrdinalIgnoreCase))
+        {
+            return new LoadResult(null, [], 0, "GLIMT_DOTENV=off");
+        }
+
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GLIMT_MONGO_URI")))
         {
             return new LoadResult(null, [], 0, "GLIMT_MONGO_URI is already set");

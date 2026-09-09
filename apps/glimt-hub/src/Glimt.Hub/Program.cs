@@ -1,8 +1,14 @@
+using Glimt.Hub.Features.Access;
+using Glimt.Hub.Features.Account;
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Auth;
+using Glimt.Hub.Features.Buffer;
+using Glimt.Hub.Features.Demo;
 using Glimt.Hub.Features.Health;
 using Glimt.Hub.Features.Live;
 using Glimt.Hub.Features.Servers;
 using Glimt.Hub.Infrastructure;
+using Glimt.Hub.Infrastructure.Email;
 
 if (VapidKeys.TryRun(args, Console.Out))
 {
@@ -34,9 +40,16 @@ builder.Services.Configure<HostOptions>(host => host.ShutdownTimeout = TimeSpan.
 builder.AddGlimtLogging(options);
 builder.Services
     .AddGlimtInfrastructure(options)
+    .AddGlimtEmail(options)
+    .AddGlimtRateLimiting(options)
+    .AddAuthFeature(options)
+    .AddAccountFeature()
+    .AddAccessFeature()
     .AddAgentsFeature()
+    .AddBufferFeature(options)
     .AddLiveFeature(options)
-    .AddServersFeature();
+    .AddServersFeature()
+    .AddDemoFeature(options);
 
 var app = builder.Build();
 
@@ -48,10 +61,18 @@ if (dotEnv.LoadedFiles.Count > 0)
 }
 
 app.UseLiveCors(options);
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
 app.MapHealthFeature();
+app.MapAuthFeature();
+app.MapAccountFeature();
+app.MapAccessFeature();
 app.MapAgentsFeature();
+app.MapBufferFeature();
 app.MapLiveFeature();
 app.MapServersFeature();
+app.MapDemoFeature();
 
 app.Run();
 return 0;

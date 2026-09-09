@@ -23,7 +23,7 @@ public sealed class MongoContext : IDisposable
         _logger = logger;
         RegisterConventions();
 
-        var settings = MongoClientSettings.FromConnectionString(options.MongoUri);
+        var settings = MongoClientSettings.FromConnectionString(NormalizeConnectionString(options.MongoUri));
         settings.ApplicationName = "glimt-hub";
         if (!options.MongoUri.Contains("serverSelectionTimeoutMS", StringComparison.OrdinalIgnoreCase))
         {
@@ -38,6 +38,16 @@ public sealed class MongoContext : IDisposable
         Client = new MongoClient(settings);
         DatabaseName = options.MongoDb;
         Db = Client.GetDatabase(DatabaseName);
+    }
+
+    /// <summary>
+    /// Compass og mongosh godtar <c>authMechanism=DEFAULT</c>, men .NET-driveren feiler med «Unable to create an authenticator».
+    /// Parameteren fjernes (driverens standard er SCRAM-forhandling) så en streng limt fra Compass virker uendret.
+    /// </summary>
+    internal static string NormalizeConnectionString(string uri)
+    {
+        var cleaned = System.Text.RegularExpressions.Regex.Replace(uri, @"([?&])authMechanism=DEFAULT(&|$)", "$1", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return cleaned.Replace("?&", "?").TrimEnd('&', '?');
     }
 
     public IMongoClient Client { get; }
@@ -202,4 +212,5 @@ internal sealed class MongoConnectService(MongoContext mongo) : BackgroundServic
             }
         }
     }
+
 }

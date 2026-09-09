@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Glimt.Hub.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Glimt.Hub.Tests;
@@ -12,21 +13,43 @@ namespace Glimt.Hub.Tests;
 /// The values are set as process environment variables because that is the only configuration
 /// source the hub reads (and it also stops DotEnv from loading the repo's .env files).
 /// </summary>
-public sealed class HubFactory : WebApplicationFactory<Program>
+public class HubFactory : WebApplicationFactory<Program>
 {
     public const string EnrolKey = "gp_test";
-    public const string MongoUri = "mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=200&connectTimeoutMS=200";
+    public const string UnreachableMongoUri = "mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=200&connectTimeoutMS=200";
 
-    public HubFactory()
+    private readonly string _mongoUri;
+    private readonly string _mongoDb;
+
+    /// <summary>Default: unreachable MongoDB (fast, no Docker). Use <see cref="WithMongo"/> for a real one.</summary>
+    public HubFactory() : this(UnreachableMongoUri, "GlimtpanelTest")
     {
-        Environment.SetEnvironmentVariable("GLIMT_MONGO_URI", MongoUri);
-        Environment.SetEnvironmentVariable("GLIMT_MONGO_DB", "GlimtpanelTest");
+    }
+
+    protected HubFactory(string mongoUri, string mongoDb)
+    {
+        _mongoUri = mongoUri;
+        _mongoDb = mongoDb;
+        // Process-wide values (same for every factory). MONGO_URI/MONGO_DB are per factory and go through UseSetting.
+        Environment.SetEnvironmentVariable("GLIMT_DOTENV", "off");
         Environment.SetEnvironmentVariable("GLIMT_JWT_SECRET", "test");
         Environment.SetEnvironmentVariable("GLIMT_ENV", "e2e");
         Environment.SetEnvironmentVariable("GLIMT_DEV_ENROL_KEY", EnrolKey);
         Environment.SetEnvironmentVariable("GLIMT_DEV_USER_EMAIL", "dev@glimtpanel.local");
         Environment.SetEnvironmentVariable("GLIMT_DEV_USER_PASSWORD", "test-password");
         Environment.SetEnvironmentVariable("GLIMT_WEB_PUBLIC_URL", "http://localhost:4200");
+    }
+
+    /// <summary>A factory backed by the shared Testcontainers MongoDB, with its own database name.</summary>
+    public static HubFactory WithMongo(string? database = null) =>
+        new(MongoTestServer.ConnectionString, database ?? "GlimtpanelTest_" + Guid.NewGuid().ToString("N")[..8]);
+
+    public string MongoDb => _mongoDb;
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseSetting("MONGO_URI", _mongoUri);
+        builder.UseSetting("MONGO_DB", _mongoDb);
     }
 
     /// <summary>Opens an agent WebSocket against the in-memory server.</summary>
