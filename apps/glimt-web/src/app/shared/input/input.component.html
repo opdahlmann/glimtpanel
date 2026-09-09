@@ -1,0 +1,29 @@
+@if (label()) {
+  <label class="label" [for]="id">{{ label() }}</label>
+}
+<div class="field" [class.icon]="leadingIcon()">
+  @if (leadingIcon()) {
+    <svg class="lupe" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" />
+    </svg>
+  }
+  <input
+    [id]="id"
+    class="input"
+    [class.sm]="size() === 'sm'"
+    [class.mono]="mono()"
+    [type]="type()"
+    [value]="value()"
+    [placeholder]="placeholder()"
+    [attr.autocomplete]="autocomplete() || null"
+    [attr.name]="name() || null"
+    [disabled]="disabled()"
+    [attr.aria-invalid]="error() ? true : null"
+    [attr.aria-describedby]="error() ? id + '-err' : null"
+    (input)="onInput($event)"
+    (blur)="blur()"
+  />
+</div>
+@if (error()) {
+  <div class="error" [id]="id + '-err'">{{ error() }}</div>
+}

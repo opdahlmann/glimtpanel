@@ -1,0 +1,18 @@
+:host { display: block; }
+.ring {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%;
+  padding: 12px 6px 10px; min-height: 44px;
+  background: var(--s-5); border: 0; border-radius: var(--radius-card); color: var(--w-100);
+  cursor: pointer; transition: background var(--t-hover);
+}
+.ring:hover { background: var(--s-9); }
+.dial { position: relative; width: 76px; height: 76px; }
+svg { display: block; transform: rotate(-90deg); }
+.fill { transition: stroke-dasharray var(--t-data); }
+.val {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 600; letter-spacing: -.02em;
+}
+.unit { font-size: 10px; font-weight: 500; color: var(--w-50); margin-left: 1px; }
+.label { font-size: 11px; font-weight: 600; color: var(--w-80); }
+.sub { font-size: 10px; color: var(--w-45); }

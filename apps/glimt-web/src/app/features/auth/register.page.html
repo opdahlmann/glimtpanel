@@ -1,0 +1,25 @@
+<gp-auth-frame [ariaLabel]="'createAcc' | t">
+  @if (sentTo(); as email) {
+    <div class="stack" role="status">
+      <h2 class="title">{{ 'checkEmail' | t }}</h2>
+      <p class="note">{{ 'checkEmailSub' | t }}<br /><b>{{ email }}</b></p>
+      @if (error(); as key) {
+        <div class="err" role="alert">{{ key | t }}</div>
+      }
+      <gp-button variant="ghost" size="lg" [block]="true" (click)="resend()">{{ 'resend' | t }}</gp-button>
+      <a routerLink="/login" class="forgot">{{ 'backToLogin' | t }}</a>
+    </div>
+  } @else {
+    <gp-segment [options]="seg.options()" value="register" (valueChange)="seg.go($event)" [full]="true" [label]="'createAcc' | t" />
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <gp-input formControlName="name" type="text" name="name" autocomplete="name" [placeholder]="'fullName' | t" [error]="nameError()" />
+      <gp-input formControlName="email" type="email" name="email" autocomplete="email" [placeholder]="'email' | t" [error]="emailError()" />
+      <gp-input formControlName="password" type="password" name="new-password" autocomplete="new-password" [placeholder]="'password' | t" [error]="passwordError()" />
+      @if (error(); as key) {
+        <div class="err" role="alert">{{ key | t }}</div>
+      }
+      <gp-button type="submit" variant="primary" size="lg" [block]="true" [loading]="busy()">{{ 'createAcc' | t }}</gp-button>
+      <p class="note">{{ 'registerNote' | t }}</p>
+    </form>
+  }
+</gp-auth-frame>

@@ -1,0 +1,12 @@
+@if (open()) {
+  <div class="overlay" tabindex="-1" (click)="onOverlay($event)" (keydown)="onKeydown($event)">
+    <div #card class="card" role="dialog" aria-modal="true" [attr.aria-label]="title() || null" [style.max-width.px]="maxWidth()" tabindex="-1">
+      <div class="head">
+        <div class="title">{{ title() }}</div>
+        <button type="button" class="close" [attr.aria-label]="closeLabel()" (click)="close()"><span class="x" aria-hidden="true">×</span></button>
+      </div>
+      <div class="body"><ng-content /></div>
+      <div class="foot"><ng-content select="[footer]" /></div>
+    </div>
+  </div>
+}

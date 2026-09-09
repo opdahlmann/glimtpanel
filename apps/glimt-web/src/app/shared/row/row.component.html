@@ -1,0 +1,17 @@
+@if (interactive()) {
+  <button type="button" class="row clickable" [class.striped]="stripe()" [style.border-left-color]="stripe()" (click)="pressed.emit()">
+    <ng-container *ngTemplateOutlet="body" />
+  </button>
+} @else {
+  <div class="row" [class.clickable]="clickable()" [class.striped]="stripe()" [style.border-left-color]="stripe()">
+    <ng-container *ngTemplateOutlet="body" />
+  </div>
+}
+<ng-template #body>
+  <div class="main">
+    <ng-content select="[leading]" />
+    <div class="content"><ng-content /></div>
+    <ng-content select="[trailing]" />
+  </div>
+  <ng-content select="[footer]" />
+</ng-template>

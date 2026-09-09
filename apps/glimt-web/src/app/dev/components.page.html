@@ -1,0 +1,308 @@
+<main class="page">
+  <header class="head">
+    <gp-logo [size]="28" />
+    <div>
+      <h1>Components</h1>
+      <p>Every shared component in every state · IMPLEMENTERINGSPLAN 6.3 · dev only</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- 1. gp-ring -->
+    <section class="sec">
+      <h2>gp-ring</h2>
+      <div class="rings">
+        <gp-ring [value]="48" color="cpu" label="CPU" sub="1.9 of 4 cores" />
+        <gp-ring [value]="61" color="ram" label="Memory" sub="4.9 of 8 GB" />
+        <gp-ring [value]="52" color="disk" label="Disk" sub="/ 52%" />
+      </div>
+      <h3>Thresholds 79 / 80 / 90 · down (0) · no threshold</h3>
+      <div class="rings rings4">
+        <gp-ring [value]="79" color="disk" label="Disk" sub="/ 79%" />
+        <gp-ring [value]="80" color="disk" label="Disk" sub="/ 80%" />
+        <gp-ring [value]="90" color="disk" label="Disk" sub="/ 90%" />
+        <gp-ring [value]="0" color="cpu" label="CPU" sub="last seen 03:12" />
+        <gp-ring [value]="95" color="net" label="Net" sub="no threshold" [threshold]="false" unit="MB" />
+      </div>
+    </section>
+
+    <!-- 2. gp-chip -->
+    <section class="sec">
+      <h2>gp-chip</h2>
+      <div class="chips">
+        <gp-chip label="Net MB/s" value="↓14.8 ↑1.2" />
+        <gp-chip label="Containers" value="7 / 8" tone="swap" />
+        <gp-chip label="Updates" value="3 (1)" tone="warn" />
+        <gp-chip label="Reboot" value="required" tone="warn" />
+        <gp-chip label="Services" value="1 failed" tone="crit" />
+      </div>
+      <h3>All tones · dot</h3>
+      <div class="chips chips6">
+        <gp-chip label="default" value="1.9 / 4" />
+        <gp-chip label="ok" value="ok" tone="ok" />
+        <gp-chip label="muted" value="—" tone="muted" />
+        <gp-chip label="dot" value="up" dot="var(--color-ram)" />
+        <gp-chip label="ufw" value="active" tone="ok" />
+        <gp-chip label="fail2ban" value="42 blocked" />
+      </div>
+
+      <h2>gp-badge</h2>
+      <div class="inline">
+        <gp-badge>prod</gp-badge>
+        <gp-badge>ext4</gp-badge>
+        <gp-badge tone="new">new</gp-badge>
+        <gp-badge tone="warn">needs restart</gp-badge>
+        <gp-badge tone="crit">EOL</gp-badge>
+        <gp-badge tone="ok">resolved</gp-badge>
+        <gp-badge>Reader</gp-badge>
+      </div>
+
+      <h2>gp-live-dot</h2>
+      <div class="dots">
+        <span><gp-live-dot state="up" [pulse]="pulse()" /> up</span>
+        <span><gp-live-dot state="down" /> down</span>
+        <span><gp-live-dot state="paused" /> paused</span>
+        <span><gp-live-dot state="connecting" /> connecting</span>
+        <gp-button size="sm" (click)="blip()">Pulse</gp-button>
+      </div>
+
+      <h2>gp-logo</h2>
+      <div class="logos">
+        <gp-logo [size]="24" />
+        <gp-logo [size]="28" />
+        <gp-logo [size]="36" />
+        <gp-logo [size]="56" label="Glimtpanel" />
+      </div>
+    </section>
+
+    <!-- 3. gp-row -->
+    <section class="sec">
+      <h2>gp-row</h2>
+      <div class="rows">
+        <gp-row>
+          <span leading class="icon-box" aria-hidden="true">/</span>
+          <span class="name">/</span>
+          <gp-badge>ext4</gp-badge>
+          <span trailing class="name num">38 GB <span class="sub">free</span></span>
+          <div footer class="stack">
+            <gp-bar [value]="52" color="disk" [height]="5" label="/ used" />
+            <div class="inline dim num" style="justify-content: space-between"><span>42 GB used of 80 GB</span><span>52%</span></div>
+          </div>
+        </gp-row>
+        <gp-row [clickable]="true" [interactive]="true">
+          <span leading class="dot6" style="background: var(--color-ram)" aria-hidden="true"></span>
+          <span class="name">web-web</span>
+          <gp-badge>nginx:1.27</gp-badge>
+          <span class="dim">running · 3d 4h</span>
+          <span trailing class="dim num">2.1% CPU · 412 MB / 1024 MB</span>
+        </gp-row>
+        <gp-row stripe="var(--color-crit)" [clickable]="true">
+          <span leading class="dot6" style="background: var(--color-crit)" aria-hidden="true"></span>
+          <span class="name">postgresql.service</span>
+          <gp-badge tone="warn">needs restart</gp-badge>
+          <span class="dim" style="color: var(--color-crit)">failed</span>
+          <gp-button trailing variant="danger" size="sm">View log</gp-button>
+        </gp-row>
+        <gp-row>
+          <span class="name num" style="width: 48px">8000</span>
+          <span class="dim">python3</span>
+          <gp-badge tone="new">new</gp-badge>
+          <span trailing class="sub">tcp</span>
+        </gp-row>
+      </div>
+    </section>
+
+    <!-- 4. gp-bar -->
+    <section class="sec">
+      <h2>gp-bar</h2>
+      <div class="bars">
+        <div><div class="bar-label num">5 px · 52%</div><gp-bar [value]="52" color="disk" [height]="5" /></div>
+        <div><div class="bar-label num">5 px · 79% / 80% / 90%</div>
+          <div class="stack" style="gap: 6px"><gp-bar [value]="79" color="disk" /><gp-bar [value]="80" color="disk" /><gp-bar [value]="90" color="disk" /></div>
+        </div>
+        <div><div class="bar-label num">8 px segmented · used 61% · buffers 14%</div>
+          <gp-bar [height]="8" [segments]="[{ value: 61, color: 'ram' }, { value: 14, color: 'disk' }]" label="Memory" />
+          <div class="legend" style="margin-top: 8px">
+            <span><i style="background: var(--color-ram)"></i>used<b class="num">4.9 GB</b></span>
+            <span><i style="background: var(--color-disk)"></i>Buffers &amp; cache<b class="num">1.1 GB</b></span>
+            <span><i style="background: var(--color-neutral)"></i>free<b class="num">2.0 GB</b></span>
+            <span><i style="background: var(--color-swap)"></i>Swap<b class="num">0.0 GB</b></span>
+          </div>
+        </div>
+        <div><div class="bar-label num">8 px container memory vs limit · 40% swap · no limit (neutral)</div>
+          <div class="stack" style="gap: 6px"><gp-bar [value]="40" color="swap" [height]="8" /><gp-bar [value]="35" color="var(--color-neutral)" [height]="8" [threshold]="false" /></div>
+        </div>
+        <div><div class="bar-label num">3 px inodes · 12%</div><gp-bar [value]="12" color="disk" [height]="3" /></div>
+      </div>
+
+      <h2>gp-sparkline</h2>
+      <div class="two">
+        <gp-sparkline [values]="spark" color="cpu" />
+        <gp-sparkline [values]="sparkMem" color="ram" />
+      </div>
+      <div class="inline"><span class="dim">eth0</span><gp-badge>10.0.0.5</gp-badge><gp-sparkline style="flex: 1; min-width: 80px" [values]="spark" color="net" /><span class="dim num">↓14.8 ↑1.2 MB/s</span></div>
+    </section>
+
+    <!-- 5. gp-segment -->
+    <section class="sec">
+      <h2>gp-segment</h2>
+      <h3>md · full</h3>
+      <gp-segment [options]="seg2" [(value)]="segA" [full]="true" label="Auth" />
+      <h3>md</h3>
+      <gp-segment [options]="seg3" [(value)]="segB" label="Priority" />
+      <h3>sm</h3>
+      <gp-segment size="sm" [options]="seg3" [(value)]="segD" label="Priority small" />
+      <h3>scroll · 8 options</h3>
+      <gp-segment [options]="seg8" [(value)]="segC" [scroll]="true" label="Log source" />
+
+      <h2>gp-toggle</h2>
+      <div class="inline">
+        <gp-toggle [(checked)]="on" label="Disk full" />
+        <gp-toggle [(checked)]="off" label="Daily summary" />
+        <gp-toggle [checked]="true" [disabled]="true" label="Server down (always on)" />
+      </div>
+    </section>
+
+    <!-- 6. gp-button -->
+    <section class="sec">
+      <h2>gp-button</h2>
+      <h3>lg · md · sm</h3>
+      <div class="inline">
+        <gp-button variant="primary" size="lg" [icon]="plus">Add server</gp-button>
+        <gp-button variant="primary" size="md">Save</gp-button>
+        <gp-button variant="primary" size="sm">Copy</gp-button>
+      </div>
+      <div class="inline">
+        <gp-button variant="ghost" size="lg">Later</gp-button>
+        <gp-button variant="ghost" size="md" [icon]="copyIcon">Copy snapshot</gp-button>
+        <gp-button variant="ghost" size="sm">Open full log view</gp-button>
+      </div>
+      <div class="inline">
+        <gp-button variant="danger" size="lg">Delete everything</gp-button>
+        <gp-button variant="danger" size="md">Remove</gp-button>
+        <gp-button variant="danger" size="sm">View log</gp-button>
+      </div>
+      <h3>disabled · loading</h3>
+      <div class="inline">
+        <gp-button variant="primary" [disabled]="true">Disabled</gp-button>
+        <gp-button variant="ghost" [disabled]="true">Disabled</gp-button>
+        <gp-button variant="primary" [loading]="true">Saving</gp-button>
+        <gp-button variant="ghost" [loading]="true">Loading</gp-button>
+      </div>
+      <h3>modal · toast</h3>
+      <div class="inline">
+        <gp-button variant="primary" (click)="modalOpen.set(true)">Open modal</gp-button>
+        <gp-button variant="ghost" (click)="toast()">Show toast</gp-button>
+      </div>
+    </section>
+
+    <!-- 7. gp-input / gp-select -->
+    <section class="sec">
+      <h2>gp-input · gp-select</h2>
+      <div class="stack">
+        <gp-input label="E-mail" type="email" placeholder="you@example.com" [(ngModel)]="email" autocomplete="email" />
+        <gp-input placeholder="Search servers or tags…" [leadingIcon]="true" [(ngModel)]="search" size="sm" />
+        <gp-input label="Password" type="password" [(ngModel)]="bad" error="At least 8 characters" />
+        <gp-input label="Webhook URL" placeholder="https://" [mono]="true" [(ngModel)]="serverName" />
+        <gp-input label="Disabled" [(ngModel)]="email" [disabled]="true" />
+        <gp-select label="Sort" [options]="sortOptions" [(ngModel)]="sort" />
+        <gp-select label="Time zone" [options]="tzOptions" [(ngModel)]="tz" error="Choose a time zone" />
+      </div>
+    </section>
+
+    <!-- 8. gp-panel -->
+    <section class="sec">
+      <h2>gp-panel</h2>
+      <div class="stack">
+        <gp-panel title="CPU" meta="48% · 1.9 of 4 cores" tone="cpu" [(open)]="cpuOpen" panelId="dev-cpu">
+          <div class="chips chips6">
+            <gp-chip label="Load 1m" value="1.9 / 4" />
+            <gp-chip label="Load 5m" value="1.4 / 4" />
+            <gp-chip label="Load 15m" value="1.1 / 4" />
+            <gp-chip label="user" value="34%" />
+            <gp-chip label="system" value="11%" />
+            <gp-chip label="iowait" value="3.8%" />
+          </div>
+        </gp-panel>
+        <gp-panel title="Memory" meta="61% · 4.9 of 8 GB · Swap 0.0 GB" tone="ram" panelId="dev-mem">
+          <gp-bar [height]="8" [segments]="[{ value: 61, color: 'ram' }, { value: 14, color: 'disk' }]" />
+        </gp-panel>
+        <gp-panel title="Disk" meta="2 mounted" tone="disk" panelId="dev-disk"><span class="dim">…</span></gp-panel>
+        <gp-panel title="Network" meta="↓14.8 ↑1.2 MB/s" tone="net" panelId="dev-net"><span class="dim">…</span></gp-panel>
+        <gp-panel title="Containers" meta="5 running · 1 stopped" tone="swap" panelId="dev-cont"><span class="dim">…</span></gp-panel>
+        <gp-panel title="Maintenance" meta="Checked every 10 minutes" tone="warn" panelId="dev-maint"><span class="dim">…</span></gp-panel>
+        <gp-panel title="Services" meta="1 failed · 8 running" tone="crit" panelId="dev-svc"><span class="dim">…</span></gp-panel>
+        <gp-panel title="Processes" meta="182 total · 0 waiting" tone="neutral" panelId="dev-proc"><span class="dim">…</span></gp-panel>
+        <gp-panel title="Logs (closed)" meta="journald · streaming" tone="neutral" [(open)]="closedOpen" panelId="dev-logs" />
+      </div>
+    </section>
+
+    <!-- 9. gp-chart -->
+    <section class="sec wide">
+      <h2>gp-chart</h2>
+      <div class="two">
+        <gp-panel title="CPU" meta="48%" tone="cpu" panelId="dev-chart-cpu">
+          <gp-chart [series]="range1() === '1h' ? serie60 : serie288" color="cpu" [height]="120" [stepMs]="range1() === '1h' ? 60000 : 300000" [from]="range1() === '1h' ? from60 : from288" [(range)]="range1" unit="%" timeZone="Europe/Oslo" label="CPU">Last hour · gap at 06:53</gp-chart>
+        </gp-panel>
+        <gp-panel title="Network" meta="↓14.8 MB/s" tone="net" panelId="dev-chart-net">
+          <gp-chart [series]="rate288" color="net" [height]="100" [stepMs]="300000" [from]="from288" [(range)]="range2" unit="MB/s" max="auto" [events]="events" timeZone="Europe/Oslo" label="Network in">24 h · one event</gp-chart>
+        </gp-panel>
+      </div>
+    </section>
+
+    <!-- 10. gp-data-grid -->
+    <section class="sec wide">
+      <h2>gp-data-grid</h2>
+      <div class="inline">
+        <gp-segment size="sm" [options]="[{ value: 'cpu', label: 'By CPU' }, { value: 'mem', label: 'By memory' }]" [(value)]="sort" label="Sort processes" />
+        <gp-input style="flex: 1; min-width: 160px" placeholder="Filter by name or user…" size="sm" [(ngModel)]="procFilter" />
+      </div>
+      <gp-data-grid
+        [columns]="procColumns"
+        [rows]="procs"
+        [getRowId]="procId"
+        [filterText]="procFilter()"
+        [sortBy]="sort()"
+        sortDir="desc"
+        [mobileRenderer]="procMobile"
+        [expandedRowRenderer]="procExpanded"
+        emptyText="No processes match"
+        label="Processes"
+      />
+      <ng-template #procMobile let-p>
+        <div class="mobile-row">
+          <div class="name">{{ p.name }} <span class="sub">{{ p.user }} · <span class="num">{{ p.pid }}</span></span></div>
+          <div class="chips-m">
+            <gp-chip label="CPU" [value]="p.cpu.toFixed(1) + '%'" [tone]="p.cpu > 50 ? 'warn' : 'default'" />
+            <gp-chip label="Memory" [value]="p.mem + ' MB'" />
+            <gp-chip label="Time" [value]="clock(p.time)" />
+          </div>
+        </div>
+      </ng-template>
+      <ng-template #procExpanded let-p>
+        <div class="expanded"><code class="cmd">{{ p.cmd }}</code></div>
+      </ng-template>
+      <h3>Ports · default stacked renderer on mobile</h3>
+      <gp-data-grid [columns]="portColumns" [rows]="ports" [getRowId]="portId" label="Listening ports" />
+      <h3>Empty</h3>
+      <gp-data-grid [columns]="portColumns" [rows]="[]" [getRowId]="portId" emptyText="No listening ports" />
+    </section>
+
+    <!-- 11. gp-log-view -->
+    <section class="sec wide">
+      <h2>gp-log-view</h2>
+      <gp-log-view [lines]="logLines" [colorByUnit]="unitColors" timeZone="Europe/Oslo" label="Journal" />
+    </section>
+  </div>
+
+  <gp-modal [(open)]="modalOpen" title="Add server" [maxWidth]="560">
+    <p class="modal-text">Run this on the server. The one-time key expires in <span class="num">59:42</span>.</p>
+    <code class="cmd">curl -fsSL https://get.glimtpanel.com | sh -s -- --key gp_8f3kQ2mLx9Rt</code>
+    <gp-input label="Name" placeholder="web-02" [(ngModel)]="serverName" />
+    <div footer class="inline">
+      <gp-button variant="ghost" (click)="modalOpen.set(false)">Cancel</gp-button>
+      <gp-button variant="primary" (click)="modalOpen.set(false); toast()">Copy</gp-button>
+    </div>
+  </gp-modal>
+  <gp-toast-host />
+</main>

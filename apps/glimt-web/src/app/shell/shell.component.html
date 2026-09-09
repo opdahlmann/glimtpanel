@@ -1,0 +1,24 @@
+<gp-backdrop />
+@if (!isMobile()) {
+  <gp-sidebar />
+}
+<div class="content">
+  @if (isMobile()) {
+    <gp-topbar />
+  }
+  @if (conn.offline()) {
+    <div class="offline" role="status" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="strong">{{ 'offline' | t }}</span>
+      <span class="sub">{{ 'offlineSub' | t }} <span class="num">{{ frozenAt() }}</span> · {{ 'reconnect' | t }}</span>
+      <gp-button class="btn" variant="ghost" size="sm" (click)="reconnect()">{{ 'reconnectBtn' | t }}</gp-button>
+    </div>
+  }
+  <main>
+    <router-outlet />
+  </main>
+  @if (showBottomNav()) {
+    <gp-bottom-nav />
+  }
+</div>
+<gp-toast-host />

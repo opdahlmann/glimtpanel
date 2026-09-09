@@ -1,0 +1,12 @@
+<button [type]="type()" class="btn" [disabled]="disabled() || loading()" [attr.aria-busy]="loading() || null" [attr.aria-label]="label() || null">
+  @if (loading()) {
+    <svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+      <path d="M12 3a9 9 0 1 0 9 9" />
+    </svg>
+  } @else if (icon(); as d) {
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path [attr.d]="d" />
+    </svg>
+  }
+  <span class="text"><ng-content /></span>
+</button>

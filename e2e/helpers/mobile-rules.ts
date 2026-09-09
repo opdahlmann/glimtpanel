@@ -16,6 +16,7 @@ export async function expectMobileRules(page: Page, testInfo: TestInfo): Promise
   expect(scrollWidth, 'siden skal ikke scrolle horisontalt').toBeLessThanOrEqual(clientWidth);
 
   // 2. Alle synlige klikkbare flater er minst 44×44 px (unntatt elementer merket data-touch-exempt).
+  //    Målt avrundet til hele piksler: WebKit rapporterer 43.99 for et 44 px felt.
   const small = await page.evaluate(() => {
     const sel = 'button, a[href], input, select, textarea, [role="button"]';
     const out: string[] = [];
@@ -23,7 +24,7 @@ export async function expectMobileRules(page: Page, testInfo: TestInfo): Promise
       if (el.hasAttribute('data-touch-exempt')) continue;
       const r = el.getBoundingClientRect();
       const visible = r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-      if (visible && (r.width < 44 || r.height < 44)) out.push(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''} ${Math.round(r.width)}×${Math.round(r.height)} "${(el.textContent ?? '').trim().slice(0, 30)}"`);
+      if (visible && (Math.round(r.width) < 44 || Math.round(r.height) < 44)) out.push(`${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''} ${Math.round(r.width)}×${Math.round(r.height)} "${(el.textContent ?? '').trim().slice(0, 30)}"`);
     }
     return out;
   });

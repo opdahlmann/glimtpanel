@@ -1,0 +1,13 @@
+/* Felles for auth-sidene (skjerm 1–2): skjema i kortet, feil i --color-crit 11 px, lenker med 44 px treffflate. */
+:host { display: contents; }
+form { display: flex; flex-direction: column; gap: 12px; }
+.err { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; font-size: 11px; color: var(--color-crit); text-align: center; }
+.note { margin: 0; font-size: 11px; color: var(--w-60); line-height: 1.5; text-align: center; }
+.title { margin: 0; font-size: 15px; font-weight: 600; text-align: center; letter-spacing: -.01em; }
+.link, .forgot {
+  display: inline-flex; align-items: center; justify-content: center; align-self: center; min-height: 44px; padding: 0 8px; margin: -8px 0;
+  border: 0; background: transparent; font: inherit; font-size: 11px; font-weight: 500; color: var(--w-60); cursor: pointer; border-radius: var(--radius-pill);
+}
+.link:hover, .forgot:hover { color: var(--w-100); }
+.link { color: var(--color-disk); }
+.stack { display: flex; flex-direction: column; gap: 12px; }

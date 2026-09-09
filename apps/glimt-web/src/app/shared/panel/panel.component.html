@@ -1,0 +1,7 @@
+<button type="button" class="head" [attr.aria-expanded]="open()" [attr.aria-controls]="bodyId()" (click)="toggle()">
+  <span class="title">{{ title() }}<ng-content select="[title]" /></span>
+  <span class="meta num">{{ meta() }}<ng-content select="[meta]" /></span>
+</button>
+@if (open()) {
+  <div class="body" [id]="bodyId()"><ng-content /></div>
+}

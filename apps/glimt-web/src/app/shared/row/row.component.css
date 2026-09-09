@@ -1,0 +1,11 @@
+:host { display: block; }
+.row {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; min-height: 44px; padding: 9px 10px;
+  background: var(--s-5); border: 0; border-radius: var(--radius-row); box-shadow: var(--hairline-card);
+  color: var(--w-100); font: inherit; text-align: left; transition: background var(--t-hover);
+}
+.striped { border-left: 3px solid transparent; }
+.clickable { cursor: pointer; }
+.clickable:hover { background: var(--s-9); }
+.main { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.content { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }

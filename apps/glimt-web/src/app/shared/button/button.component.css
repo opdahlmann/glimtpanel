@@ -1,0 +1,23 @@
+:host { display: inline-flex; max-width: 100%; }
+:host(.block) { display: flex; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  padding: 0 16px; min-height: 40px; border-radius: var(--radius-pill); border: 1px solid transparent;
+  font-size: 12px; font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
+  transition: background var(--t-hover), color var(--t-hover), transform var(--t-panel) var(--ease-out-expo), box-shadow var(--t-panel);
+}
+.text:empty { display: none; }
+:host(.lg) .btn { min-height: 44px; padding: 0 18px; font-size: 13px; }
+:host(.sm) .btn { min-height: 32px; padding: 0 12px; font-size: 11px; }
+:host(.primary) .btn { background: var(--w-100); color: var(--color-ink); box-shadow: var(--glow-primary); }
+:host(.primary) .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 40px -10px var(--w-50); }
+:host(.ghost) .btn { background: transparent; color: var(--w-85); border-color: var(--s-14); }
+:host(.ghost) .btn:hover:not(:disabled) { background: var(--s-5); }
+:host(.danger) .btn { background: transparent; color: var(--color-crit); border-color: var(--color-crit); }
+:host(.danger) .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-crit) 8%, transparent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.spin { animation: gp-spin .8s linear infinite; }
+@keyframes gp-spin { to { transform: rotate(360deg); } }
+@media (pointer: coarse) {
+  :host(.md) .btn, :host(.sm) .btn { min-height: 44px; }
+}

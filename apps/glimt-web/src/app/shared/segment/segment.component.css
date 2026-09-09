@@ -1,0 +1,26 @@
+:host { display: inline-flex; max-width: 100%; min-width: 0; }
+:host(.full) { display: flex; }
+:host(.scroll) { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+:host(.scroll)::-webkit-scrollbar { display: none; }
+.pill {
+  display: inline-flex; gap: 2px; padding: 3px; min-height: 36px; max-width: 100%;
+  background: var(--s-6); border: 1px solid var(--s-8); border-radius: var(--radius-pill);
+  flex-wrap: wrap;
+}
+:host(.sm) .pill { min-height: 32px; }
+:host(.scroll) .pill { flex-wrap: nowrap; width: max-content; max-width: none; }
+:host(.full) .pill { width: 100%; }
+.opt {
+  flex: 0 0 auto; border: 0; border-radius: var(--radius-pill); padding: 0 12px; min-height: 28px; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: var(--w-60); background-color: transparent; cursor: pointer;
+  transition: background var(--t-segment), color var(--t-segment);
+}
+:host(.sm) .opt { font-size: 11px; min-height: 24px; padding: 0 10px; }
+:host(.full) .opt { flex: 1; }
+.opt:hover { color: var(--w-85); }
+.opt.on { background-color: var(--w-100); color: var(--color-ink); }
+/* Berøring: treffflaten er 44 px (gjennomsiktige kanter som ikke males), pillen ser ut som i designet. */
+@media (pointer: coarse) {
+  .opt { min-height: 44px; min-width: 44px; border: 8px solid transparent; border-width: 8px 0; margin: -8px 0; background-clip: padding-box; }
+  :host(.sm) .opt { border-width: 10px 0; margin: -10px 0; }
+}

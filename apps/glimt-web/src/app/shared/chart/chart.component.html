@@ -1,0 +1,35 @@
+<div class="head">
+  <div class="title"><ng-content /></div>
+  @if (showRange()) {
+    <gp-segment size="sm" [options]="rangeOptions" [(value)]="range" label="Time range" />
+  }
+</div>
+<div
+  class="plot"
+  [style.height.px]="height()"
+  role="img"
+  [attr.aria-label]="ariaLabel()"
+  (pointermove)="onPointer($event)"
+  (pointerdown)="onPointer($event)"
+  (pointerleave)="leave()"
+  (pointercancel)="leave()"
+>
+  <svg [attr.viewBox]="viewBox()" preserveAspectRatio="none" [style.height.px]="height()" aria-hidden="true">
+    <path [attr.d]="paths().fill" [attr.fill]="fill8()" />
+    <path [attr.d]="paths().line" fill="none" [attr.stroke]="stroke()" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+  </svg>
+  @if (hover(); as h) {
+    <div class="hair" [style.left.%]="h.x"></div>
+    <div class="chip num" [style.left.%]="h.x"><b>{{ h.value }}</b> <span>{{ h.time }}</span></div>
+  }
+</div>
+<div class="events">
+  @for (e of events(); track $index) {
+    <span class="event" [style.left.%]="e.x" [style.background]="e.color" [title]="e.label" role="img" [attr.aria-label]="e.label"></span>
+  }
+</div>
+<div class="ticks num" aria-hidden="true">
+  @for (t of ticks(); track $index) {
+    <span>{{ t }}</span>
+  }
+</div>

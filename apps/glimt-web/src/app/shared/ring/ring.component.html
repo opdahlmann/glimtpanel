@@ -1,0 +1,13 @@
+<button type="button" class="ring" [attr.aria-label]="ariaLabel()" (click)="pressed.emit()">
+  <span class="dial">
+    <svg width="76" height="76" viewBox="0 0 76 76" aria-hidden="true">
+      <circle cx="38" cy="38" r="32" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="6" />
+      <circle class="fill" cx="38" cy="38" r="32" fill="none" [attr.stroke]="stroke()" stroke-width="6" stroke-linecap="round" [attr.stroke-dasharray]="dash()" />
+    </svg>
+    <span class="val num">{{ shown() }}<span class="unit">{{ unit() }}</span></span>
+  </span>
+  <span class="label">{{ label() }}</span>
+  @if (sub()) {
+    <span class="sub num">{{ sub() }}</span>
+  }
+</button>

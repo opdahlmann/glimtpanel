@@ -1,0 +1,20 @@
+.overlay {
+  position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px 12px;
+  background: #0f1013b3; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); overflow: auto;
+}
+.card {
+  width: 100%; max-height: 100%; overflow: auto; outline: none;
+  background: var(--color-glass); border-radius: var(--radius-window); box-shadow: var(--shadow-window);
+  padding: 16px 14px 14px; display: flex; flex-direction: column; gap: 12px; animation: pdIn var(--t-panel);
+}
+.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.title { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.close {
+  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -6px -6px 0;
+  background: none; border: 0; color: var(--w-85); cursor: pointer; padding: 0;
+}
+.x { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--s-8); font-size: 14px; line-height: 1; }
+.close:hover .x { background: var(--s-14); }
+.body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.foot:empty { display: none; }
+.foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }

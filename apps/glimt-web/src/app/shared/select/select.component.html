@@ -1,0 +1,26 @@
+@if (label()) {
+  <label class="label" [for]="id">{{ label() }}</label>
+}
+<div class="field">
+  <select
+    [id]="id"
+    class="select"
+    [attr.name]="name() || null"
+    [disabled]="disabled()"
+    [attr.aria-invalid]="error() ? true : null"
+    [attr.aria-describedby]="error() ? id + '-err' : null"
+    (change)="onSelect($event)"
+    (blur)="blur()"
+  >
+    @for (o of options(); track o.value) {
+      <option [value]="o.value" [selected]="o.value === value()">{{ o.label }}</option>
+    }
+    <ng-content />
+  </select>
+  <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+</div>
+@if (error()) {
+  <div class="error" [id]="id + '-err'">{{ error() }}</div>
+}

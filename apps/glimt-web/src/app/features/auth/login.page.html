@@ -1,0 +1,17 @@
+<gp-auth-frame [ariaLabel]="'signIn' | t">
+  <gp-segment [options]="seg.options()" value="login" (valueChange)="seg.go($event)" [full]="true" [label]="'signIn' | t" />
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <gp-input formControlName="email" type="email" name="email" autocomplete="email" [placeholder]="'email' | t" [error]="emailError()" />
+    <gp-input formControlName="password" type="password" name="password" autocomplete="current-password" [placeholder]="'password' | t" [error]="passwordError()" />
+    @if (error(); as key) {
+      <div class="err" role="alert">
+        <span>{{ key | t }}</span>
+        @if (unconfirmed()) {
+          <button type="button" class="link" (click)="resend()">{{ 'resend' | t }}</button>
+        }
+      </div>
+    }
+    <gp-button type="submit" variant="primary" size="lg" [block]="true" [loading]="busy()">{{ 'signIn' | t }}</gp-button>
+    <a routerLink="/forgot" class="forgot">{{ 'forgot' | t }}</a>
+  </form>
+</gp-auth-frame>

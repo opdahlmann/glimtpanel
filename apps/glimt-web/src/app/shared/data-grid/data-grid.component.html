@@ -1,0 +1,11 @@
+<ag-grid-angular
+  class="grid"
+  [theme]="theme"
+  [gridOptions]="gridOptions"
+  [columnDefs]="columnDefs()"
+  [rowData]="rowData()"
+  [quickFilterText]="filterText()"
+  [headerHeight]="mobile() ? 0 : 28"
+  [overlayNoRowsTemplate]="emptyHtml()"
+  [attr.aria-label]="label() || null"
+/>

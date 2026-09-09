@@ -1,0 +1,13 @@
+:host { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.label { font-size: 10px; color: var(--w-45); }
+.field { position: relative; display: flex; }
+.select {
+  width: 100%; min-height: 44px; padding: 0 32px 0 12px; border: 0; border-radius: var(--radius-card); outline: none;
+  background: var(--s-5); box-shadow: inset 0 0 0 .5px var(--s-8); color: var(--w-85); font-size: 12px; font-weight: 600;
+  appearance: none; -webkit-appearance: none; cursor: pointer; transition: box-shadow var(--t-hover);
+}
+.select:focus { box-shadow: 0 0 0 2px var(--color-cpu); }
+.select:focus-visible { outline: none; }
+.select:disabled { opacity: .5; cursor: default; }
+.chev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--w-50); pointer-events: none; }
+.error { font-size: 11px; color: var(--color-crit); }

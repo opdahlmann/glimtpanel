@@ -1,0 +1,14 @@
+<div class="pill" role="radiogroup" [attr.aria-label]="label() || null">
+  @for (o of options(); track o.value; let i = $index) {
+    <button
+      type="button"
+      role="radio"
+      class="opt"
+      [class.on]="o.value === value()"
+      [attr.aria-checked]="o.value === value()"
+      [attr.tabindex]="i === selectedIndex() ? 0 : -1"
+      (click)="select(o.value)"
+      (keydown)="onKeydown($event, i)"
+    >{{ o.label }}</button>
+  }
+</div>

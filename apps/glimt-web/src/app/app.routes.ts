@@ -1,17 +1,24 @@
 import { Routes } from '@angular/router';
-import { authGuard, devGuard, guestGuard } from '@core/guards';
+import { authGuard, authShellMatch, devGuard, guestGuard } from '@core/guards';
 
 /**
- * Ruter fra IMPLEMENTERINGSPLAN 3.1. Alt er lazy. Innloggede sider ligger under ShellComponent (sidepanel/bunnlinje),
- * auth-sidene og /welcome bruker et nakent skall, /demo har eget skall.
+ * Ruter fra IMPLEMENTERINGSPLAN 3.1. Alt er lazy. Auth-sidene ligger under AuthShellComponent (sentrert, uten
+ * navigasjon), innloggede sider under ShellComponent (sidepanel/bunnlinje). `/welcome` bruker hovedskallet uten
+ * bunnlinje (`data.bottomNav`). /demo har eget skall (fase 10).
  */
 export const routes: Routes = [
-  { path: 'login', canActivate: [guestGuard], loadComponent: () => import('@features/auth/login.page').then((m) => m.LoginPage) },
-  { path: 'register', canActivate: [guestGuard], loadComponent: () => import('@features/auth/register.page').then((m) => m.RegisterPage) },
-  { path: 'forgot', canActivate: [guestGuard], loadComponent: () => import('@features/auth/forgot.page').then((m) => m.ForgotPage) },
-  { path: 'reset', loadComponent: () => import('@features/auth/reset.page').then((m) => m.ResetPage) },
-  { path: 'confirm', loadComponent: () => import('@features/auth/confirm.page').then((m) => m.ConfirmPage) },
-  { path: 'welcome', canActivate: [authGuard], loadComponent: () => import('@features/pwa/welcome.page').then((m) => m.WelcomePage) },
+  {
+    path: '',
+    canMatch: [authShellMatch],
+    loadComponent: () => import('./shell/auth-shell.component').then((m) => m.AuthShellComponent),
+    children: [
+      { path: 'login', canActivate: [guestGuard], loadComponent: () => import('@features/auth/login.page').then((m) => m.LoginPage) },
+      { path: 'register', canActivate: [guestGuard], loadComponent: () => import('@features/auth/register.page').then((m) => m.RegisterPage) },
+      { path: 'forgot', canActivate: [guestGuard], loadComponent: () => import('@features/auth/forgot.page').then((m) => m.ForgotPage) },
+      { path: 'reset', loadComponent: () => import('@features/auth/reset.page').then((m) => m.ResetPage) },
+      { path: 'confirm', loadComponent: () => import('@features/auth/confirm.page').then((m) => m.ConfirmPage) },
+    ],
+  },
   {
     path: 'demo',
     loadComponent: () => import('@features/demo/demo-shell.component').then((m) => m.DemoShell),
@@ -35,6 +42,7 @@ export const routes: Routes = [
       { path: 'alerts', loadComponent: () => import('@features/alerts/alerts.page').then((m) => m.AlertsPage) },
       { path: 'settings', redirectTo: 'settings/account', pathMatch: 'full' },
       { path: 'settings/:tab', loadComponent: () => import('@features/settings/settings.page').then((m) => m.SettingsPage) },
+      { path: 'welcome', data: { bottomNav: false }, loadComponent: () => import('@features/pwa/welcome.page').then((m) => m.WelcomePage) },
     ],
   },
   { path: '**', redirectTo: '' },

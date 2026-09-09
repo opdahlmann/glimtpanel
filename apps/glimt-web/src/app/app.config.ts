@@ -7,14 +7,21 @@ import {
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { ConfigService } from '@core/config.service';
+import { SessionService } from '@core/session.service';
 import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    // Ingen withViewTransitions: dekor står stille (6.7).
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(withFetch()),
-    // Henter /config.json før appen starter. Feiler henting, brukes standardverdier (se ConfigService).
-    provideAppInitializer(() => inject(ConfigService).load()),
+    // Henter /config.json før appen starter (standardverdier hvis den mangler), og starter deretter
+    // sesjonens oppfriskning (cookie → /api/auth/me) uten å blokkere; guardene venter på `ready`.
+    provideAppInitializer(() => {
+      const config = inject(ConfigService);
+      const session = inject(SessionService);
+      return config.load().then(() => session.start());
+    }),
   ],
 };

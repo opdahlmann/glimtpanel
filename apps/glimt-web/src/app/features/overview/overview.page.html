@@ -1,64 +1,29 @@
-<main class="page">
+<div class="page">
   <header class="head">
-    <svg class="logo" width="28" height="28" viewBox="0 0 64 64" aria-hidden="true">
-      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3f4b"/><stop offset="1" stop-color="#23252b"/></linearGradient></defs>
-      <rect width="64" height="64" rx="14" fill="url(#g)"/>
-      <g fill="none" stroke-width="4.5" stroke-linecap="round" transform="rotate(-90 32 32)">
-        <circle cx="32" cy="32" r="16.5" stroke="rgba(255,255,255,.14)"/>
-        <circle cx="32" cy="32" r="16.5" stroke="#0a84ff" stroke-dasharray="28 75.7"/>
-        <circle cx="32" cy="32" r="16.5" stroke="#30d158" stroke-dasharray="28 75.7" stroke-dashoffset="-34.6"/>
-        <circle cx="32" cy="32" r="16.5" stroke="#64d2ff" stroke-dasharray="28 75.7" stroke-dashoffset="-69.1"/>
-      </g>
-    </svg>
-    <div class="brand">
-      <h1 class="title">Glimtpanel</h1>
-      <span class="by">by <b>Kodetank</b></span>
+    <h1 class="title">{{ 'servers' | t }}</h1>
+    <div class="summary num">
+      {{ cards().length }} {{ 'servers' | t }} · {{ upCount() }} {{ 'up' | t }} · {{ downCount() }} {{ 'down' | t }}
+      @if (pausedCount() > 0) { · {{ pausedCount() }} {{ 'paused' | t }} }
+      · {{ (state() === 'connected' ? 'liveLabel' : state() === 'reconnecting' ? 'reconnect' : 'loading') | t }}
     </div>
-    <span class="live" [class.live--on]="connected()" role="status" aria-live="polite">
-      <span class="live__dot" aria-hidden="true"></span>
-      <span class="live__label">{{ state() }}</span>
-    </span>
   </header>
 
-  @if (servers().length === 0) {
-    <p class="empty">Waiting for the first agent…</p>
+  @if (cards().length === 0) {
+    <p class="empty">{{ 'waitingAgent' | t }}</p>
   } @else {
-    <ul class="list" aria-label="Servers">
-      @for (s of servers(); track s.id) {
-        <li class="row">
-          <span class="dot" [class.dot--up]="s.status === 'up'" [class.dot--down]="s.status === 'down'" aria-hidden="true"></span>
-          <div class="ident">
-            <span class="name">{{ s.name }}</span>
-            <span class="host">{{ s.hostname }}</span>
-          </div>
-          <dl class="meta">
-            <div>
-              <dt>Status</dt>
-              <dd class="status" [class.status--up]="s.status === 'up'" [class.status--down]="s.status === 'down'">{{ s.status }}</dd>
-            </div>
-            <div>
-              <dt>Last seen</dt>
-              <dd class="num">{{ s.lastSeenAt ? (s.lastSeenAt | date: 'HH:mm:ss') : '—' }}</dd>
-            </div>
-            <div>
-              <dt>OS</dt>
-              <dd>{{ s.os || '—' }} <span class="dim">{{ s.arch }}</span></dd>
-            </div>
-            <div>
-              <dt>Cores</dt>
-              <dd class="num">{{ s.cores }}</dd>
-            </div>
-            <div>
-              <dt>RAM</dt>
-              <dd class="num">{{ gigabytes(s.ramBytes) }} GB</dd>
-            </div>
-            <div>
-              <dt>Agent</dt>
-              <dd class="num">{{ s.agentVersion || '—' }}</dd>
-            </div>
-          </dl>
-        </li>
+    <div class="list" role="list" [attr.aria-label]="'servers' | t">
+      @for (c of cards(); track c.id) {
+        <gp-row role="listitem" [class.down]="c.status !== 'up'">
+          <gp-live-dot leading [state]="dot(c)" />
+          <a class="name" [routerLink]="['/servers', c.id]">{{ c.name }}</a>
+          <span class="status" [class.status--down]="c.status === 'down'">{{ statusText(c) }}</span>
+          <span class="spacer"></span>
+          <span class="metric"><span class="k">{{ 'cpu' | t }}</span><span class="num v">{{ pct(c.cpu) }}</span></span>
+          <span class="metric"><span class="k">{{ 'memory' | t }}</span><span class="num v">{{ pct(c.mem) }}</span></span>
+          <span class="metric"><span class="k">{{ 'disk' | t }}</span><span class="num v">{{ pct(c.diskWorst?.pct) }}</span></span>
+          <gp-sparkline trailing class="spark" [values]="lastHour(c.id)().cpu" color="cpu" [height]="24" />
+        </gp-row>
       }
-    </ul>
+    </div>
   }
-</main>
+</div>
