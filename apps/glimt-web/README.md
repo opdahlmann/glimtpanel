@@ -2,8 +2,9 @@
 
 Dashbordet til Glimtpanel: Angular 22 (standalone, zoneless, OnPush), ren CSS med delte tokens fra
 `@glimt/design-tokens`, SignalR mot huben. Fase 3 er på plass: layout-skallet (steg 3.3), ordboken (3.2),
-kjerne-tjenestene (3.4), felleskomponentene med `/dev/components` (3.5) og auth-skjermene (3.6). Oversikten på `/`
-er fortsatt en midlertidig liste; serverkortet kommer i fase 4.
+kjerne-tjenestene (3.4), felleskomponentene med `/dev/components` (3.5) og auth-skjermene (3.6). Fase 4 gir oversikten
+på `/`: serverkortet, verktøylinje med søk, sortering og filterchips, tom-tilstanden med innrulleringskortet og dialogen
+«Legg til server» (steg 4.1–4.5). Serversiden kommer i fase 5.
 
 ## Struktur
 
@@ -30,7 +31,12 @@ apps/glimt-web/
 │       ├── dev/components.page.ts           # /dev/components: alle komponentene i alle tilstander (kun utvikling)
 │       └── features/
 │           ├── auth/                        # /login, /register, /confirm, /forgot, /reset (steg 3.6)
-│           └── overview/                    # midlertidig oversikt (rute `/`)
+│           └── overview/                    # oversikten (rute `/`, fase 4), se «Oversikten» under
+│               ├── overview.page.*          # tittel, sammendrag, verktøylinje, chips, kortgrid, tom-tilstand, tastatur
+│               ├── overview.model.ts        # rene filter-/sorteringsfunksjoner (testet mot de 16 demoserverne i overview.fixtures.ts)
+│               ├── server-card/             # gp-server-card + card-view.ts (avledede verdier)
+│               ├── enrol/                   # gp-enrol-panel: nøkkel, nedtelling, Docker-valg, Copy, «venter»
+│               └── add-server/              # gp-add-server-dialog: tre trinn
 ├── scripts/i18n-check.mjs                   # `npm run i18n:check`: nøkkelsett og ukjente nøkler i maler
 ├── public/                                  # favicon.svg; config.json genereres hit (git-ignorert)
 ├── nginx/default.conf.template              # nginx i containeren, ${GLIMT_HUB_INTERNAL_URL} fylles inn ved start
@@ -61,8 +67,8 @@ Alle er standalone, `OnPush`, med signal-inputs (`input()`/`model()`), prefiks `
 | `gp-data-grid` | AG Grid Community (tema fra 6.6). Importeres fra `@shared/data-grid/data-grid.component` (ikke barrel) slik at AG Grid havner i en lat chunk. `columns`, `rows`, `getRowId`, `mobileRenderer` (komponent eller `ng-template`), `expandedRowRenderer` (full-bredde-rad under valgt rad), `filterText`, `sortBy`/`sortDir` (brukes på mobil). Under 760 px målt på verten: én stablet kolonne uten hode |
 
 Hjelpere i `shared/util/`: `thr(pct, base)` (crit ≥ 90, warn ≥ 80), `metricColor`, `withAlpha`, `formatBytes`, `formatRate`,
-`formatGb`, `formatDuration`, `formatDurationClock`, `formatTime` (Intl, 24 t, valgfri tidssone) og `BreakpointService`
-(`isMobile`-signal fra en ResizeObserver på rot-elementet, < 760 px).
+`formatGb`, `formatDuration`, `formatDurationClock`, `formatTime` (Intl, 24 t, valgfri tidssone), `BreakpointService`
+(`isMobile`-signal fra en ResizeObserver på rot-elementet, < 760 px) og direktivet `gpAutofocus` (fokus ved rendering).
 
 Berøring: alle klikkbare flater er minst 44 px. Segment-knapper og panelhoder får treffflaten via gjennomsiktige kanter/negative
 marger så designmålene (32 px hode, 28/24 px segmentknapper) beholdes; `gp-button` `md`/`sm` blir 44 px høye under `(pointer: coarse)`.
@@ -185,6 +191,49 @@ Feil vises under feltet etter blur eller innsending, i `--color-crit` 11 px. Ser
 `/login` med toast. Enter sender skjemaet; autofokus i første felt bare på desktop. Betaløftet under kortet er
 ordboksteksten `authNote` (`GET /api/subscription` krever innlogging, så konstantene hentes ikke derfra på
 innloggingsskjermen).
+
+## Oversikten (fase 4)
+
+`OverviewPage` (`features/overview/`) er skjerm 3, 4, 16 og 18 fra designet:
+
+- **Sammendraget** bygges av deler: `16 servers · 13 up · 1 down · 1 paused · live · 08:14:05` (klokken tikker hvert
+  sekund; «connection lost» fra ConnectionService, «reconnecting…» fra LiveService). «Add server» vises for alle unntatt
+  lesere uten egne servere (`readerOf > 0` og `ownsServers` falsk fra `/api/auth/me`).
+- **Verktøylinjen**: `gp-input` med lupe (søk på navn og tagger, 150 ms debounce), `gp-select` med sortering
+  (`name`, `cpu`, `mem`, `disk`, `status`, `tag`; status sorterer nede → pauset → oppe, tagg på sammenslått taggstreng,
+  tallene synkende med nede-servere sist), og visningssegmentet Cards/Compact/Groups bare når flaggene `compact`/`groups`
+  er på (i MVP rendres det ikke). Filterchips: All, én chip per tagg (alfabetisk), up/down/paused med prikk, «Has alert»
+  uavhengig. `PrefsService` husker sortering, filter og visning; søket huskes ikke. Funksjonene ligger i
+  `overview.model.ts` og testes mot de 16 demoserverne i `overview.fixtures.ts`.
+- **Serverkortet** (`gp-server-card`, input `id`) leser `LiveStore.card(id)` og `LiveStore.lastHour(id)` selv, slik at ett
+  `Card` bare tegner ett kort. Avledningene (`card-view.ts`): status/prikk/opasitet, infolinje «Ubuntu 24.04 · 4 cores ·
+  8 GB · up 12d 4h» (huben sender `uptimeSec` på kortet), ringene med «1.9 of 4 cores» / «4.9 of 8 GB» / «/ 92%», chips
+  Net (MB/s), Containers (gul når noen ikke kjører, «—» uten Docker), Updates «3 (1)» (oransje ved sikkerhet), Reboot
+  («required»/«—»), Services («1 failed»/«ok»), stripe i varselets farge (alvorsgrad per varsel kommer i fase 7; til da er
+  aktive varsler røde). Ringene er knapper til `/servers/:id#cpu|mem|disk`, navnet til `/servers/:id`, Enter på kortet
+  åpner. Kort utenfor skjermen (IntersectionObserver, 120 px marg) fryser det som tegnes (`linkedSignal`) mens signalene
+  lever videre. Sparklines kan slås av i `PrefsService.sparklines`. Hele kortet har `aria-label` med status og de tre
+  prosentene. Nede: ringer på 0, opasitet .6, «last seen 03:12» (`formatWhen`). Pauset: nøytral prikk, opasitet .6.
+- **Tom-tilstand** (skjerm 3) når `GET /api/servers` er lastet og tom: «No servers yet» og glasskortet med
+  `gp-enrol-panel`. Panelet henter nøkkelen ved visning (`POST /api/servers/enrol-key { dockerMode }`), teller ned fra
+  `expiresAt`, gir «New key» ved utløp, Docker-segmentet (Secure = `proxy`, Simple = `simple`) henter en ny nøkkel med
+  det valget (huben lagrer valget på nøkkelen), Copy går gjennom `ClipboardService` og viser «Copied» i 1,8 s. Lesere
+  uten servere ser «You have not been given access to any servers yet».
+- **«Legg til server»** (`gp-add-server-dialog`, `gp-modal` 560 px) har tre trinn: (0) `gp-enrol-panel`, (1) grønt
+  «connected»-kort, navnefelt forhåndsutfylt med hostname, taggchips (eksisterende tagger + «+» for ny, samme regel som
+  huben: 1–24 tegn a-z, 0-9 og -), «Next» lagrer med `PATCH /api/servers/{id}`; (2) forslag om appen med «Done» og «Show
+  me» → `/welcome`. Siden lytter på `LiveService.onServerAdded`: mens tom-tilstanden vises eller dialogen står på trinn 0,
+  hopper dialogen til trinn 1 med den nye serveren. Dialogen kan lukkes når som helst; nøkkelen lever til den utløper.
+  Alt innholdet ligger bak `@if (open())`, fordi projisert innhold ellers instansieres (og ville hentet en nøkkel) selv
+  når dialogen er lukket.
+- **Tastatur** (FB 13.6): `/` fokuserer søket, piltaster/Home/End flytter fokus mellom kortene, Enter åpner.
+- **Mobil**: søk i full bredde, sortering under, chips ruller horisontalt (`scrollbar-width: none`), ett kort per rad,
+  chips 44 px ved `(pointer: coarse)`.
+
+Playwright (`e2e/tests/overview.spec.ts`, `e2e/tests/add-server.spec.ts`) dekker skjerm 3, 4, 16, 18 og 19 i alle tre
+prosjektene med skjermbilder (levende tall maskeres) og hele flyten fra tom oversikt til «Done» via hubens e2e-endepunkt
+`enrol-fake-agent`. Ytelsesmålet i steg 4.5 (30 kort under 5 % CPU i Chrome) er ikke målt ennå; det gjøres i fase 9
+sammen med den fysiske mobiltesten.
 
 ## Dockerfile
 

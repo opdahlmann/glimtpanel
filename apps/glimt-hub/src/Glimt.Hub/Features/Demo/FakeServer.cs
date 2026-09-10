@@ -11,8 +11,9 @@ namespace Glimt.Hub.Features.Demo;
 /// </summary>
 public sealed class FakeServer
 {
-    private const double MB = 1_000_000;
-    private const long GB = 1_000_000_000;
+    // Binary units, so an "8 GB" demo server reads as 8 GB in the web app (which formats with 1024).
+    private const double MB = 1024 * 1024;
+    private const long GB = 1024L * 1024 * 1024;
 
     private readonly Random _rng;
     private readonly string _prefix;
@@ -109,6 +110,9 @@ public sealed class FakeServer
     /// <summary>False for nordic-db (down since 03:12) and after POST /api/e2e/disconnect-server.</summary>
     public bool Online { get; set; }
 
+    /// <summary>Docker mode reported in hello; the enrol key's choice for servers from POST /api/e2e/enrol-fake-agent.</summary>
+    public string? DockerMode { get; init; }
+
     public double Cpu { get; private set; }
     public double Mem { get; private set; }
     public double[] PerCore { get; }
@@ -135,7 +139,7 @@ public sealed class FakeServer
         Definition.Cores,
         RamBytes,
         BootTime,
-        Definition.Containers > 0 ? "socket" : "none");
+        DockerMode ?? (Definition.Containers > 0 ? "socket" : "none"));
 
     /// <summary>One second of drift (simulate() in glimtData.js).</summary>
     public void Tick()

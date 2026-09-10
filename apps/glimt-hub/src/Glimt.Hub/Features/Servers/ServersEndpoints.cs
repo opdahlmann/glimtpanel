@@ -121,6 +121,7 @@ public static class ServersEndpoints
         IAccessService access,
         IServerStore servers,
         AgentRegistry registry,
+        ILivePublisher live,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
@@ -160,6 +161,13 @@ public static class ServersEndpoints
         if (doc is null)
         {
             return Validation.NotFound("Server not found");
+        }
+
+        // The live session carries name and tags into every Card/ServerStatus; tell it, and push a fresh Card to the browsers.
+        if (registry.TryGet(id, out var session))
+        {
+            session.SetIdentity(doc.Name, doc.Tags);
+            await live.StatusAsync(session, cancellationToken);
         }
 
         return Results.Ok(Project(doc, userId, new Dictionary<string, string>(), registry, DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime)));

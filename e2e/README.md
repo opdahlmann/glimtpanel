@@ -27,3 +27,17 @@ Innlogging trenger MongoDB (dev-brukeren `dev@glimtpanel.local` / `GlimtDev-2026
 Testene i `tests/auth.spec.ts` (innlogging, sesjon over omlasting, utlogging, `/login?next=`, språkbytte) logger inn
 gjennom skjemaet eller gjennom `helpers/auth.ts` (`loginViaApi` setter cookien i nettleserkonteksten). Skjermbildet
 `login.png` sammenlignes med `tests/auth.spec.ts-snapshots/` (`--update-snapshots` etter designendringer).
+
+## Fase 4: oversikten og legg til server
+
+- `tests/overview.spec.ts`: skjerm 4 (de 16 demoserverne som dev-brukeren eier, sammendrag, verktøylinje, chips, kort
+  med levende tall), 16 (`nordic-db` nede), 18 (leser: ingen «Add server», rollen Reader) og 19 (norsk), filter/sortering/
+  søk med huskede valg, tastatur (desktop) og ringen som åpner `/servers/:id#mem`. Skjermbilder `overview.png`,
+  `overview-reader.png` og `overview-no.png` med ringer, chips, sparklines, infolinje og sammendrag maskert (de lever).
+- `tests/add-server.spec.ts`: skjerm 3 (tom oversikt for en eier uten servere: kommando, nedtelling, Docker-valg,
+  løfte, «venter», `empty-owner.png`), Copy (ikke i WebKit), og hele flyten: nøkkelen leses fra kommandoen,
+  `POST /api/e2e/enrol-fake-agent { key, hostname }` lar en falsk agent bruke den, dialogen hopper til trinn 2, navn og
+  tagg lagres, trinn 3 → «Done»/«Show me».
+- `helpers/e2e-api.ts`: `ensureEmptyOwner`, `ensureReader` (hubens `POST /api/e2e/ensure-user`, passord
+  `GlimtE2E-2026!`), `enrolFakeAgent`, unike e-poster/vertsnavn per prosjekt og kjøring, og `forceLang` (låser
+  `gp.lang` i localStorage så profilspråket som språktesten bytter ikke slår inn).

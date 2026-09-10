@@ -1,0 +1,29 @@
+/* Innholdet i glasskortet på skjerm 3 og i dialogens trinn 0 (6.4). Kortet rundt settes av verten. */
+:host { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.section { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--w-55); }
+.cmd-row { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.cmd {
+  flex: 1; min-width: 0; background: var(--color-ink); border-radius: var(--radius-card); padding: 12px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--w-90); word-break: break-all; line-height: 1.5;
+}
+.cmd.muted { color: var(--w-45); }
+.copy {
+  flex: none; background: var(--w-100); color: var(--color-ink); border: 0; border-radius: var(--radius-card);
+  padding: 0 16px; min-width: 44px; min-height: 44px; font-size: 12px; font-weight: 600; cursor: pointer;
+  box-shadow: var(--glow-primary); transition: transform var(--t-panel) var(--ease-out-expo);
+}
+.copy:hover:not(:disabled) { transform: translateY(-1px); }
+.copy:disabled { opacity: .5; cursor: default; box-shadow: none; }
+.expires { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--w-45); }
+.expires b { font-weight: 600; color: var(--w-70); }
+.expired { color: var(--color-warn); }
+.error { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--color-crit); }
+.docker { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.label { font-size: 11px; font-weight: 600; color: var(--w-85); }
+.note { font-size: 11px; color: var(--w-60); line-height: 1.5; }
+.promise {
+  font-size: 11px; color: var(--w-60); line-height: 1.5; padding: 10px 12px; border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-ram) 8%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--color-ram) 25%, transparent);
+}
+.waiting { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--w-70); }
+.wdot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-cpu); animation: blink 1.4s infinite; flex: none; }

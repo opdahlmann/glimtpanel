@@ -1,0 +1,66 @@
+<gp-modal [(open)]="open" [title]="'addServer' | t" [maxWidth]="560" [closeLabel]="'close' | t">
+  <!-- Alt ligger bak @if (open()): projisert innhold instansieres ellers selv om dialogen er lukket, og trinn 0 ville hentet en nøkkel. -->
+  @if (open() && step() === 0) {
+    <gp-enrol-panel />
+  } @else if (open() && step() === 1) {
+    @if (server(); as s) {
+      <div class="connected" role="status">
+        <span class="cdot" aria-hidden="true"></span>
+        <span class="cname">{{ s.hostname || s.name }}</span>
+        <span class="cline num">{{ connectedLine() }}</span>
+      </div>
+    }
+    <div class="label">{{ 'nameIt' | t }}</div>
+    <gp-input [label]="'name' | t" [ngModel]="name()" (ngModelChange)="name.set($event)" name="serverName" autocomplete="off" />
+    <div class="label small">{{ 'tags' | t }}</div>
+    <div class="tags" role="group" [attr.aria-label]="'tags' | t">
+      @for (tag of allTags(); track tag) {
+        <button type="button" class="tag" [class.on]="hasTag(tag)" [attr.aria-pressed]="hasTag(tag)" (click)="toggleTag(tag)">{{ tag }}</button>
+      }
+      @if (addingTag()) {
+        <input
+          class="tag-input"
+          type="text"
+          [value]="newTag()"
+          (input)="onTagInput($event)"
+          (keydown)="onTagKeydown($event)"
+          (blur)="commitTag()"
+          [attr.aria-label]="'addTag' | t"
+          [attr.aria-invalid]="tagError() ? true : null"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          gpAutofocus
+        />
+      } @else if (canAddTag()) {
+        <button type="button" class="tag add" (click)="startTag()" [attr.aria-label]="'addTag' | t">+</button>
+      }
+    </div>
+    @if (tagError(); as e) {
+      <div class="error">{{ e | t }}</div>
+    }
+    @if (error(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="foot">
+      <gp-button variant="primary" size="lg" [loading]="saving()" (click)="next()">{{ 'next' | t }}</gp-button>
+    </div>
+  } @else if (open()) {
+    <div class="suggest">
+      <svg width="36" height="36" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="14" fill="#2b2e36" />
+        <g fill="none" stroke-width="4.5" stroke-linecap="round" transform="rotate(-90 32 32)">
+          <circle cx="32" cy="32" r="16.5" stroke="rgba(255,255,255,.14)" />
+          <circle cx="32" cy="32" r="16.5" stroke="#0a84ff" stroke-dasharray="28 75.7" />
+          <circle cx="32" cy="32" r="16.5" stroke="#30d158" stroke-dasharray="28 75.7" stroke-dashoffset="-34.6" />
+          <circle cx="32" cy="32" r="16.5" stroke="#64d2ff" stroke-dasharray="28 75.7" stroke-dashoffset="-69.1" />
+        </g>
+      </svg>
+      <div class="stext">{{ 'suggestApp' | t }}</div>
+    </div>
+    <div class="foot">
+      <gp-button variant="ghost" size="lg" (click)="done()">{{ 'done' | t }}</gp-button>
+      <gp-button variant="primary" size="lg" (click)="showMe()">{{ 'showMe' | t }}</gp-button>
+    </div>
+  }
+</gp-modal>

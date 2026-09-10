@@ -17,6 +17,7 @@ public sealed class FakeAgentService(
     BufferStore buffers,
     UserDirectory users,
     IServerStore store,
+    IEnrolKeyStore enrolKeys,
     MongoContext mongo,
     GlimtOptions options,
     TimeProvider clock,
@@ -24,6 +25,8 @@ public sealed class FakeAgentService(
 {
     public const int E2eSeed = 20260909;
     public const string FallbackDemoUserId = "demo-user";
+    /// <summary>Hostname of the server POST /api/e2e/enrol-fake-agent creates when none is given (screen 3 in the design).</summary>
+    public const string DefaultEnrolHostname = "web-03";
     private static readonly TimeSpan MongoWait = TimeSpan.FromSeconds(5);
 
     private readonly Lock _lock = new();
@@ -36,6 +39,9 @@ public sealed class FakeAgentService(
     public Task Ready => _ready.Task;
 
     public string DemoUserId { get; private set; } = FallbackDemoUserId;
+
+    /// <summary>The user that owns the 16 demo servers (the dev user in e2e when it exists, otherwise the demo user).</summary>
+    public string OwnerId { get; private set; } = FallbackDemoUserId;
 
     public IReadOnlyList<FakeServer> Servers
     {
@@ -66,6 +72,7 @@ public sealed class FakeAgentService(
         try
         {
             var ownerId = await ResolveOwnerAsync(stoppingToken);
+            OwnerId = ownerId;
             _rng = options.Env == GlimtOptions.E2e ? new Random(E2eSeed) : new Random();
             var now = clock.GetUtcNow();
             for (var i = 0; i < DemoData.Definitions.Length; i++)
@@ -256,6 +263,60 @@ public sealed class FakeAgentService(
         return true;
     }
 
+    /// <summary>
+    /// POST /api/e2e/enrol-fake-agent: consumes a real one-time key (POST /api/servers/enrol-key) exactly like an
+    /// agent's hello would, and starts a new fake server owned by the key's owner. The overview sees
+    /// ServerAdded and the "Add server" dialog jumps to step 2 (IMPLEMENTERINGSPLAN step 4.3). The server has no
+    /// history, like a freshly installed agent.
+    /// </summary>
+    public async Task<EnrolFakeResult> EnrolAsync(string? key, string? hostname, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return EnrolFakeResult.Fail(StatusCodes.Status400BadRequest, "key is required");
+        }
+
+        var name = ServerIds.Slug(string.IsNullOrWhiteSpace(hostname) ? DefaultEnrolHostname : hostname);
+        lock (_lock)
+        {
+            if (_servers.Any(s => s.Name == name))
+            {
+                return EnrolFakeResult.Fail(StatusCodes.Status409Conflict, $"a fake server named {name} already exists");
+            }
+        }
+
+        var info = await enrolKeys.TryConsumeAsync(key, cancellationToken);
+        if (info is null)
+        {
+            return EnrolFakeResult.Fail(StatusCodes.Status404NotFound, "unknown, expired or already used key");
+        }
+
+        var now = clock.GetUtcNow();
+        var definition = new DemoDefinition(name, [], 2, 4, "24.04", 22, 46, [new DemoMount("/", "ext4", 40, 37)], 3, new DemoFlags());
+        FakeServer fake;
+        lock (_lock)
+        {
+            // Own Random: the shared one is used by the tick loop on another thread.
+            fake = new FakeServer(_servers.Count % DemoData.Definitions.Length, definition, new Random(), now) { DockerMode = info.DockerMode };
+            _servers.Add(fake);
+        }
+
+        var session = registry.GetOrAddDemo(fake.ServerId);
+        session.OwnerId = info.OwnerId;
+        var link = new FakeAgentLink(fake, this);
+        lock (_lock)
+        {
+            _links[fake.ServerId] = link;
+        }
+
+        // No SetIdentity: the name comes from the hostname in hello, as for a real enrolment.
+        session.Attach(link, fake.Hello(), now);
+        await ingest.ConnectedAsync(session, isNew: true, cancellationToken);
+        await ingest.SnapshotAsync(session, fake.Snapshot(now.ToUnixTimeMilliseconds()), cancellationToken);
+        logger.LogInformation("e2e: fake agent {Name} enrolled as {ServerId} for owner {OwnerId}", name, fake.ServerId, info.OwnerId);
+        return EnrolFakeResult.Ok(fake.ServerId, name, info.OwnerId);
+    }
+
     // ---- fake agent side -------------------------------------------------------------------------
 
     internal Task EmitLogAsync(FakeServer fake, Log log, CancellationToken cancellationToken) =>
@@ -282,6 +343,14 @@ public sealed class FakeAgentService(
         var at = new DateTimeOffset(local.Year, local.Month, local.Day, int.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture), int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture), 0, local.Offset);
         return at > now ? at.AddDays(-1) : at;
     }
+}
+
+/// <summary>Outcome of <see cref="FakeAgentService.EnrolAsync"/>: the new server, or an HTTP status with a reason.</summary>
+public sealed record EnrolFakeResult(int Status, string? ServerId, string? Name, string? OwnerId, string? Error)
+{
+    public static EnrolFakeResult Ok(string serverId, string name, string ownerId) => new(StatusCodes.Status200OK, serverId, name, ownerId, null);
+
+    public static EnrolFakeResult Fail(int status, string error) => new(status, null, null, null, error);
 }
 
 /// <summary>

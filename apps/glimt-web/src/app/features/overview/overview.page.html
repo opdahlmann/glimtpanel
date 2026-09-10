@@ -1,29 +1,56 @@
 <div class="page">
   <header class="head">
-    <h1 class="title">{{ 'servers' | t }}</h1>
-    <div class="summary num">
-      {{ cards().length }} {{ 'servers' | t }} · {{ upCount() }} {{ 'up' | t }} · {{ downCount() }} {{ 'down' | t }}
-      @if (pausedCount() > 0) { · {{ pausedCount() }} {{ 'paused' | t }} }
-      · {{ (state() === 'connected' ? 'liveLabel' : state() === 'reconnecting' ? 'reconnect' : 'loading') | t }}
+    <div class="heading">
+      <h1 class="title">{{ 'servers' | t }}</h1>
+      <div class="summary num" data-testid="summary">{{ summary() }}</div>
     </div>
+    @if (canAdd()) {
+      <gp-button variant="primary" size="lg" icon="M12 5v14M5 12h14" (click)="openAdd()">{{ 'addServer' | t }}</gp-button>
+    }
   </header>
 
-  @if (cards().length === 0) {
-    <p class="empty">{{ 'waitingAgent' | t }}</p>
+  @if (emptyReader()) {
+    <p class="empty" data-testid="empty-reader">{{ 'noAccessYet' | t }}</p>
+  } @else if (emptyOwner()) {
+    <section class="onboarding" data-testid="empty-owner">
+      <div class="intro">
+        <div class="intro-title">{{ 'noServers' | t }}</div>
+        <div class="intro-sub">{{ 'noServersSub' | t }}</div>
+      </div>
+      <div class="glass">
+        <gp-enrol-panel />
+      </div>
+    </section>
   } @else {
-    <div class="list" role="list" [attr.aria-label]="'servers' | t">
-      @for (c of cards(); track c.id) {
-        <gp-row role="listitem" [class.down]="c.status !== 'up'">
-          <gp-live-dot leading [state]="dot(c)" />
-          <a class="name" [routerLink]="['/servers', c.id]">{{ c.name }}</a>
-          <span class="status" [class.status--down]="c.status === 'down'">{{ statusText(c) }}</span>
-          <span class="spacer"></span>
-          <span class="metric"><span class="k">{{ 'cpu' | t }}</span><span class="num v">{{ pct(c.cpu) }}</span></span>
-          <span class="metric"><span class="k">{{ 'memory' | t }}</span><span class="num v">{{ pct(c.mem) }}</span></span>
-          <span class="metric"><span class="k">{{ 'disk' | t }}</span><span class="num v">{{ pct(c.diskWorst?.pct) }}</span></span>
-          <gp-sparkline trailing class="spark" [values]="lastHour(c.id)().cpu" color="cpu" [height]="24" />
-        </gp-row>
+    <div class="toolbar">
+      <gp-input class="search" [leadingIcon]="true" size="sm" name="search" autocomplete="off" [placeholder]="'search' | t" [ngModel]="search()" (ngModelChange)="onSearch($event)" />
+      <gp-select class="sort" name="sort" [options]="sortOptions()" [ngModel]="sort()" (ngModelChange)="onSort($event)" />
+      @if (showViewSegment()) {
+        <gp-segment class="views" [options]="viewOptions()" [value]="view()" (valueChange)="onView($event)" [label]="'view' | t" />
       }
     </div>
+    <div class="chips" role="group" [attr.aria-label]="'filter' | t">
+      <button type="button" class="chip" [class.on]="allActive()" [attr.aria-pressed]="allActive()" (click)="clearAll()">{{ 'all' | t }}</button>
+      @for (tag of tags(); track tag) {
+        <button type="button" class="chip" [class.on]="filters().tag === tag" [attr.aria-pressed]="filters().tag === tag" (click)="toggleTag(tag)">{{ tag }}</button>
+      }
+      <button type="button" class="chip" [class.on]="filters().status === 'up'" [attr.aria-pressed]="filters().status === 'up'" (click)="toggleStatus('up')"><span class="dot dot--up" aria-hidden="true"></span>{{ 'up' | t }}</button>
+      <button type="button" class="chip" [class.on]="filters().status === 'down'" [attr.aria-pressed]="filters().status === 'down'" (click)="toggleStatus('down')"><span class="dot dot--down" aria-hidden="true"></span>{{ 'down' | t }}</button>
+      <button type="button" class="chip" [class.on]="filters().status === 'paused'" [attr.aria-pressed]="filters().status === 'paused'" (click)="toggleStatus('paused')"><span class="dot dot--paused" aria-hidden="true"></span>{{ 'paused' | t }}</button>
+      <button type="button" class="chip" [class.on]="filters().alert" [attr.aria-pressed]="filters().alert" (click)="toggleAlert()"><span class="dot dot--warn" aria-hidden="true"></span>{{ 'hasAlert' | t }}</button>
+    </div>
+    @if (cards().length === 0) {
+      <p class="empty muted">{{ 'loading' | t }}</p>
+    } @else if (visibleCards().length === 0) {
+      <p class="empty">{{ 'noMatch' | t }}</p>
+    } @else {
+      <div #grid class="grid" role="list" [attr.aria-label]="'servers' | t" (keydown)="onGridKeydown($event)">
+        @for (c of visibleCards(); track c.id) {
+          <gp-server-card role="listitem" [id]="c.id" />
+        }
+      </div>
+    }
   }
+
+  <gp-add-server-dialog [(open)]="addOpen" [(step)]="addStep" [server]="addedCard()" [existingTags]="tags()" />
 </div>

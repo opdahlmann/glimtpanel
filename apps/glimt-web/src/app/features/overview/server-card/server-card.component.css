@@ -1,0 +1,24 @@
+/* Serverkortet (6.4, skjerm 4): glass, radius 14, vindusskygge, 3 px stripe. Kun tokens. */
+:host { display: block; min-width: 0; border-radius: var(--radius-window); outline-offset: 3px; }
+:host(.dim) .card { opacity: .6; }
+.card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden; height: 100%;
+  background: var(--color-glass); border-radius: var(--radius-window); box-shadow: var(--shadow-window);
+  transition: opacity var(--t-data);
+}
+.stripe { height: 3px; flex: none; transition: background var(--t-hover); }
+.title { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 8px 12px 6px; }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.name {
+  background: none; border: 0; color: var(--w-85); font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 8px 6px; min-height: 44px; min-width: 44px; max-width: 100%; overflow-wrap: anywhere; border-radius: var(--radius-chip);
+  transition: color var(--t-hover);
+}
+.name:hover { color: var(--w-100); }
+.status { display: flex; justify-content: flex-end; align-items: center; gap: 5px; font-size: 10px; color: var(--w-45); white-space: nowrap; }
+.status--down { color: var(--color-crit); }
+.info { padding: 0 14px 10px; font-size: 10.5px; color: var(--w-45); text-align: center; }
+.rings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 12px; }
+.chips { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr; gap: 6px; padding: 10px 12px 0; }
+.sparks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 12px 12px; }
+.card:not(:has(.sparks)) { padding-bottom: 12px; }

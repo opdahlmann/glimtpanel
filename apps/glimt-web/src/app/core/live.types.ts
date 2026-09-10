@@ -44,6 +44,8 @@ export interface CardDto {
   arch: string | null;
   cores: number | null;
   ramBytes: number | null;
+  /** Oppetid i sekunder; null når serveren er nede. */
+  uptimeSec: number | null;
   cpu: number | null;
   mem: number | null;
   diskWorst: DiskWorstDto | null;

@@ -1,58 +1,210 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, Signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ConnectionService } from '@core/connection.service';
+import { FeatureFlags } from '@core/feature-flags';
 import { I18nService } from '@core/i18n.service';
 import { LiveService } from '@core/live.service';
-import { LastHour, LiveStore } from '@core/live.store';
+import { LiveStore } from '@core/live.store';
 import { CardDto } from '@core/live.types';
+import { OverviewFilters, PrefsService, SORT_KEYS, SortKey, ViewKey } from '@core/prefs.service';
+import { ServerListService } from '@core/server-list.service';
+import { SessionService } from '@core/session.service';
 import { TPipe } from '@core/t.pipe';
-import { LiveDotComponent } from '@shared/live-dot/live-dot.component';
-import { RowComponent } from '@shared/row/row.component';
-import { SparklineComponent } from '@shared/sparkline/sparkline.component';
+import { ButtonComponent } from '@shared/button/button.component';
+import { InputComponent } from '@shared/input/input.component';
+import { SegmentComponent, SegmentOption } from '@shared/segment/segment.component';
+import { SelectComponent, SelectOption } from '@shared/select/select.component';
 import { TitleService } from '../../shell/title.service';
+import { AddServerDialogComponent, AddStep } from './add-server/add-server-dialog.component';
+import { EnrolPanelComponent } from './enrol/enrol-panel.component';
+import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, sortCards, toggleAlert, toggleStatus, toggleTag } from './overview.model';
+import { ServerCardComponent } from './server-card/server-card.component';
+
+/** Søket venter så lenge før listen filtreres (steg 4.1). */
+export const SEARCH_DEBOUNCE_MS = 150;
+
+const SORT_LABEL_KEYS = { name: 'name', cpu: 'cpu', mem: 'memory', disk: 'disk', status: 'status', tag: 'tag' } as const;
 
 /**
- * Midlertidig oversikt (steg 3.4 «en midlertidig side viser live-tall»): én `gp-row` per kort fra LiveStore med
- * statusprikk, cpu/mem/disk og sparkline fra siste time. Serverkortet og verktøylinjen kommer i fase 4.
+ * Oversikten (steg 4.1–4.4, skjerm 3, 4, 16 og 18): tittel og sammendragslinje bygget av deler, «Add server» kun for
+ * eiere, verktøylinje (søk med 150 ms debounce, sortering som `<select>`, visningssegment kun når flere visninger er
+ * slått på), filterchips (All, tagger, up/down/paused, Has alert), kortgrid, tom-tilstand med innrulleringskortet for
+ * eiere uten servere og «no access yet» for lesere. PrefsService husker sortering, filter og visning.
+ * Piltaster mellom kort, Enter åpner, `/` fokuserer søket.
  */
 @Component({
   selector: 'gp-overview-page',
-  imports: [RouterLink, RowComponent, LiveDotComponent, SparklineComponent, TPipe],
+  imports: [FormsModule, InputComponent, SelectComponent, SegmentComponent, ButtonComponent, ServerCardComponent, EnrolPanelComponent, AddServerDialogComponent, TPipe],
   templateUrl: './overview.page.html',
   styleUrl: './overview.page.css',
+  host: { '(document:keydown)': 'onDocumentKeydown($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OverviewPage {
   private readonly live = inject(LiveService);
   private readonly store = inject(LiveStore);
   private readonly i18n = inject(I18nService);
+  private readonly prefs = inject(PrefsService);
+  private readonly session = inject(SessionService);
+  private readonly serverList = inject(ServerListService);
+  private readonly flags = inject(FeatureFlags);
+  private readonly conn = inject(ConnectionService);
+
+  private readonly searchField = viewChild<InputComponent, ElementRef<HTMLElement>>(InputComponent, { read: ElementRef });
+  private readonly grid = viewChild<ElementRef<HTMLElement>>('grid');
 
   readonly state = this.live.state;
   readonly cards = this.store.cards;
-  readonly upCount = computed(() => this.cards().filter((c) => c.status === 'up').length);
-  readonly downCount = computed(() => this.cards().filter((c) => c.status === 'down').length);
-  readonly pausedCount = computed(() => this.cards().filter((c) => c.status === 'paused').length);
+  readonly sort = this.prefs.sort.value;
+  readonly filters = this.prefs.filters.value;
+  readonly view = this.prefs.view.value;
+
+  readonly search = signal('');
+  private readonly debouncedSearch = signal('');
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  readonly counts = computed(() => countByStatus(this.cards()));
+  readonly tags = computed(() => collectTags(this.cards()));
+  readonly visibleCards = computed(() => sortCards(filterCards(this.cards(), this.debouncedSearch(), this.filters()), this.sort()));
+  readonly allActive = computed(() => isAllActive(this.filters()));
+
+  readonly sortOptions = computed<SelectOption<SortKey>[]>(() => SORT_KEYS.map((k) => ({ value: k, label: `${this.i18n.t('sort')}: ${this.i18n.t(SORT_LABEL_KEYS[k])}` })));
+  readonly viewOptions = computed<SegmentOption<ViewKey>[]>(() => {
+    const opts: SegmentOption<ViewKey>[] = [{ value: 'cards', label: this.i18n.t('cards') }];
+    if (this.flags.compact()) opts.push({ value: 'compact', label: this.i18n.t('compact') });
+    if (this.flags.groups()) opts.push({ value: 'groups', label: this.i18n.t('groups') });
+    return opts;
+  });
+  /** Segmentet rendres ikke når bare én visning er tilgjengelig (MVP). */
+  readonly showViewSegment = computed(() => this.viewOptions().length > 1);
+
+  /** Klokken i sammendraget («live · 08:14:05»). */
+  private readonly now = signal(Date.now());
+  readonly summary = computed(() => {
+    const c = this.counts();
+    const t = (k: Parameters<I18nService['t']>[0]) => this.i18n.t(k);
+    const tail = this.conn.offline()
+      ? t('offline').toLowerCase()
+      : this.state() === 'connected'
+        ? `${t('liveLabel')} · ${this.i18n.formatClock(this.now())}`
+        : t(this.state() === 'reconnecting' ? 'reconnect' : 'loading').toLowerCase();
+    return `${c.total} ${t('servers').toLowerCase()} · ${c.up} ${t('up')} · ${c.down} ${t('down')} · ${c.paused} ${t('paused')} · ${tail}`;
+  });
+
+  readonly addOpen = signal(false);
+  readonly addStep = signal<AddStep>(0);
+  readonly addedCard = signal<CardDto | null>(null);
+
+  /** Leser uten egne servere: ingen «Add server», og en annen tom-tilstand. */
+  readonly isReader = computed(() => !this.session.ownsAnyServer() && (this.session.user()?.readerOf ?? 0) > 0);
+  readonly canAdd = computed(() => !this.isReader());
+  readonly listLoaded = this.serverList.loaded;
+  /** Ingen servere ifølge GET /api/servers. Kortene sjekkes ikke her: ServerAdded legger kortet i lageret før siden får beskjed. */
+  private readonly listEmpty = computed(() => this.listLoaded() && this.serverList.servers().length === 0);
+  /** Tom-tilstanden: listen er tom og ingen levende kort har kommet. */
+  readonly noServers = computed(() => this.listEmpty() && this.cards().length === 0);
+  readonly emptyOwner = computed(() => this.noServers() && !this.isReader());
+  readonly emptyReader = computed(() => this.noServers() && this.isReader());
+  /** Vi venter på en agent: skjerm 3 for en eier, eller dialogen på trinn 0. */
+  readonly waitingForAgent = computed(() => (this.listEmpty() && !this.isReader()) || (this.addOpen() && this.addStep() === 0));
 
   constructor() {
     inject(TitleService).setKey('servers');
-    const unsubscribe = this.live.subscribeOverview();
-    inject(DestroyRef).onDestroy(unsubscribe);
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(this.live.subscribeOverview());
+    void this.serverList.load().catch((err: unknown) => console.warn('[overview] could not load the server list', err));
+    destroyRef.onDestroy(
+      this.live.onServerAdded((card) => {
+        // Skjerm 3: mens vi venter (tom-tilstanden eller dialogens trinn 0) hopper dialogen til trinn 2 (indeks 1).
+        if (this.waitingForAgent()) {
+          this.addedCard.set(card);
+          this.addStep.set(1);
+          this.addOpen.set(true);
+        }
+        void this.serverList.load().catch(() => undefined);
+      }),
+    );
+    destroyRef.onDestroy(this.live.onServerRemoved(() => void this.serverList.load().catch(() => undefined)));
+    const clock = setInterval(() => this.now.set(Date.now()), 1000);
+    destroyRef.onDestroy(() => {
+      clearInterval(clock);
+      if (this.searchTimer) clearTimeout(this.searchTimer);
+    });
   }
 
-  lastHour(id: string): Signal<LastHour> {
-    return this.store.lastHour(id);
+  // ---- verktøylinje og filter ---------------------------------------------------------------------
+
+  onSearch(value: string): void {
+    this.search.set(value);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = null;
+      this.debouncedSearch.set(value);
+    }, SEARCH_DEBOUNCE_MS);
   }
 
-  dot(c: CardDto): 'up' | 'down' | 'paused' {
-    return c.status === 'up' ? 'up' : c.status === 'paused' ? 'paused' : 'down';
+  onSort(value: SortKey | ''): void {
+    if (value && SORT_KEYS.includes(value)) this.prefs.sort.set(value);
   }
 
-  statusText(c: CardDto): string {
-    if (c.status === 'up') return this.i18n.t('liveLabel');
-    if (c.status === 'paused') return this.i18n.t('paused');
-    return c.lastSeenAt ? `${this.i18n.t('lastSeen')} ${this.i18n.formatWhen(Date.parse(c.lastSeenAt))}` : this.i18n.t('down');
+  onView(value: ViewKey | null): void {
+    if (value) this.prefs.view.set(value);
   }
 
-  pct(v: number | null | undefined): string {
-    return v === null || v === undefined ? '—' : `${Math.round(v)}%`;
+  clearAll(): void {
+    this.prefs.filters.set(clearFilters());
+  }
+
+  toggleTag(tag: string): void {
+    this.prefs.filters.update((f) => toggleTag(f, tag));
+  }
+
+  toggleStatus(status: Exclude<OverviewFilters['status'], ''>): void {
+    this.prefs.filters.update((f) => toggleStatus(f, status));
+  }
+
+  toggleAlert(): void {
+    this.prefs.filters.update(toggleAlert);
+  }
+
+  // ---- legg til server ----------------------------------------------------------------------------
+
+  openAdd(): void {
+    this.addedCard.set(null);
+    this.addStep.set(0);
+    this.addOpen.set(true);
+  }
+
+  // ---- tastatur (FB 13.6) -------------------------------------------------------------------------
+
+  /** `/` fokuserer søket når ingen skjemafelt har fokus. */
+  onDocumentKeydown(e: KeyboardEvent): void {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || this.addOpen()) return;
+    const target = e.target as HTMLElement | null;
+    if (target && (target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)) return;
+    const input = this.searchField()?.nativeElement.querySelector<HTMLInputElement>('input');
+    if (!input) return;
+    e.preventDefault();
+    input.focus();
+    input.select();
+  }
+
+  /** Piltaster flytter fokus mellom kortene; Enter åpner (håndteres av kortet). */
+  onGridKeydown(e: KeyboardEvent): void {
+    const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    const grid = this.grid()?.nativeElement;
+    if (!grid) return;
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('gp-server-card'));
+    if (cards.length === 0) return;
+    const active = (e.target as HTMLElement | null)?.closest<HTMLElement>('gp-server-card');
+    const i = active ? cards.indexOf(active) : -1;
+    let next: number;
+    if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = cards.length - 1;
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = i < 0 ? 0 : Math.min(cards.length - 1, i + 1);
+    else next = i < 0 ? 0 : Math.max(0, i - 1);
+    e.preventDefault();
+    cards[next].focus();
   }
 }

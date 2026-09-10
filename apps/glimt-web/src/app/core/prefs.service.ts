@@ -1,7 +1,9 @@
 import { Injectable, Signal, signal } from '@angular/core';
 
 export type Lang = 'en' | 'no';
-export type SortKey = 'name' | 'cpu' | 'mem' | 'disk' | 'status' | 'alerts';
+/** Sorteringen i oversikten (FB 5.2): navn, prosessor, minne, disk, status, tagg. */
+export type SortKey = 'name' | 'cpu' | 'mem' | 'disk' | 'status' | 'tag';
+export const SORT_KEYS: readonly SortKey[] = ['name', 'cpu', 'mem', 'disk', 'status', 'tag'];
 export type ViewKey = 'cards' | 'compact' | 'groups';
 
 export interface OverviewFilters {

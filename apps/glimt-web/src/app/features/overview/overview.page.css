@@ -1,25 +1,59 @@
-/* Midlertidig oversikt: kun tokens. Padding kommer fra skallet (24/28/40 desktop, 12/12/24 mobil). */
+/* Oversikten (6.4 skjerm 3 og 4). Padding kommer fra skallet (24/28/40 desktop, 12/12/24 mobil). Kun tokens. */
 :host { display: block; }
 .page { max-width: 1440px; display: flex; flex-direction: column; gap: 14px; }
-.head { display: flex; flex-direction: column; gap: 4px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em; }
 .summary { font-size: 11px; color: var(--w-45); }
 
-.empty {
-  margin: 0; padding: 40px 16px; text-align: center; font-size: 13px; color: var(--w-50);
-  background: var(--s-4); border-radius: var(--radius-card); box-shadow: var(--hairline-card);
+/* Verktøylinje: søk flex 1, sortering, segment. På mobil bryter søket til full bredde. */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.search { flex: 1; min-width: 180px; }
+.sort { flex: none; }
+.views { flex: none; }
+@media (max-width: 759.98px) {
+  .search { flex-basis: 100%; }
 }
 
-.list { display: flex; flex-direction: column; gap: 6px; }
-.down { opacity: .6; }
-.name { font-size: 13px; font-weight: 600; color: var(--w-100); overflow-wrap: anywhere; min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; margin: -8px 0; }
-.status { font-size: 11px; color: var(--w-45); }
-.status--down { color: var(--color-crit); }
-.spacer { flex: 1; }
-.metric { display: inline-flex; align-items: baseline; gap: 4px; min-width: 64px; }
-.k { font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--w-40); }
-.v { font-size: 12px; color: var(--w-85); }
-.spark { width: 120px; flex: none; }
+/* Filterchips: piller 32 px (44 px treffflate ved berøring), ruller horisontalt på mobil. */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: var(--radius-pill);
+  border: 1px solid var(--s-14); background: transparent; color: var(--w-60); font-size: 11px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; transition: background var(--t-hover), color var(--t-hover), border-color var(--t-hover);
+}
+.chip:hover { color: var(--w-85); background: var(--s-5); }
+.chip.on { background: var(--w-100); color: var(--color-ink); border-color: var(--w-100); }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.dot--up { background: var(--color-ram); }
+.dot--down { background: var(--color-crit); }
+.dot--paused { background: var(--color-neutral); }
+.dot--warn { background: var(--color-warn); }
+@media (pointer: coarse) {
+  .chip { min-height: 44px; min-width: 44px; justify-content: center; }
+}
 @media (max-width: 759.98px) {
-  .spark { width: 100%; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; margin: 0 -12px; padding: 0 12px; }
+  .chips::-webkit-scrollbar { display: none; }
+}
+
+/* Kort i auto-fill 340 px (én kolonne på mobil). */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr)); gap: 12px; }
+@media (max-width: 759.98px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.empty {
+  margin: 0; padding: 40px 16px; text-align: center; font-size: 13px; color: var(--w-60);
+  background: var(--s-4); border-radius: var(--radius-card); box-shadow: var(--hairline-card);
+}
+.empty.muted { color: var(--w-45); }
+
+/* Skjerm 3: tom-tilstand med glasskort 560 px. */
+.onboarding { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 32px 0; }
+.intro { text-align: center; max-width: 460px; }
+.intro-title { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.intro-sub { font-size: 13px; color: var(--w-60); margin-top: 6px; line-height: 1.5; }
+.glass {
+  width: 100%; max-width: 560px; padding: 14px; background: var(--color-glass); border-radius: var(--radius-window); box-shadow: var(--shadow-window);
 }

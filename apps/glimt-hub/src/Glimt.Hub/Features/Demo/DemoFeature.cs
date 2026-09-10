@@ -10,12 +10,22 @@ public sealed record DemoUserResponse(string Id, string Email, string Name);
 
 public sealed record DevTokenRequest(string Email);
 
-public sealed record E2eRequest(string? ServerId, int? Seconds, string? Unit);
+/// <summary>Body of POST /api/e2e/{action}; every field is optional and only some apply to each action.</summary>
+public sealed record E2eRequest(
+    string? ServerId,
+    int? Seconds,
+    string? Unit,
+    string? Key = null,
+    string? Hostname = null,
+    string? Email = null,
+    string? Password = null,
+    string? ReaderOf = null);
 
 /// <summary>
 /// GLIMT_DEMO_MODE=true or GLIMT_ENV=e2e: the fake agents and POST /api/demo/session. In development and
 /// e2e also POST /api/dev/token (a JWT for any existing user, for scripts and manual testing). In e2e the
-/// clock is shiftable and POST /api/e2e/* drives the fake servers.
+/// clock is shiftable and POST /api/e2e/* drives the fake servers, enrols a fake agent with a real one-time
+/// key and creates test accounts (owner without servers, reader of the demo servers).
 /// </summary>
 public static class DemoFeature
 {
@@ -36,6 +46,11 @@ public static class DemoFeature
         {
             services.AddSingleton<FakeAgentService>();
             services.AddHostedService(sp => sp.GetRequiredService<FakeAgentService>());
+        }
+
+        if (options.Env == GlimtOptions.E2e)
+        {
+            services.AddSingleton<E2eUsers>();
         }
 
         return services;
@@ -69,11 +84,21 @@ public static class DemoFeature
 
         if (options.Env == GlimtOptions.E2e && IsDemoMode(options))
         {
-            app.MapPost("/api/e2e/{action}", async (string action, E2eRequest? request, FakeAgentService demo, ShiftableTimeProvider clock, DownDetector down, CancellationToken ct) =>
+            app.MapPost("/api/e2e/{action}", async (string action, E2eRequest? request, FakeAgentService demo, E2eUsers e2eUsers, ShiftableTimeProvider clock, DownDetector down, CancellationToken ct) =>
             {
                 request ??= new E2eRequest(null, null, null);
                 switch (action)
                 {
+                    case "enrol-fake-agent":
+                        var enrolled = await demo.EnrolAsync(request.Key, request.Hostname, ct);
+                        return enrolled.Error is null
+                            ? Results.Ok(new { ok = true, serverId = enrolled.ServerId, name = enrolled.Name, ownerId = enrolled.OwnerId })
+                            : Results.Json(new { error = enrolled.Error }, statusCode: enrolled.Status);
+                    case "ensure-user":
+                        var ensured = await e2eUsers.EnsureAsync(request.Email, request.Password, request.ReaderOf, ct);
+                        return ensured.Error is null
+                            ? Results.Ok(new { ok = true, id = ensured.Id, email = ensured.Email, created = ensured.Created, reader = ensured.Reader })
+                            : Results.Json(new { error = ensured.Error }, statusCode: ensured.Status);
                     case "disconnect-server":
                         return await demo.DisconnectAsync(request.ServerId, ct) ? Results.Ok(new { ok = true }) : Results.NotFound();
                     case "reconnect-server":
@@ -85,7 +110,7 @@ public static class DemoFeature
                         await down.SweepAsync(persist: false, ct);
                         return Results.Ok(new { ok = true, now = clock.GetUtcNow().ToString("o"), offsetSec = (long)clock.Offset.TotalSeconds });
                     default:
-                        return Results.NotFound(new { error = "unknown e2e action; use disconnect-server, reconnect-server, fail-service or advance" });
+                        return Results.NotFound(new { error = "unknown e2e action; use disconnect-server, reconnect-server, fail-service, advance, enrol-fake-agent or ensure-user" });
                 }
             });
         }

@@ -1,0 +1,36 @@
+<div class="section">{{ 'runOn' | t }}</div>
+<div class="cmd-row">
+  <code class="cmd" data-testid="enrol-command" [class.muted]="!key()">
+    @if (key(); as k) {
+      {{ k.command }}
+    } @else if (error()) {
+      —
+    } @else {
+      {{ 'loading' | t }}
+    }
+  </code>
+  <button type="button" class="copy" (click)="copy()" [disabled]="!key() || expired()">{{ (copied() ? 'copiedShort' : 'copy') | t }}</button>
+</div>
+@if (error(); as e) {
+  <div class="error" role="alert">
+    {{ e | t }}
+    <gp-button size="sm" (click)="renew()">{{ 'newKey' | t }}</gp-button>
+  </div>
+} @else if (expired()) {
+  <div class="expires expired" role="status">
+    {{ 'keyExpired' | t }}
+    <gp-button size="sm" (click)="renew()">{{ 'newKey' | t }}</gp-button>
+  </div>
+} @else if (key()) {
+  <div class="expires">{{ 'keyExpires' | t }} <b class="num" data-testid="enrol-countdown">{{ countdown() }}</b></div>
+}
+<div class="docker">
+  <div class="label">{{ 'dockerAccess' | t }}</div>
+  <gp-segment [options]="dockerOptions()" [value]="mode()" (valueChange)="onMode($event)" [label]="'dockerAccess' | t" />
+  <div class="note">{{ dockerNote() }}</div>
+</div>
+<div class="promise">{{ 'readOnly' | t }}</div>
+<div class="waiting" role="status" aria-live="polite">
+  <span class="wdot" aria-hidden="true"></span>
+  <span>{{ 'waitingAgent' | t }}</span>
+</div>

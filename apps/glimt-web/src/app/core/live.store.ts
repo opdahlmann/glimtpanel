@@ -262,6 +262,7 @@ export function cardFromStatus(s: ServerStatusDto): CardDto {
     arch: s.arch ?? null,
     cores: s.cores ?? null,
     ramBytes: s.ramBytes ?? null,
+    uptimeSec: null,
     cpu: null,
     mem: null,
     diskWorst: null,
