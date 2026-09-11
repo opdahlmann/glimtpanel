@@ -41,3 +41,13 @@ gjennom skjemaet eller gjennom `helpers/auth.ts` (`loginViaApi` setter cookien i
 - `helpers/e2e-api.ts`: `ensureEmptyOwner`, `ensureReader` (hubens `POST /api/e2e/ensure-user`, passord
   `GlimtE2E-2026!`), `enrolFakeAgent`, unike e-poster/vertsnavn per prosjekt og kjøring, og `forceLang` (låser
   `gp.lang` i localStorage så profilspråket som språktesten bytter ikke slår inn).
+
+## Fase 5: serversiden og containerdetalj
+
+- `tests/server.spec.ts`: skjerm 5 (`/servers/demo-web-02`: topp, panelnav, alle ti paneler med ekte tall fra demoserveren,
+  journal-strømmen i loggpanelet), lukk/husk/panelnav-rulling, 24 t-bytte med `history`-kall og pekemerke på kurven,
+  prosesstabellen (sortering lest på `row-index` i ett `evaluate`, filter, utvidet kommandolinje, stablet på mobil),
+  skjerm 16 (`demo-nordic-db` nede) og ringen på kortet → `#mem`. Skjermbilder `server.png`, `server-down.png` og
+  `panel-<nøkkel>.png` per panel; alt som lever maskeres og loggboksen får fast høyde.
+- `tests/container.spec.ts`: skjerm 6 via containerpanelet på web-02 → web-web: topp, to kurver, porter, volumer,
+  loggstrøm med Pause («Resume · N new») og Resume, «Open full log view» → `/logs?…`, tilbake med `#cont`. `container.png`.

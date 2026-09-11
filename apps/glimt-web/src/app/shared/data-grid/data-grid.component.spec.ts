@@ -70,7 +70,12 @@ describe('gp-data-grid', () => {
     const desk = desktopColumnDefs(columns, 'cpu', 'desc');
     expect(desk.length).toBe(2);
     expect(desk[1].sort).toBe('desc');
-    expect(desk[0].sort).toBeUndefined();
+    // null (ikke undefined) så AG Grid glemmer forrige sortering når sortBy bytter kolonne.
+    expect(desk[0].sort).toBeNull();
+    expect(desktopColumnDefs(columns, null, 'desc')[0].sort).toBeUndefined();
+    // Hurtigfilteret på mobil ser de opprinnelige kolonnene.
+    const text = tplCols[0].getQuickFilterText?.({ data: { name: 'nginx', cpu: 3 }, node: null, column: null, colDef: tplCols[0], value: undefined, api: null, context: null } as never);
+    expect(text).toBe('nginx 3');
   });
 
   it('switches to the mobile column set and sorted rows when the host element is narrower than 760', async () => {

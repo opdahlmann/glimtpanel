@@ -1,5 +1,5 @@
-import { CardDto, ServerStatusDto } from './live.types';
-import { cardFromStatus, HourRing, HOUR_POINTS, LiveStore, RING_SLOTS } from './live.store';
+import { CardDto, ServerDto, ServerStatusDto } from './live.types';
+import { cardFromStatus, CHART_POINTS, CHART_STEP_MS, HourRing, HOUR_POINTS, LiveStore, RING_SLOTS, serverPercent } from './live.store';
 
 function card(overrides: Partial<CardDto> & Pick<CardDto, 'id' | 'name'>): CardDto {
   return {
@@ -130,5 +130,71 @@ describe('LiveStore', () => {
       expect(h.cpu.length).toBe(HOUR_POINTS);
       expect(h.cpu[HOUR_POINTS - 1]).toBe(99);
     });
+  });
+});
+
+describe('LiveStore: serversiden (fase 5)', () => {
+  let store: LiveStore;
+  let nowS: number;
+
+  beforeEach(() => {
+    store = new LiveStore();
+    nowS = 1_800_000_000;
+    store.now = () => nowS;
+  });
+
+  const server = (over: Partial<ServerDto> = {}): ServerDto => ({
+    ...card({ id: 's', name: 's' }),
+    os: null, kernel: null, dockerMode: null, bootTime: null, uptimeSec: null, processes: null, processTotals: null, containers: null,
+    services: null, maintenance: null, security: null, snapshotAt: null, streamAt: null, agentVersion: '0.1',
+    host: { cpu: { total: 30 }, mem: { total: 1000, used: 400, free: 600 } },
+    ...over,
+  });
+
+  it('applyServer legger ett punkt i ringen (cpu total, mem brukt/total) og oppdaterer kurven', () => {
+    const chart = store.hourChart('s');
+    expect(chart().cpu).toEqual([]);
+    store.applyServer(server());
+    expect(store.lastHour('s')().cpu[HOUR_POINTS - 1]).toBe(30);
+    expect(store.lastHour('s')().mem[HOUR_POINTS - 1]).toBe(40);
+    const c = chart();
+    expect(c.cpu.length).toBe(CHART_POINTS);
+    expect(c.stepMs).toBe(CHART_STEP_MS);
+    expect(c.cpu[CHART_POINTS - 1]).toBe(30);
+    expect(c.cpu[0]).toBeNull();
+    expect(c.from).toBe((nowS - RING_SLOTS + 1) * 1000);
+  });
+
+  it('applyServer for en server som er nede gir hull (null) i kurven', () => {
+    store.applyServer(server({ status: 'down', connected: false }));
+    expect(store.hourChart('s')().cpu[CHART_POINTS - 1]).toBeNull();
+    expect(store.lastHour('s')().cpu[HOUR_POINTS - 1]).toBe(0);
+  });
+
+  it('seedHour fyller ringen fra historikken uten å røre levende punkter, og hopper over en fersk seeding', () => {
+    store.applyServer(server({ host: { cpu: { total: 77 }, mem: { total: 100, used: 50, free: 50 } } }));
+    const cpu = Array.from({ length: HOUR_POINTS }, (_, i) => (i === 3 ? null : 10));
+    store.seedHour('s', cpu, cpu.map((v) => (v === null ? null : 20)));
+    const hour = store.lastHour('s')();
+    expect(hour.cpu[HOUR_POINTS - 1]).toBe(77);
+    expect(hour.cpu[0]).toBe(10);
+    expect(hour.cpu[3]).toBe(0);
+    expect(hour.mem[10]).toBe(20);
+    expect(store.hourChart('s')().cpu[15]).toBeNull();
+    // Allerede seedet og fersk: en ny seeding (f.eks. et annet svar) endrer ikke ringen.
+    store.seedHour('s', cpu.map(() => 99), cpu.map(() => 99));
+    expect(store.lastHour('s')().cpu[0]).toBe(10);
+  });
+
+  it('seedHour uten ring lager en (dyplenke før første Server)', () => {
+    store.seedHour('n', [50, 60], [1, 2]);
+    expect(store.lastHour('n')().cpu[HOUR_POINTS - 1]).toBe(60);
+    expect(store.hourChart('n')().cpu[CHART_POINTS - 1]).toBe(60);
+  });
+
+  it('serverPercent: null når nede eller uten host', () => {
+    expect(serverPercent(server())).toEqual({ cpu: 30, mem: 40 });
+    expect(serverPercent(server({ status: 'down', connected: false }))).toEqual({ cpu: null, mem: null });
+    expect(serverPercent(server({ host: null }))).toEqual({ cpu: null, mem: null });
   });
 });

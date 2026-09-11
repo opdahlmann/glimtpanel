@@ -46,7 +46,7 @@ public static class HistoryQuery
         }
     }
 
-    /// <summary>cpu | mem | swap | disk:&lt;path&gt; | net:&lt;iface&gt; | cont:&lt;id&gt;</summary>
+    /// <summary>cpu | mem | swap | disk:&lt;path&gt; | net:&lt;iface&gt; | cont:&lt;id&gt; (cpu %) | cont:&lt;id&gt;:mem (memory % of limit)</summary>
     public static bool IsValidMetric(string? metric) =>
         metric is "cpu" or "mem" or "swap"
         || (metric is not null && (metric.StartsWith("disk:", StringComparison.Ordinal) || metric.StartsWith("net:", StringComparison.Ordinal) || metric.StartsWith("cont:", StringComparison.Ordinal)) && metric.Length > 5);
@@ -77,7 +77,7 @@ public static class HistoryQuery
             "mem" => p => p.Mem,
             "swap" => p => p.Swap,
             _ when metric.StartsWith("disk:", StringComparison.Ordinal) => DiskSelector(buffer?.MountIndex(metric[5..]) ?? -1),
-            _ => ContainerSelector(buffer?.ContainerIndex(metric[5..]) ?? -1),
+            _ => ContainerSelector(buffer, metric[5..]),
         };
         var values = Aggregate(points, buckets, from, stepMs, average: false, select);
         return new HistoryResult(metric, range!, stepMs, from, to, values, null, null);
@@ -99,7 +99,15 @@ public static class HistoryQuery
 
     private static Func<Point, float> DiskSelector(int index) => p => Slot(p.Disk, index);
 
-    private static Func<Point, float> ContainerSelector(int index) => p => Slot(p.Cont, index * 2);
+    /// <summary>Cont is [cpu0, mem0, cpu1, mem1, …]: "&lt;id&gt;" reads the cpu slot, "&lt;id&gt;:mem" the memory slot.</summary>
+    private static Func<Point, float> ContainerSelector(ServerBuffer? buffer, string spec)
+    {
+        var mem = spec.EndsWith(":mem", StringComparison.Ordinal);
+        var id = mem ? spec[..^4] : spec;
+        var index = buffer?.ContainerIndex(id) ?? -1;
+        var slot = index < 0 ? -1 : index * 2 + (mem ? 1 : 0);
+        return p => Slot(p.Cont, slot);
+    }
 
     private static float Slot(float[] values, int index) => index >= 0 && index < values.Length ? values[index] : float.NaN;
 

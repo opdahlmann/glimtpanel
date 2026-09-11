@@ -111,7 +111,10 @@ public sealed class BufferTests
 
         var cont = HistoryQuery.Query(buffer, "cont:c1", "24h", Now)!;
         Assert.Equal(9, cont.Values![index]);
+        var contMem = HistoryQuery.Query(buffer, "cont:c1:mem", "24h", Now)!;
+        Assert.Equal(30, contMem.Values![index]);
         Assert.Null(HistoryQuery.Query(buffer, "cont:unknown", "24h", Now)!.Values![index]);
+        Assert.Null(HistoryQuery.Query(buffer, "cont:unknown:mem", "24h", Now)!.Values![index]);
     }
 
     [Fact]

@@ -1,0 +1,67 @@
+<div class="page">
+  <header class="head">
+    <button type="button" class="back" (click)="backToServer()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>{{ serverName() || ('back' | t) }}
+    </button>
+    @if (view(); as v) {
+      <div class="titlerow">
+        <h1 class="title">{{ v.name }}</h1>
+        <span class="status num" data-testid="status"><gp-live-dot [state]="v.dot" />{{ v.status }}</span>
+        <gp-badge class="image">{{ v.image }}</gp-badge>
+      </div>
+      <div class="meta num" data-testid="meta">
+        <span>{{ 'restarts' | t }} <b [class.warn]="v.restartsTone === 'warn'">{{ v.restarts }}</b></span>
+        <span>{{ 'imageAge' | t }} <b [class.warn]="v.ageTone === 'warn'">{{ v.age }}</b></span>
+        <span>{{ 'health' | t }} <b>{{ v.health }}</b></span>
+        <span>{{ 'compose' | t }} <b>{{ v.compose }}</b></span>
+      </div>
+    } @else {
+      <div class="titlerow"><h1 class="title">{{ cid() }}</h1></div>
+      <div class="meta">{{ (notFound() ? 'serverNotFound' : server() ? 'containerNotFound' : 'waitingData') | t }}</div>
+    }
+  </header>
+
+  @if (view(); as v) {
+    <div class="charts">
+      <section class="card tone-cpu">
+        <gp-history-chart [serverId]="id()" [metric]="cpuMetric()" color="cpu" [height]="100" unit="%" [label]="'cpu' | t">{{ 'cpu' | t }} <span class="meta-inline num">{{ v.cpu }}</span></gp-history-chart>
+      </section>
+      <section class="card tone-ram">
+        <gp-history-chart [serverId]="id()" [metric]="memMetric()" color="ram" [height]="100" unit="%" [label]="'memory' | t">{{ 'memory' | t }} <span class="meta-inline num">{{ v.mem }} {{ v.limit }}</span></gp-history-chart>
+      </section>
+    </div>
+    <div class="facts">
+      <div class="fact">
+        <div class="sec-title">{{ 'publishedPorts' | t }}</div>
+        <div class="chip-list">
+          @for (p of v.ports; track p) {
+            <span class="tag num">{{ p }}</span>
+          } @empty {
+            <span class="empty">{{ 'noPublishedPorts' | t }}</span>
+          }
+        </div>
+      </div>
+      <div class="fact">
+        <div class="sec-title">{{ 'volumes' | t }}</div>
+        <div class="chip-list">
+          @for (m of v.mounts; track m) {
+            <span class="tag mono">{{ m }}</span>
+          } @empty {
+            <span class="empty">{{ 'noVolumes' | t }}</span>
+          }
+        </div>
+      </div>
+    </div>
+    <section class="card logs">
+      <div class="loghead">
+        <span class="logtitle">{{ 'logOf' | t }} · {{ v.name }}</span>
+        <span class="status num" data-testid="log-status"><gp-live-dot [state]="down() ? 'down' : streaming() ? 'up' : 'paused'" />{{ logStatus() }}</span>
+      </div>
+      <gp-log-view class="logbox" [lines]="lines()" [maxLines]="300" [timeZone]="timeZone()" [label]="'logs' | t" [emptyText]="(down() ? 'notAvailableDown' : 'loading') | t" />
+      <div class="logbtns">
+        <gp-button variant="ghost" (click)="togglePause()" [disabled]="down()">{{ pauseLabel() }}</gp-button>
+        <gp-button variant="ghost" (click)="openFull()">{{ 'openLogs' | t }}</gp-button>
+      </div>
+    </section>
+  }
+</div>

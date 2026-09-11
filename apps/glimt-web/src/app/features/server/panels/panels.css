@@ -1,0 +1,27 @@
+/* Felles stiler for panelinnholdet på serversiden (6.4, skjerm 5). Kun tokens. */
+:host { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+:host(.dim) .data { opacity: .6; }
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; }
+.chips-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.chips-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rows { display: flex; flex-direction: column; gap: 6px; }
+.rows-tight { display: flex; flex-direction: column; gap: 4px; }
+.name { font-size: 12px; font-weight: 600; color: var(--w-90); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sub { font-size: 10px; color: var(--w-45); white-space: nowrap; }
+.muted { font-size: 11px; color: var(--w-60); }
+.strong { font-size: 12px; font-weight: 600; color: var(--w-85); white-space: nowrap; }
+.unit { font-size: 10px; font-weight: 500; color: var(--w-45); }
+.sec-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--w-55); padding: 0 2px 2px; }
+.warn { color: var(--color-warn); }
+.crit { color: var(--color-crit); }
+.empty { font-size: 12px; color: var(--w-45); padding: 6px 2px; }
+.mono { font-family: var(--font-mono); }
+.right { margin-left: auto; }
+.foot { display: flex; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--w-45); }
+.foot b { font-weight: 600; color: var(--w-85); }
+.foot b.warn { color: var(--color-warn); }
+.chip-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag { font-size: 11px; font-weight: 600; color: var(--w-85); background: var(--s-8); border-radius: var(--radius-chip); padding: 6px 10px; }
+.tag.mono { font-weight: 400; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }

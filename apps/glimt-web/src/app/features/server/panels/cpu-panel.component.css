@@ -1,0 +1,5 @@
+.cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); gap: 6px; }
+.core { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.bar { position: relative; width: 100%; height: 44px; overflow: hidden; border-radius: 4px; background: var(--s-8); }
+.fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-cpu); border-radius: 4px; transition: height var(--t-data); }
+.label { font-size: 9px; color: var(--w-50); }

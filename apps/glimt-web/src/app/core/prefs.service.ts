@@ -24,6 +24,8 @@ export interface Prefs {
   welcomeSeen: boolean;
   /** Vi har hatt en sesjon i denne nettleseren (cookien er httpOnly og usynlig): styrer om oppstarten prøver refresh. */
   hasSession: boolean;
+  /** Server-id → «port/proto» → første gang sett (ms). «new»-badgen i sikkerhetspanelet (steg 5.11). */
+  knownPorts: Record<string, Record<string, number>>;
 }
 
 export const PREF_DEFAULTS: Prefs = {
@@ -35,6 +37,7 @@ export const PREF_DEFAULTS: Prefs = {
   sparklines: true,
   welcomeSeen: false,
   hasSession: false,
+  knownPorts: {},
 };
 
 const PREFIX = 'gp.';
@@ -77,10 +80,11 @@ export class PrefsService {
   readonly sparklines = new Pref<boolean>('sparklines', PREF_DEFAULTS.sparklines);
   readonly welcomeSeen = new Pref<boolean>('welcomeSeen', PREF_DEFAULTS.welcomeSeen);
   readonly hasSession = new Pref<boolean>('hasSession', PREF_DEFAULTS.hasSession);
+  readonly knownPorts = new Pref<Record<string, Record<string, number>>>('knownPorts', PREF_DEFAULTS.knownPorts);
 
   /** Sletter alle lagrede valg (brukes ved utlogging av testene, ikke av appen). */
   clear(): void {
-    for (const p of [this.lang, this.sort, this.filters, this.view, this.collapsed, this.sparklines, this.welcomeSeen, this.hasSession]) {
+    for (const p of [this.lang, this.sort, this.filters, this.view, this.collapsed, this.sparklines, this.welcomeSeen, this.hasSession, this.knownPorts]) {
       p.reset();
     }
   }

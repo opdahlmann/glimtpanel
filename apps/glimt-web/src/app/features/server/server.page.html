@@ -1,0 +1,89 @@
+<div class="page">
+  <header class="head">
+    <div class="heading">
+      <button type="button" class="back" (click)="back()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>{{ 'back' | t }}
+      </button>
+      @if (header(); as h) {
+        <div class="titlerow">
+          <h1 class="title">{{ h.name }}</h1>
+          <span class="status num" [class.status--down]="h.down" data-testid="status"><gp-live-dot [state]="h.dot" />{{ h.statusText }}</span>
+          <span class="tags">
+            @for (tag of h.tags; track tag) {
+              <gp-badge>{{ tag }}</gp-badge>
+            }
+          </span>
+        </div>
+        <div class="info num" data-testid="info">{{ h.info }}</div>
+        <div class="uptime num">
+          @if (h.uptime) {
+            <span data-testid="uptime">{{ h.uptime }}</span>
+          }
+          @if (h.eol) {
+            <gp-badge tone="crit">{{ 'eol' | t }}</gp-badge>
+          }
+          @if (h.support) {
+            <gp-badge>{{ h.support }}</gp-badge>
+          }
+        </div>
+      } @else {
+        <div class="titlerow"><h1 class="title">{{ item()?.name ?? ('server' | t) }}</h1></div>
+        <div class="info">{{ (notFound() ? 'serverNotFound' : 'waitingData') | t }}</div>
+      }
+    </div>
+    <div class="actions">
+      @if (flagText()) {
+        <gp-button variant="ghost" icon="M4 17l6-5-6-5M12 19h8" (click)="toggleText()">{{ (textMode() ? 'panels' : 'textMode') | t }}</gp-button>
+      }
+      @if (flagSnapshot()) {
+        <gp-button variant="ghost" icon="M9 9h11v11H9zM5 15V5a1 1 0 011-1h9" (click)="copySnapshot()">{{ 'copySnap' | t }}</gp-button>
+      }
+      @if (flagShare() && isOwner()) {
+        <gp-button variant="ghost" icon="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1">{{ 'share' | t }}</gp-button>
+      }
+      @if (isOwner()) {
+        <gp-button variant="ghost" icon="M6 16V11a6 6 0 0112 0v5l2 2H4l2-2zM10 20a2 2 0 004 0" (click)="alertSettings()">{{ 'alertSettings' | t }}</gp-button>
+      }
+    </div>
+  </header>
+
+  @if (server(); as s) {
+    @if (textMode()) {
+      <pre class="text">{{ textLines() }}</pre>
+    } @else {
+      <gp-panel-nav [items]="navItems()" [label]="'panels' | t" (selected)="goTo($event)" />
+      <div class="panels">
+        <gp-panel [panelId]="panelId('cpu')" [title]="'cpu' | t" [meta]="cpu()?.head ?? ''" tone="cpu" [open]="isOpen('cpu')" (openChange)="setOpen('cpu', $event)">
+          <gp-cpu-panel [view]="cpu()!" [serverId]="s.id" [live]="hourChart()" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('mem')" [title]="'memory' | t" [meta]="mem()?.head ?? ''" tone="ram" [open]="isOpen('mem')" (openChange)="setOpen('mem', $event)">
+          <gp-mem-panel [view]="mem()!" [serverId]="s.id" [live]="hourChart()" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('disk')" [title]="'disk' | t" [meta]="disk()?.head ?? ''" tone="disk" [open]="isOpen('disk')" (openChange)="setOpen('disk', $event)">
+          <gp-disk-panel [view]="disk()!" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('net')" [title]="'network' | t" [meta]="net()?.head ?? ''" tone="net" [open]="isOpen('net')" (openChange)="setOpen('net', $event)">
+          <gp-net-panel [view]="net()!" [serverId]="s.id" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('proc')" [title]="'processes' | t" [meta]="down() ? '' : (proc()?.head ?? '')" tone="neutral" [open]="isOpen('proc')" (openChange)="setOpen('proc', $event)">
+          <gp-proc-panel [view]="proc()!" [down]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('cont')" [title]="'containers' | t" [meta]="containers()?.head ?? ''" tone="swap" [open]="isOpen('cont')" (openChange)="setOpen('cont', $event)">
+          <gp-cont-panel [view]="containers()!" [serverId]="s.id" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('svc')" [title]="'services' | t" [meta]="services()?.head ?? ''" [tone]="svcTone()" [open]="isOpen('svc')" (openChange)="setOpen('svc', $event)">
+          <gp-svc-panel [view]="services()!" [serverId]="s.id" [dim]="down()" (showAll)="showAllServices.set(true)" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('maint')" [title]="'maintenance' | t" [meta]="'every10' | t" tone="warn" [open]="isOpen('maint')" (openChange)="setOpen('maint', $event)" [attr.title]="maint()?.checked || null">
+          <gp-maint-panel [view]="maint()!" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('sec')" [title]="'security' | t" [meta]="secMeta()" tone="neutral" [open]="isOpen('sec')" (openChange)="setOpen('sec', $event)">
+          <gp-sec-panel [view]="security()!" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('logs')" [title]="'logs' | t" [meta]="logsMeta()" tone="neutral" [open]="isOpen('logs')" (openChange)="setOpen('logs', $event)">
+          <gp-logs-panel [serverId]="s.id" [down]="down()" />
+        </gp-panel>
+      </div>
+    }
+  }
+</div>

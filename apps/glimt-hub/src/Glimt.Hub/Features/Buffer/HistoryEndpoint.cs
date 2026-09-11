@@ -5,7 +5,7 @@ using Glimt.Hub.Infrastructure.Auth;
 
 namespace Glimt.Hub.Features.Buffer;
 
-/// <summary>GET /api/servers/{id}/history?metric=cpu|mem|swap|disk:&lt;path&gt;|net:&lt;iface&gt;|cont:&lt;id&gt;&amp;range=1h|24h</summary>
+/// <summary>GET /api/servers/{id}/history?metric=cpu|mem|swap|disk:&lt;path&gt;|net:&lt;iface&gt;|cont:&lt;id&gt;[:mem]&amp;range=1h|24h</summary>
 public static class HistoryEndpoint
 {
     public const string Path = "/api/servers/{id}/history";
@@ -22,7 +22,7 @@ public static class HistoryEndpoint
 
                 if (!HistoryQuery.IsValidMetric(metric))
                 {
-                    return Results.BadRequest(new { error = "metric must be cpu, mem, swap, disk:<path>, net:<iface> or cont:<id>" });
+                    return Results.BadRequest(new { error = "metric must be cpu, mem, swap, disk:<path>, net:<iface>, cont:<id> or cont:<id>:mem" });
                 }
 
                 if (!HistoryQuery.TryParseRange(range, out _, out _))

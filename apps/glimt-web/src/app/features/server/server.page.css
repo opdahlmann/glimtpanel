@@ -1,0 +1,25 @@
+/* Serversiden (6.4, skjerm 5 og 16). Padding kommer fra skallet. Kun tokens. */
+:host { display: block; --panel-nav-top: 0px; }
+:host(.mobile) { --panel-nav-top: 44px; }
+.page { max-width: var(--page-max); display: flex; flex-direction: column; gap: 12px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.heading { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.back {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; min-height: 24px; padding: 0; margin: 10px 0;
+  background: none; border: 0; color: var(--w-60); font-size: 11px; font-weight: 600; cursor: pointer; transition: color var(--t-hover);
+}
+.back:hover { color: var(--w-100); }
+@media (pointer: coarse) { .back { min-height: 44px; margin: 0; } }
+.titlerow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.status { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--w-45); }
+.status--down { color: var(--color-crit); }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.info { font-size: 10.5px; color: var(--w-45); }
+.uptime { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 10.5px; color: var(--w-45); min-height: 16px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.panels { display: flex; flex-direction: column; gap: 10px; }
+.text {
+  margin: 0; padding: 14px; overflow: auto; white-space: pre; border-radius: var(--radius-card); background: var(--color-ink);
+  box-shadow: inset 0 0 0 .5px var(--s-8); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--color-ram);
+}

@@ -1,4 +1,4 @@
-import { DestroyRef, Injectable, WritableSignal, inject, signal } from '@angular/core';
+import { computed, DestroyRef, Injectable, Signal, WritableSignal, inject, signal } from '@angular/core';
 
 /** Mobilbreakpointet 760 px målt på rot-elementets bredde med ResizeObserver, ikke på vinduet (IMPLEMENTERINGSPLAN 6.2). */
 export const MOBILE_BREAKPOINT = 760;
@@ -34,19 +34,25 @@ function measureRoot(): number {
 }
 
 /**
- * Observerer bredden til ett element (< 760 = mobil). gp-data-grid måler seg selv med denne, ikke vinduet.
- * Uten ResizeObserver (jsdom) brukes rot-bredden én gang.
+ * Observerer bredden til ett element i piksler. gp-data-grid måler seg selv med denne, ikke vinduet.
+ * Uten ResizeObserver (jsdom) brukes elementets (ellers rotens) bredde én gang.
  */
-export function observeMobile(el: HTMLElement, destroyRef: DestroyRef): WritableSignal<boolean> {
+export function observeWidth(el: HTMLElement, destroyRef: DestroyRef): WritableSignal<number> {
   const w0 = el.getBoundingClientRect().width;
-  const s = signal((w0 > 0 ? w0 : measureRoot()) < MOBILE_BREAKPOINT);
+  const s = signal(w0 > 0 ? w0 : measureRoot());
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 0;
-      if (w > 0) s.set(w < MOBILE_BREAKPOINT);
+      if (w > 0) s.set(w);
     });
     ro.observe(el);
     destroyRef.onDestroy(() => ro.disconnect());
   }
   return s;
+}
+
+/** `observeWidth` som mobil-flagg (< 760). */
+export function observeMobile(el: HTMLElement, destroyRef: DestroyRef): Signal<boolean> {
+  const width = observeWidth(el, destroyRef);
+  return computed(() => width() < MOBILE_BREAKPOINT);
 }

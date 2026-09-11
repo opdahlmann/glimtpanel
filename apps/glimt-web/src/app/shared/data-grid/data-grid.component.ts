@@ -16,6 +16,7 @@ import { AgGridAngular, ICellRendererAngularComp } from 'ag-grid-angular';
 import {
   AllCommunityModule,
   ColDef,
+  GetQuickFilterTextParams,
   GetRowIdParams,
   GridOptions,
   IsFullWidthRowParams,
@@ -23,7 +24,7 @@ import {
   RowClickedEvent,
   themeQuartz,
 } from 'ag-grid-community';
-import { MOBILE_BREAKPOINT, observeMobile } from '../util/breakpoint.service';
+import { MOBILE_BREAKPOINT, observeWidth } from '../util/breakpoint.service';
 import { ExpandedRow, GridContext, GridExpandedCellComponent, GridRowContext, GridStackedCellComponent, GridTemplateCellComponent, isExpandedRow } from './grid-renderers';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -56,7 +57,19 @@ export const GRID_ROW_GAP = 4;
 export type RowRenderer<T> = Type<ICellRendererAngularComp> | TemplateRef<GridRowContext<T>>;
 export type GridRow<T> = T | ExpandedRow<T>;
 
-/** Kolonnesettet for mobil: én kolonne med `flex: 1`, `autoHeight`, `wrapText` og stablet renderer (6.6). */
+/** Hurtigfilterteksten for én rad: kolonnenes `getQuickFilterText`, ellers feltverdien. */
+function quickFilterText<T>(columns: ColDef<T>[], p: GetQuickFilterTextParams<GridRow<T>>): string {
+  const data = (isExpandedRow<T>(p.data) ? p.data.row : p.data) as T;
+  return columns
+    .map((c) => {
+      const value = c.field ? (data as Record<string, unknown>)[c.field] : undefined;
+      if (typeof c.getQuickFilterText === 'function') return c.getQuickFilterText({ ...p, data, colDef: c, value } as unknown as GetQuickFilterTextParams<T>);
+      return value === null || value === undefined ? '' : String(value);
+    })
+    .join(' ');
+}
+
+/** Kolonnesettet for mobil: én kolonne med `flex: 1`, `autoHeight`, `wrapText` og stablet renderer (6.6). Hurtigfilteret ser de opprinnelige kolonnene. */
 export function mobileColumnDefs<T>(columns: ColDef<T>[], renderer: RowRenderer<T> | null): ColDef<GridRow<T>>[] {
   const isTpl = renderer instanceof TemplateRef;
   return [
@@ -69,6 +82,7 @@ export function mobileColumnDefs<T>(columns: ColDef<T>[], renderer: RowRenderer<
       sortable: false,
       resizable: false,
       suppressMovable: true,
+      getQuickFilterText: (p) => quickFilterText(columns, p),
       cellClass: 'gp-grid-mobile-cell',
       cellRenderer: renderer && !isTpl ? renderer : isTpl ? GridTemplateCellComponent : GridStackedCellComponent,
       cellRendererParams: isTpl ? { template: renderer } : { columns },
@@ -76,18 +90,18 @@ export function mobileColumnDefs<T>(columns: ColDef<T>[], renderer: RowRenderer<
   ];
 }
 
-/** Kolonnesettet for desktop med eventuell startsortering. */
+/** Kolonnesettet for desktop med eventuell startsortering. `sort: null` på de andre, ellers beholder AG Grid forrige sortering som sekundær. */
 export function desktopColumnDefs<T>(columns: ColDef<T>[], sortBy: string | null, sortDir: 'asc' | 'desc'): ColDef<GridRow<T>>[] {
   return columns.map((c) => {
     const id = c.colId ?? c.field;
-    const sort = sortBy && id === sortBy ? sortDir : undefined;
-    return { resizable: false, suppressMovable: true, ...c, ...(sort ? { sort } : {}) } as ColDef<GridRow<T>>;
+    const sort = sortBy && id === sortBy ? sortDir : null;
+    return { resizable: false, suppressMovable: true, ...c, ...(sortBy ? { sort } : {}) } as ColDef<GridRow<T>>;
   });
 }
 
 /**
  * AG Grid Community-innpakning (6.6). `domLayout: autoHeight`, ingen horisontal scroll, rader som `gp-row`.
- * Under 760 px (målt på verten) byttes kolonnene til én stablet kolonne uten hode; `sortBy`/`sortDir` sorterer da radene.
+ * Under `breakpoint` (760 px, målt på verten) byttes kolonnene til én stablet kolonne uten hode; `sortBy`/`sortDir` sorterer da radene.
  * `expandedRowRenderer` tegnes som en full-bredde-rad under raden som klikkes.
  */
 @Component({
@@ -113,9 +127,11 @@ export class DataGridComponent<T> {
   readonly rowPressed = output<T>();
 
   readonly theme = GP_GRID_THEME;
-  readonly breakpoint = MOBILE_BREAKPOINT;
+  /** Bredden (på verten) der gridet bytter til stablet modus. 760 som skallet; smalere for tabeller i en kolonne av to (portene i sikkerhetspanelet). */
+  readonly breakpoint = input(MOBILE_BREAKPOINT);
   readonly expandedId = signal<string | null>(null);
-  readonly mobile = observeMobile(inject<ElementRef<HTMLElement>>(ElementRef).nativeElement, inject(DestroyRef));
+  private readonly width = observeWidth(inject<ElementRef<HTMLElement>>(ElementRef).nativeElement, inject(DestroyRef));
+  readonly mobile = computed(() => this.width() < this.breakpoint());
 
   readonly columnDefs = computed<ColDef<GridRow<T>>[]>(() =>
     this.mobile() ? mobileColumnDefs(this.columns(), this.mobileRenderer()) : desktopColumnDefs(this.columns(), this.sortBy(), this.sortDir()),

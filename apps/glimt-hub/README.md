@@ -84,7 +84,7 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 | `WS /agent/ws` | Agentprotokollen v1 (`packages/protocol/agent-hub.schema.json`): første melding må være `hello` innen 10 s, maks 1 MB per ramme, tekstrammer. Se «Sanntid» under |
 | `SignalR /hub/live` | JWT (`access_token` i spørrestrengen eller Bearer). Metoder og klientkall i «Sanntid» under |
 | `GET /api/servers/{id}/snapshot` | Bearer + lesetilgang. Siste `snapshot` flettet med siste `stream` som `Server`-projeksjonen. 404 ukjent server, 204 før noe er mottatt |
-| `GET /api/servers/{id}/history?metric=&range=1h\|24h` | Bearer + lesetilgang. `metric` = `cpu`, `mem`, `swap`, `disk:<sti>`, `net:<grensesnitt>`, `cont:<container-id>`. Svar `{ metric, range, stepMs, from, to, values[] }` (`net:` gir `rx[]`/`tx[]` i stedet for `values`); `null` der bufferen mangler punkt |
+| `GET /api/servers/{id}/history?metric=&range=1h\|24h` | Bearer + lesetilgang. `metric` = `cpu`, `mem`, `swap`, `disk:<sti>`, `net:<grensesnitt>`, `cont:<container-id>` (CPU %) eller `cont:<container-id>:mem` (minne % av grensen). Svar `{ metric, range, stepMs, from, to, values[] }` (`net:` gir `rx[]`/`tx[]` i stedet for `values`); `null` der bufferen mangler punkt |
 | `POST /api/demo/session` | Kun i demomodus: `{ accessToken (1 t), expiresAt, user }` for `demo@glimtpanel.com` (leser). 404 ellers |
 | `POST /api/dev/token` | Kun `development`/`e2e`: `{ email }` → samme form, for en eksisterende bruker (brukes av `scripts/live-tail.mjs --dev-token`) |
 | `POST /api/e2e/{disconnect-server\|reconnect-server\|fail-service\|advance}` | Kun `GLIMT_ENV=e2e`: `{ serverId?, unit?, seconds? }` styrer de falske serverne; `advance` flytter hubens klokke og kjører nede-deteksjonen |

@@ -91,6 +91,11 @@ export class I18nService {
     return withTime ? `${day} ${this.formatTimeShort(ms)}` : day;
   }
 
+  /** "Apr 2029" (en) / "apr. 2029" (no), for «Supported until». */
+  formatMonthYear(ms: number | Date): string {
+    return this.fmt({ month: 'short', year: 'numeric' }).format(ms);
+  }
+
   /** "08:11" i dag, "yesterday 23:10" i går, ellers "Sep 7 14:20". */
   formatWhen(ms: number | Date, now: number = Date.now()): string {
     const day = this.dayKey(ms);

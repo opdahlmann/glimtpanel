@@ -4,7 +4,8 @@ Dashbordet til Glimtpanel: Angular 22 (standalone, zoneless, OnPush), ren CSS me
 `@glimt/design-tokens`, SignalR mot huben. Fase 3 er på plass: layout-skallet (steg 3.3), ordboken (3.2),
 kjerne-tjenestene (3.4), felleskomponentene med `/dev/components` (3.5) og auth-skjermene (3.6). Fase 4 gir oversikten
 på `/`: serverkortet, verktøylinje med søk, sortering og filterchips, tom-tilstanden med innrulleringskortet og dialogen
-«Legg til server» (steg 4.1–4.5). Serversiden kommer i fase 5.
+«Legg til server» (steg 4.1–4.5). Fase 5 gir serversiden på `/servers/:id` med alle ti panelene og kurver for siste time
+og 24 timer, og containerdetaljen på `/servers/:id/containers/:cid` (steg 5.1–5.14). Se «Serversiden» under.
 
 ## Struktur
 
@@ -18,6 +19,7 @@ apps/glimt-web/
 │       │   ├── config.service.ts            # /config.json -> signal `config`; feature-flags.ts leser flaggene
 │       │   ├── i18n.service.ts, t.pipe.ts   # ordboken, `| t`, dato/klokkeslett (steg 3.2)
 │       │   ├── api.service.ts               # fetch + Bearer + refresh ved 401, ProblemDetails -> ApiError
+│       │   ├── history.service.ts           # GET /api/servers/{id}/history, mellomlagret 60 s per (server, metrikk, område)
 │       │   ├── session.service.ts           # bruker, tilgangstoken, login/logout/refresh, isOwnerOf
 │       │   ├── live.service.ts              # SignalR (/hub/live): refcount-abonnement, adaptivt intervall, logger
 │       │   ├── live.store.ts                # signal per server (Card/Server), siste-time-ring
@@ -31,12 +33,20 @@ apps/glimt-web/
 │       ├── dev/components.page.ts           # /dev/components: alle komponentene i alle tilstander (kun utvikling)
 │       └── features/
 │           ├── auth/                        # /login, /register, /confirm, /forgot, /reset (steg 3.6)
-│           └── overview/                    # oversikten (rute `/`, fase 4), se «Oversikten» under
-│               ├── overview.page.*          # tittel, sammendrag, verktøylinje, chips, kortgrid, tom-tilstand, tastatur
-│               ├── overview.model.ts        # rene filter-/sorteringsfunksjoner (testet mot de 16 demoserverne i overview.fixtures.ts)
-│               ├── server-card/             # gp-server-card + card-view.ts (avledede verdier)
-│               ├── enrol/                   # gp-enrol-panel: nøkkel, nedtelling, Docker-valg, Copy, «venter»
-│               └── add-server/              # gp-add-server-dialog: tre trinn
+│           ├── overview/                    # oversikten (rute `/`, fase 4), se «Oversikten» under
+│           │   ├── overview.page.*          # tittel, sammendrag, verktøylinje, chips, kortgrid, tom-tilstand, tastatur
+│           │   ├── overview.model.ts        # rene filter-/sorteringsfunksjoner (testet mot de 16 demoserverne i overview.fixtures.ts)
+│           │   ├── server-card/             # gp-server-card + card-view.ts (avledede verdier)
+│           │   ├── enrol/                   # gp-enrol-panel: nøkkel, nedtelling, Docker-valg, Copy, «venter»
+│           │   └── add-server/              # gp-add-server-dialog: tre trinn
+│           ├── server/                      # serversiden (rute `/servers/:id`, fase 5), se «Serversiden» under
+│           │   ├── server.page.*            # ramme: abonnement, snapshot, historikk-seeding, topp, panelnav, ti paneler, fragment
+│           │   ├── server-view.ts           # rene avledninger per panel fra ServerDto (testet mot server.fixtures.ts)
+│           │   ├── history-chart.component.ts # gp-history-chart: 1 t fra ringen eller historikken, 24 t fra historikken
+│           │   ├── panel-nav.component.ts   # sticky piller med fargeprikk
+│           │   └── panels/                  # gp-cpu-panel, gp-mem-panel, gp-disk-panel, gp-net-panel, gp-proc-panel, gp-cont-panel,
+│           │                                #   gp-svc-panel, gp-maint-panel, gp-sec-panel, gp-logs-panel (kun innhold; gp-panel er rammen)
+│           └── container/                   # containerdetalj (rute `/servers/:id/containers/:cid`, steg 5.13)
 ├── scripts/i18n-check.mjs                   # `npm run i18n:check`: nøkkelsett og ukjente nøkler i maler
 ├── public/                                  # favicon.svg; config.json genereres hit (git-ignorert)
 ├── nginx/default.conf.template              # nginx i containeren, ${GLIMT_HUB_INTERNAL_URL} fylles inn ved start
@@ -234,6 +244,57 @@ Playwright (`e2e/tests/overview.spec.ts`, `e2e/tests/add-server.spec.ts`) dekker
 prosjektene med skjermbilder (levende tall maskeres) og hele flyten fra tom oversikt til «Done» via hubens e2e-endepunkt
 `enrol-fake-agent`. Ytelsesmålet i steg 4.5 (30 kort under 5 % CPU i Chrome) er ikke målt ennå; det gjøres i fase 9
 sammen med den fysiske mobiltesten.
+
+## Serversiden (fase 5)
+
+`ServerPage` (`features/server/`) er skjerm 5 og 16. `id` kommer fra ruten. Ved inngang: `LiveService.subscribeServer(id)`
+(avmeldes ved utgang), `GET /api/servers/{id}/snapshot` så siden tegnes før første `Server` fra strømmen (404/403 gir
+«Server not found»), og `history?metric=cpu|mem&range=1h` seeder siste-time-ringen i `LiveStore` (dyplenke uten kort).
+`LiveStore.applyServer` legger hvert `Server` inn i ringen (serversiden får ingen `Card`), og `LiveStore.hourChart(id)` gir
+kurven for siste time med 600 punkter à 6 s (maks per bøtte, `null` for hull), beregnet bare for servere noen ser på.
+`GET /api/servers` gir `supportUntil`/`eol` og rollen (`Alert settings` kun for eier).
+
+- **Toppen**: «‹ Servers», h1 + prikk + status («live», «last seen 03:12», «paused») + tagger, infolinje «Ubuntu 24.04 ·
+  6.8.0-45-generic · 4 cores · 8 GB», «up 41d 2h · last boot Jul 30 01:05», rød EOL-badge og «Supported until Apr 2029».
+  «Text mode», «Copy snapshot» og «Share link» rendres bare bak flaggene `textmode`, `snapshot` og `share`.
+- **Panelnav** (`gp-panel-nav`): sticky (`top: 0`, `top: 44px` under topplinjen på mobil), klikk åpner panelet og ruller
+  det til 70 px under toppen. Fragment `#cpu|#mem|#disk` (kortets ringer) gjør det samme ved inngang; alle panelnøklene
+  godtas. Lukkede paneler huskes i `PrefsService.collapsed` (per panel, ikke per server).
+- **Panelene** i rekkefølge CPU, Memory, Disk, Network, Processes, Containers, Services, Maintenance, Security, Logs.
+  Rammen er `gp-panel` (tittel, `meta` fra `server-view.ts`, tone, `open`); innholdet er egne komponenter i `panels/` som
+  får ferdige visningsobjekter som input. `server-view.ts` er rene funksjoner: `headerView`, `cpuView` (kjerner, seks
+  chips: load over kjerner og iowait over 5 % er oransje), `memView` (brukt = total − free − buffers − cached),
+  `diskView` (fulleste først, GB under 1 000 GB ellers TB, inoder, I/O), `netView`, `procView`, `containersView`
+  (restarting/stopped først, så CPU; minne mot grense, uten grense mot 2 GB i nøytral farge), `servicesView` (feilede →
+  running → stoppede, kun `.service`, maks 200 + «Show all»), `maintView`, `securityView` og `rememberPorts` («new»-badge
+  for porter som ikke fantes i et tidligere øyeblikksbilde, høyst 24 t, lagret i `PrefsService.knownPorts` per server;
+  første besøk merker ingenting som nytt).
+- **Kurver** (`gp-history-chart`): 1 t fra `live` (ringen) når den finnes, ellers `history?range=1h`; 24 t fra
+  `history?range=24h`. Hentes ved bytte og oppfriskes hvert 60. sekund (`HistoryService` mellomlagrer 60 s). Nettverkets
+  sparklines henter `net:<grensesnitt>` for siste time. Hull i bufferen vises som brudd.
+- **Prosesser** (`gp-proc-panel`): segment By CPU / By memory, filter på navn eller bruker, `gp-data-grid` med Process
+  (navn + «bruker · pid»), CPU (oransje over 50 %), Memory («812 MB», «1.5 GB»), Time (`3d 04:12`). Klikk viser
+  kommandolinjen som full-bredde-rad. `getRowId = pid`, oppdateres hvert sekund. Stablet på mobil med tre chips.
+  `gp-data-grid` fikk `breakpoint` (portene i sikkerhetspanelet stables først under 300 px, siden de står i en av to
+  kolonner) og hurtigfilter som ser de opprinnelige kolonnene også i stablet modus.
+- **Logger** (`gp-logs-panel`): starter en `journal`-strøm med `tail: 10` når panelet er åpent, fanen synlig og
+  forbindelsen oppe; stoppes når panelet lukkes eller siden forlates, gjenstartes etter skjult fane og gjenoppkobling.
+  «Open full log view» → `/logs?server=:id`. «View log» på en feilet tjeneste → `/logs?server=:id&source=journal&unit=`.
+- **Nede** (skjerm 16): rød prikk og «last seen», tallene nedtonet (`.dim`), kurvene viser hull, prosesser og logger
+  «Not available while the server is down».
+- **Mobil**: topplinjen viser servernavnet (`TitleService`), knappene bryter, containernes tall på egen linje,
+  sparklines under grensesnittnavnet, tabellene i stablet modus.
+
+`ContainerPage` (`features/container/`) er skjerm 6: «‹ servernavn», h1 + prikk «running · 3d 4h» + image-badge,
+meta-linje (restarts, image age, health, compose), CPU- og minnekurve fra `history?metric=cont:<id>` og
+`cont:<id>:mem` (1 t og 24 t fra historikken), porter som chips, volumer i monospace, og loggseksjon: `container`-strøm
+med `tail: 200` ved inngang, «Pause» holder visningen og teller nye linjer i knappen («Resume · 12 new»), «Open full
+log view» → `/logs?server=:id&source=container&container=<id>`, tilbake-lenken går til serversiden med `#cont`.
+Containeren finnes på full id, kort id eller navn.
+
+Playwright (`e2e/tests/server.spec.ts`, `e2e/tests/container.spec.ts`) dekker skjerm 5, 6 og 16 i alle tre prosjektene
+med skjermbilder per panel; levende tall, kurver, grid-rader, containerrader (sortert på levende CPU) og logglinjer
+maskeres, og loggboksen får fast høyde før skjermbildet så sidehøyden er den samme hver gang.
 
 ## Dockerfile
 
