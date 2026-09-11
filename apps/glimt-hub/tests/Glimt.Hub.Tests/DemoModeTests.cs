@@ -98,7 +98,11 @@ public sealed class DemoModeTests(HubFactory factory) : IClassFixture<HubFactory
         var received = await LiveTestSupport.WaitAsync(lines);
         Assert.NotEmpty(received);
         Assert.All(received, l => Assert.Contains(l.Unit, new[] { "sshd", "sudo" }));
+        var open = await client.GetFromJsonAsync<JsonElement>("/api/e2e/agent-streams", ct);
+        Assert.Equal(1, open.GetProperty("byServer").GetProperty("demo-web-01").GetInt32());
         await connection.InvokeAsync("StopLog", streamId, ct);
+        var closed = await client.GetFromJsonAsync<JsonElement>("/api/e2e/agent-streams", ct);
+        Assert.Equal(0, closed.GetProperty("total").GetInt32());
 
         var dev = await anonymous.PostAsJsonAsync("/api/dev/token", new { email = "nobody@glimtpanel.local" }, ct);
         Assert.Equal(HttpStatusCode.NotFound, dev.StatusCode);

@@ -89,6 +89,7 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 | `POST /api/dev/token` | Kun `development`/`e2e`: `{ email }` → samme form, for en eksisterende bruker (brukes av `scripts/live-tail.mjs --dev-token`) |
 | `POST /api/e2e/{disconnect-server\|reconnect-server\|fail-service\|advance}` | Kun `GLIMT_ENV=e2e`: `{ serverId?, unit?, seconds? }` styrer de falske serverne; `advance` flytter hubens klokke og kjører nede-deteksjonen |
 | `POST /api/e2e/enrol-fake-agent` | Kun `GLIMT_ENV=e2e`: `{ key, hostname? }` – en falsk agent bruker en ekte engangsnøkkel fra `POST /api/servers/enrol-key` (én gang; 404 ukjent/utløpt/brukt, 409 navnet finnes) og starter som ny server (`demo-<hostname>`, standard `web-03`, 2 kjerner, 4 GB, uten historikk) eid av nøkkelens eier. Eieren får `ServerAdded` (skjerm 3) |
+| `GET /api/e2e/agent-streams` | Kun `GLIMT_ENV=e2e`: `{ total, byServer: { serverId: antall } }` åpne loggstrømmer i `LogRelay` (fase 6: «ingen strøm står igjen etter at siden forlates») |
 | `POST /api/e2e/ensure-user` | Kun `GLIMT_ENV=e2e`: `{ email, password?, readerOf? }` – bekreftet testkonto (standardpassord `GlimtE2E-2026!`, idempotent). `readerOf: "all"` gir akseptert lesetilgang til demoserverne (skjerm 18); uten gir en eier uten servere (skjerm 3) |
 
 ### REST under `/api` (fase 2 del A)

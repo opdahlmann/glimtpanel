@@ -47,6 +47,8 @@ export class LiveService {
   private hubIntervalMs: number | null = null;
 
   private readonly logHandlers = new Map<string, LogHandlers>();
+  /** Log/LogEnded som kommer før `StartLog`-svaret (etterslepet sendes straks): holdes til mottakeren er registrert. */
+  private readonly earlyLogs = new Map<string, { lines: { lines: LogLineDto[]; dropped: number | null }[]; ended: { reason: string; message: string | null } | null }>();
   private readonly addedCallbacks = new Set<(card: CardDto) => void>();
   private readonly removedCallbacks = new Set<(id: string) => void>();
 
@@ -113,12 +115,20 @@ export class LiveService {
     this.start();
     const conn = await this.whenConnected();
     const streamId = await conn.invoke<string>('StartLog', req);
+    const early = this.earlyLogs.get(streamId);
+    this.earlyLogs.delete(streamId);
+    if (early?.ended) {
+      handlers.ended(early.ended.reason, early.ended.message);
+      return streamId;
+    }
     this.logHandlers.set(streamId, handlers);
+    for (const batch of early?.lines ?? []) handlers.lines(batch.lines, batch.dropped);
     return streamId;
   }
 
   async stopLog(streamId: string): Promise<void> {
     this.logHandlers.delete(streamId);
+    this.earlyLogs.delete(streamId);
     if (this.isConnected()) {
       try {
         await this.connection?.invoke('StopLog', streamId);
@@ -190,13 +200,16 @@ export class LiveService {
     });
     connection.on('Log', (streamId: string, lines: LogLineDto[], dropped: number | null) => {
       this.touch();
-      this.logHandlers.get(streamId)?.lines(lines ?? [], dropped ?? null);
+      const h = this.logHandlers.get(streamId);
+      if (h) h.lines(lines ?? [], dropped ?? null);
+      else this.early(streamId).lines.push({ lines: lines ?? [], dropped: dropped ?? null });
     });
     connection.on('LogEnded', (streamId: string, reason: string, message: string | null) => {
       this.touch();
       const h = this.logHandlers.get(streamId);
       this.logHandlers.delete(streamId);
-      h?.ended(reason, message ?? null);
+      if (h) h.ended(reason, message ?? null);
+      else if (this.earlyLogs.has(streamId)) this.early(streamId).ended = { reason, message: message ?? null };
     });
     connection.on('ServerAdded', (dto: CardDto) => {
       this.touch();
@@ -324,7 +337,19 @@ export class LiveService {
   private endAllLogs(reason: string): void {
     const handlers = [...this.logHandlers.values()];
     this.logHandlers.clear();
+    this.earlyLogs.clear();
     for (const h of handlers) h.ended(reason, null);
+  }
+
+  /** Bøtte for meldinger til en strøm uten mottaker ennå (høyst 20 strømmer; de eldste glemmes). */
+  private early(streamId: string): { lines: { lines: LogLineDto[]; dropped: number | null }[]; ended: { reason: string; message: string | null } | null } {
+    let e = this.earlyLogs.get(streamId);
+    if (!e) {
+      e = { lines: [], ended: null };
+      this.earlyLogs.set(streamId, e);
+      if (this.earlyLogs.size > 20) this.earlyLogs.delete(this.earlyLogs.keys().next().value as string);
+    }
+    return e;
   }
 
   private touch(): void {

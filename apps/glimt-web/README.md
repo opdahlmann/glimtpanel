@@ -5,7 +5,8 @@ Dashbordet til Glimtpanel: Angular 22 (standalone, zoneless, OnPush), ren CSS me
 kjerne-tjenestene (3.4), felleskomponentene med `/dev/components` (3.5) og auth-skjermene (3.6). Fase 4 gir oversikten
 på `/`: serverkortet, verktøylinje med søk, sortering og filterchips, tom-tilstanden med innrulleringskortet og dialogen
 «Legg til server» (steg 4.1–4.5). Fase 5 gir serversiden på `/servers/:id` med alle ti panelene og kurver for siste time
-og 24 timer, og containerdetaljen på `/servers/:id/containers/:cid` (steg 5.1–5.14). Se «Serversiden» under.
+og 24 timer, og containerdetaljen på `/servers/:id/containers/:cid` (steg 5.1–5.14). Fase 6 gir loggsiden på `/logs`
+(steg 6.1–6.5). Se «Serversiden» og «Loggsiden» under.
 
 ## Struktur
 
@@ -20,6 +21,7 @@ apps/glimt-web/
 │       │   ├── i18n.service.ts, t.pipe.ts   # ordboken, `| t`, dato/klokkeslett (steg 3.2)
 │       │   ├── api.service.ts               # fetch + Bearer + refresh ved 401, ProblemDetails -> ApiError
 │       │   ├── history.service.ts           # GET /api/servers/{id}/history, mellomlagret 60 s per (server, metrikk, område)
+│       │   ├── log-stream.service.ts        # strømmenes livssyklus for én loggvisning (per side, ikke root)
 │       │   ├── session.service.ts           # bruker, tilgangstoken, login/logout/refresh, isOwnerOf
 │       │   ├── live.service.ts              # SignalR (/hub/live): refcount-abonnement, adaptivt intervall, logger
 │       │   ├── live.store.ts                # signal per server (Card/Server), siste-time-ring
@@ -46,7 +48,8 @@ apps/glimt-web/
 │           │   ├── panel-nav.component.ts   # sticky piller med fargeprikk
 │           │   └── panels/                  # gp-cpu-panel, gp-mem-panel, gp-disk-panel, gp-net-panel, gp-proc-panel, gp-cont-panel,
 │           │                                #   gp-svc-panel, gp-maint-panel, gp-sec-panel, gp-logs-panel (kun innhold; gp-panel er rammen)
-│           └── container/                   # containerdetalj (rute `/servers/:id/containers/:cid`, steg 5.13)
+│           ├── container/                   # containerdetalj (rute `/servers/:id/containers/:cid`, steg 5.13)
+│           └── logs/                        # loggsiden (rute `/logs`, fase 6), se «Loggsiden» under
 ├── scripts/i18n-check.mjs                   # `npm run i18n:check`: nøkkelsett og ukjente nøkler i maler
 ├── public/                                  # favicon.svg; config.json genereres hit (git-ignorert)
 ├── nginx/default.conf.template              # nginx i containeren, ${GLIMT_HUB_INTERNAL_URL} fylles inn ved start
@@ -295,6 +298,37 @@ Containeren finnes på full id, kort id eller navn.
 Playwright (`e2e/tests/server.spec.ts`, `e2e/tests/container.spec.ts`) dekker skjerm 5, 6 og 16 i alle tre prosjektene
 med skjermbilder per panel; levende tall, kurver, grid-rader, containerrader (sortert på levende CPU) og logglinjer
 maskeres, og loggboksen får fast høyde før skjermbildet så sidehøyden er den samme hver gang.
+
+## Loggsiden (fase 6)
+
+`LogsPage` (`features/logs/`) er skjerm 7. Alt lever i spørreparametrene `server`, `source` (hubens navn: `journal`,
+`auth`, `kernel`, `packages`, `web`, `firewall`, `container`), `unit`, `container` (kommaseparert, høyst 4),
+`priority` (`err`/`warn`/`info`), `range` (`15m`/`1h`/`24h`, standard 1 h) og `q`, så dyplenkene fra tjenestepanelet
+(«View log» → `unit`), loggpanelet, containerpanelet og containersiden (`source=container&container=`) lander med riktig
+filter og siden kan deles internt. Hvert valg skriver hele spørrestrengen fra sidens egne verdier (`replaceUrl`).
+
+- **Verktøylinje**: server-`<select>` (alle servere med tilgang, første som standard), tekstfilter (filtrerer det som er
+  lastet, 100 ms debounce, `q` i URL-en), tidsromsegment 15 min / 1 h / 24 h (`sinceMs` = nå − tidsrom, satt når
+  strømmen byttes, ikke hvert sekund). Kildesegment System, Login & sudo, Kernel, Packages, Web server, Firewall,
+  Containers med hint-tekst per kilde; «Custom files» er Neste og vises ikke. Prioritetssegment All / Errors / Warnings /
+  Info sendes som `priority`. Enhetsfilteret vises som en chip som kan fjernes. Scope-segmentet kun bak flagget `crossLogs`.
+- **`LogStreamService`** (`core/`, `providers: [LogStreamService]` på siden): `configure(requests)` holder nøyaktig disse
+  strømmene åpne (høyst 4); bytte av server, kilde, enhet, container, prioritet eller tidsrom er StopLog + StartLog og
+  tømmer linjene. Nyeste øverst, høyst 300 linjer i minnet. Pause samler linjer i en buffer (høyst 300) og knappen viser
+  «Resume · 42»; Resume flytter dem inn. `dropped` fra huben blir en grå linje «n lines dropped». Stopp ved skjult fane og
+  frakobling (LiveService avslutter med `hidden`/`reconnecting`/`disconnected`), gjenstart ved synlig/tilkoblet med
+  `sinceMs` = siste mottatte linje + 1 og uten `tail`, så ingenting mangler. En avslutning fra huben eller agenten
+  (`eof`, `unavailable`, `error`) står til forespørselen byttes; `unavailable` vises som «Not found on this server»
+  (webtjenerloggen på en server uten nginx/Apache). Alt stoppes når siden forlates.
+- **Containere** (steg 6.3): kilden Containers viser chips for alle containere på serveren (fra `GET /api/servers/{id}/snapshot`),
+  flere kan velges (høyst 4), hver får en farge fra prototypens `CCOL` på enhetsnavnet, én `container`-strøm per valgt.
+  Flettet visning sortert på tidsstempel er standard; på desktop kan «Side by side» dele visningen i kolonner (høyst 3).
+- **Sticky bunnlinje**: «Pause»/«Resume» som primærknapp og «Copy lines» (markerte linjer i loggboksen, ellers de 50
+  nyeste som «08:14:05 sshd: melding»). På mobil ligger den 60 px over navigasjonen; kildesegmentet ruller, linjer bryter.
+
+Playwright (`e2e/tests/logs.spec.ts`) dekker kilde, prioritet, tidsrom, pause/resume, tekstfilter i URL-en, kopiering,
+containere flettet med farge og side om side, dyplenken fra en feilet tjeneste på worker-01, og at
+`GET /api/e2e/agent-streams` viser 0 strømmer for serveren etter at siden forlates.
 
 ## Dockerfile
 

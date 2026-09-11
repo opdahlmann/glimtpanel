@@ -10,6 +10,8 @@ export interface LogLine {
   server?: string;
   priority?: LogPriority;
   message: string;
+  /** Markør «n lines dropped» (steg 6.2): grå linje uten enhet. */
+  dropped?: number;
 }
 
 export type UnitColor = Map<string, string> | ((unit: string) => string | undefined) | null;
@@ -23,6 +25,9 @@ export type UnitColor = Map<string, string> | ((unit: string) => string | undefi
   template: `
     <div class="box" role="log" [attr.aria-label]="label() || null">
       @for (l of shown(); track l.ts + ':' + $index) {
+        @if (l.dropped) {
+          <div class="line dropped"><span class="time num">{{ time(l.ts) }}</span><span class="msg">{{ l.dropped }} {{ droppedText() }}</span></div>
+        } @else {
         <div class="line" [class]="'line ' + (l.priority ?? 'info')">
           <span class="time num">{{ time(l.ts) }}</span>
           @if (showServer() && l.server) {
@@ -33,6 +38,7 @@ export type UnitColor = Map<string, string> | ((unit: string) => string | undefi
           }
           <span class="msg">{{ l.message }}</span>
         </div>
+        }
       } @empty {
         <div class="empty">{{ emptyText() }}</div>
       }
@@ -47,6 +53,7 @@ export type UnitColor = Map<string, string> | ((unit: string) => string | undefi
     .line { display: flex; gap: 10px; word-break: break-word; color: var(--w-70); }
     .line.err { color: var(--color-crit); }
     .line.warn { color: var(--color-warn); }
+    .line.dropped { color: var(--w-40); font-style: italic; }
     .time { flex: none; color: var(--w-40); }
     .server { flex: none; color: var(--w-60); }
     .unit { flex: none; color: var(--w-50); }
@@ -64,6 +71,7 @@ export class LogViewComponent {
   readonly timeZone = input<string | undefined>(undefined);
   readonly label = input('');
   readonly emptyText = input('No lines');
+  readonly droppedText = input('lines dropped');
 
   readonly shown = computed(() => {
     const all = this.lines();

@@ -51,3 +51,13 @@ gjennom skjemaet eller gjennom `helpers/auth.ts` (`loginViaApi` setter cookien i
   `panel-<nøkkel>.png` per panel; alt som lever maskeres og loggboksen får fast høyde.
 - `tests/container.spec.ts`: skjerm 6 via containerpanelet på web-02 → web-web: topp, to kurver, porter, volumer,
   loggstrøm med Pause («Resume · N new») og Resume, «Open full log view» → `/logs?…`, tilbake med `#cont`. `container.png`.
+
+## Fase 6: loggsiden
+
+- `tests/logs.spec.ts`: skjerm 7 (`/logs?server=demo-web-02`): journal strømmer, Login & sudo gir bare sshd/sudo/fail2ban,
+  Errors bare røde linjer, 24 h gir ny strøm, Pause holder visningen og teller («Resume · N»), tekstfilter i `q`, Copy
+  lines (ikke i WebKit), containere med chips, farge per container og «Side by side» på desktop, dyplenken «View log»
+  fra `cron-sync.service` på worker-01 → `/logs?server=demo-worker-01&source=journal&unit=cron-sync.service`, og
+  `GET /api/e2e/agent-streams` (kun `GLIMT_ENV=e2e`) viser 0 strømmer for worker-01 etter at siden forlates (kun
+  desktop-prosjektet, siden prosjektene deler hub og tellingen er per server). Skjermbilde `logs.png` med loggboksen
+  i fast høyde. Hvert klikk som endrer URL-en ventes inn før neste, siden en ny navigasjon overkjører en pågående.

@@ -1,0 +1,51 @@
+/* Loggsiden (6.4, skjerm 7). Padding kommer fra skallet. Kun tokens. */
+:host { display: block; --bar-bottom: 0px; }
+:host(.mobile) { --bar-bottom: 60px; }
+.page { max-width: var(--page-max); display: flex; flex-direction: column; gap: 10px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em; }
+.status { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--w-45); flex-wrap: wrap; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-neutral); flex: none; }
+.dot.up { background: var(--color-ram); }
+.dot.paused { background: var(--color-warn); }
+.dot.down { background: var(--color-crit); }
+.dot.connecting { background: var(--color-warn); animation: blink 1.2s infinite; }
+
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.server { flex: none; min-width: 140px; }
+.filter { flex: 1; min-width: 160px; }
+.range { flex: none; }
+@media (max-width: 759.98px) { .filter { flex-basis: 100%; order: 3; } }
+
+.sources { max-width: 100%; }
+@media (max-width: 759.98px) { .sources { margin: 0 -12px; padding: 0 12px; } }
+
+.hintrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hint { font-size: 11px; color: var(--w-45); }
+.priority { margin-left: auto; }
+
+/* Chips: containere (med farge) og enhetsfilteret. */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: var(--radius-pill);
+  border: 1px solid var(--s-14); background: transparent; color: var(--w-60); font-size: 11px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; transition: background var(--t-hover), color var(--t-hover), border-color var(--t-hover);
+}
+.chip:hover { color: var(--w-85); background: var(--s-5); }
+.chip.on { background: var(--w-100); color: var(--color-ink); border-color: var(--w-100); }
+.cdot { width: 6px; height: 6px; border-radius: 50%; background: var(--chip-color, var(--w-35)); flex: none; }
+.chip.on .cdot { background: var(--chip-color, var(--color-ink)); box-shadow: 0 0 0 1px var(--color-ink); }
+.layout { margin-left: auto; }
+@media (pointer: coarse) { .chip { min-height: 44px; } }
+
+.logbox { min-height: 300px; border-radius: var(--radius-card); box-shadow: inset 0 0 0 .5px var(--s-8); }
+.columns { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 8px; }
+.column { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.colhead { font-size: 11px; font-weight: 600; padding: 0 2px; }
+
+/* Sticky bunnlinje: 60 px over mobilnavigasjonen. */
+.bar {
+  position: sticky; bottom: var(--bar-bottom); z-index: 4; display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0;
+  background: #0f1013e6; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}

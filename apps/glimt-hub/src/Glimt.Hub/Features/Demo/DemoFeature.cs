@@ -84,6 +84,13 @@ public static class DemoFeature
 
         if (options.Env == GlimtOptions.E2e && IsDemoMode(options))
         {
+            // Open log streams per server, so Playwright can verify that leaving the log view stopped every stream (step 6.5).
+            app.MapGet("/api/e2e/agent-streams", (LogRelay logs) =>
+            {
+                var byServer = logs.CountByServer();
+                return Results.Ok(new { total = byServer.Values.Sum(), byServer });
+            });
+
             app.MapPost("/api/e2e/{action}", async (string action, E2eRequest? request, FakeAgentService demo, E2eUsers e2eUsers, ShiftableTimeProvider clock, DownDetector down, CancellationToken ct) =>
             {
                 request ??= new E2eRequest(null, null, null);

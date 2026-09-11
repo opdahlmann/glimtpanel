@@ -1,0 +1,65 @@
+<div class="page">
+  <header class="head">
+    <div class="heading">
+      <h1 class="title">{{ 'logs' | t }}</h1>
+      <div class="status num" data-testid="log-status">
+        <span class="dot" [class]="'dot ' + dot()" aria-hidden="true"></span>
+        <span>{{ statusText() }}</span>
+        <span>·</span>
+        <span data-testid="line-count">{{ countText() }}</span>
+      </div>
+    </div>
+    @if (crossLogs()) {
+      <gp-segment [options]="scopeOptions()" value="one" [label]="'view' | t" />
+    }
+  </header>
+
+  <div class="toolbar">
+    <gp-select class="server" name="server" [options]="serverOptions()" [ngModel]="serverId() ?? ''" (ngModelChange)="onServer($event)" />
+    <gp-input class="filter" name="q" autocomplete="off" [placeholder]="'filterLog' | t" [ngModel]="filterText()" (ngModelChange)="onFilter($event)" />
+    <gp-segment class="range" [options]="rangeOptions()" [value]="rng()" (valueChange)="onRange($event)" [label]="'range1h' | t" />
+  </div>
+
+  <gp-segment class="sources" [options]="sourceOptions()" [value]="src()" (valueChange)="onSource($event)" [scroll]="true" [label]="'logs' | t" />
+
+  <div class="hintrow">
+    <span class="hint">{{ hint() }}</span>
+    @if (unit()) {
+      <button type="button" class="chip on" (click)="clearUnit()" [attr.aria-label]="('remove' | t) + ' ' + unit()">{{ 'unitLabel' | t }} · {{ unit() }} <span aria-hidden="true">×</span></button>
+    }
+    <gp-segment class="priority" size="sm" [options]="priorityOptions()" [value]="pri()" (valueChange)="onPriority($event)" [label]="'severity' | t" />
+  </div>
+
+  @if (src() === 'cont') {
+    <div class="chips" role="group" [attr.aria-label]="'chooseContainers' | t" data-testid="container-chips">
+      @for (c of containers(); track c.id) {
+        <button type="button" class="chip" [class.on]="isSelected(c.name)" [attr.aria-pressed]="isSelected(c.name)" [style.--chip-color]="containerColor(c.name)" (click)="toggleContainer(c.name)">
+          <span class="cdot" aria-hidden="true"></span>{{ c.name }}
+        </button>
+      } @empty {
+        <span class="hint">{{ (containersLoaded() ? 'noContainers' : 'loading') | t }}</span>
+      }
+      @if (showLayout()) {
+        <gp-segment class="layout" size="sm" [options]="layoutOptions()" [(value)]="layout" [label]="'view' | t" />
+      }
+    </div>
+  }
+
+  @if (columns(); as cols) {
+    <div class="columns" [style.--cols]="cols.length">
+      @for (c of cols; track c) {
+        <div class="column">
+          <div class="colhead" [style.color]="containerColor(c)">{{ c }}</div>
+          <gp-log-view class="logbox" [lines]="linesFor(c)" [maxLines]="300" [timeZone]="timeZone()" [colorByUnit]="colorByContainer()" [label]="c" [emptyText]="emptyText()" [droppedText]="'droppedLines' | t" />
+        </div>
+      }
+    </div>
+  } @else {
+    <gp-log-view class="logbox" [lines]="filtered()" [maxLines]="300" [timeZone]="timeZone()" [colorByUnit]="colorByContainer()" [label]="'logs' | t" [emptyText]="emptyText()" [droppedText]="'droppedLines' | t" />
+  }
+
+  <div class="bar">
+    <gp-button variant="primary" size="lg" (click)="togglePause()" [disabled]="!requests().length">{{ pauseLabel() }}</gp-button>
+    <gp-button variant="ghost" size="lg" (click)="copyLines()" [disabled]="!filtered().length">{{ 'copySel' | t }}</gp-button>
+  </div>
+</div>

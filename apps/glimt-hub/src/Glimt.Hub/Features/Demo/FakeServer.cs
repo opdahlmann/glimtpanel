@@ -271,7 +271,8 @@ public sealed class FakeServer
 
         var category = DemoData.CategoryFor(request.Source);
         var table = DemoData.LogTable.Where(r => category is null || r.Category == category)
-            .Where(r => request.Unit is null || r.Unit == request.Unit.Replace(".service", "", StringComparison.Ordinal))
+            // A unit filter matches the unit itself or lines that mention it (systemd logs a failed unit under its own name).
+            .Where(r => request.Unit is null || r.Unit == UnitName(request.Unit) || r.Message.Contains(UnitName(request.Unit), StringComparison.Ordinal))
             .Where(r => request.Priority switch { "err" => r.Priority == "err", "warn" => r.Priority is "err" or "warn", _ => true })
             .ToArray();
         if (table.Length == 0)
@@ -285,6 +286,8 @@ public sealed class FakeServer
             yield return new LogLine(fromTs + i * 1000, row.Unit, null, row.Priority, row.Message);
         }
     }
+
+    private static string UnitName(string unit) => unit.Replace(".service", "", StringComparison.Ordinal);
 
     private HostMetrics Host()
     {

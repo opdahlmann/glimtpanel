@@ -48,6 +48,15 @@ public sealed class LogRelay(AgentRegistry registry, ILogReceiver receiver, ILog
         }
     }
 
+    /// <summary>Open streams per server id (GET /api/e2e/agent-streams: «no stream is left behind after the page is left»).</summary>
+    public IReadOnlyDictionary<string, int> CountByServer()
+    {
+        lock (_lock)
+        {
+            return _streams.Values.GroupBy(s => s.ServerId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        }
+    }
+
     /// <summary>
     /// Opens a stream. Always returns a streamId; when the request cannot be served the connection
     /// receives LogEnded for that id right away (reason error or unavailable).
