@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Pre-commit-sjekk: kun README.md av markdown-filer og kun example.env av env-filer får sjekkes inn.
+// Pre-commit-sjekk: kun README.md og CLAUDE.md av markdown-filer og kun example.env av env-filer får sjekkes inn.
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -11,7 +11,7 @@ const staged = execSync('git diff --cached --name-only --diff-filter=ACMR', { en
 const offending = [];
 for (const file of staged) {
   const base = path.basename(file);
-  if (base.toLowerCase().endsWith('.md') && base !== 'README.md') offending.push(`${file}  (markdown: kun README.md er tillatt)`);
+  if (base.toLowerCase().endsWith('.md') && base !== 'README.md' && file !== 'CLAUDE.md') offending.push(`${file}  (markdown: kun README.md og CLAUDE.md er tillatt)`);
   if (/^\.env(\..+)?$/.test(base)) offending.push(`${file}  (env-fil: kun example.env er tillatt)`);
 }
 

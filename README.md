@@ -26,7 +26,7 @@ Ett nettleservindu som viser hva alle serverne dine gjør akkurat nå. En liten 
 Krav: Node 22+, .NET SDK 10, Docker Desktop (for agent-containeren). Go trengs ikke, agenten bygges i Docker.
 
 ```sh
-git config core.hooksPath .githooks   # nekter commit av markdown (utenom README.md) og .env-filer
+git config core.hooksPath .githooks   # nekter commit av markdown (utenom README.md og CLAUDE.md) og .env-filer
 npm install
 cp example.env .env                   # standard for Docker-containere lokalt
 cp example.env .env.dev               # hub og web direkte på maskinen; sett GLIMT_MONGO_URI
@@ -54,7 +54,7 @@ direkte på maskinen, `.env.prod` limes inn i Dokploy. Alle nøkler har prefiks 
 
 ## Regler for git
 
-- Kun `README.md` av markdown-filer sjekkes inn. Kun `example.env` av env-filer sjekkes inn. Håndheves av `.githooks/pre-commit`.
+- Kun `README.md` og `CLAUDE.md` (instruksjoner til Claude Code) av markdown-filer sjekkes inn. Kun `example.env` av env-filer sjekkes inn. Håndheves av `.githooks/pre-commit`.
 - Måledata lagres aldri i databasen. Agenten har ingen skrivekommandoer.
 
 ## Lisens

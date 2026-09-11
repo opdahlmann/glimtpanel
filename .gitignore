@@ -1,7 +1,8 @@
-# Markdown: kun README.md sjekkes inn (regel fra eier)
+# Markdown: kun README.md og CLAUDE.md sjekkes inn (regel fra eier)
 *.md
 !README.md
 !**/README.md
+!CLAUDE.md
 
 # Miljø: kun example.env sjekkes inn
 .env
