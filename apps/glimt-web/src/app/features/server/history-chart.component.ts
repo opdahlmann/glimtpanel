@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, input, model, signal, untracked } from '@angular/core';
-import { HISTORY_CACHE_MS, HistoryRange, HistoryResult, HistoryService } from '@core/history.service';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, signal, untracked } from '@angular/core';
+import { ClockService } from '@core/clock.service';
+import { HistoryRange, HistoryResult, HistoryService } from '@core/history.service';
 import { I18nService } from '@core/i18n.service';
 import { HourChart } from '@core/live.store';
 import { ChartComponent, ChartEvent, ChartUnit } from '@shared/chart/chart.component';
@@ -61,7 +62,7 @@ export class HistoryChartComponent {
   readonly i18n = inject(I18nService);
   private readonly history = inject(HistoryService);
   private readonly fetched = signal<HistoryResult | null>(null);
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private readonly clock = inject(ClockService);
   private seq = 0;
 
   readonly timeZone = computed(() => this.i18n.timeZone() ?? undefined);
@@ -82,22 +83,17 @@ export class HistoryChartComponent {
   readonly empty = computed(() => !this.series().values.some((v) => v !== null));
 
   constructor() {
-    const destroyRef = inject(DestroyRef);
+    // Hentes på nytt hvert minutt fra den delte klokken (steg 9.2), ikke med egen setInterval.
     effect(() => {
       const id = this.serverId();
       const metric = this.metric();
       const range = this.range();
       const wantFetch = !this.useLive();
-      untracked(() => this.arm(wantFetch, id, metric, range));
+      if (wantFetch) this.clock.minute();
+      untracked(() => {
+        if (wantFetch) void this.load(id, metric, range);
+      });
     });
-    destroyRef.onDestroy(() => this.clearTimer());
-  }
-
-  private arm(wantFetch: boolean, id: string, metric: string, range: HistoryRange): void {
-    this.clearTimer();
-    if (!wantFetch) return;
-    void this.load(id, metric, range);
-    this.timer = setInterval(() => void this.load(id, metric, range), HISTORY_CACHE_MS);
   }
 
   private async load(id: string, metric: string, range: HistoryRange): Promise<void> {
@@ -110,8 +106,4 @@ export class HistoryChartComponent {
     }
   }
 
-  private clearTimer(): void {
-    if (this.timer !== null) clearInterval(this.timer);
-    this.timer = null;
-  }
 }

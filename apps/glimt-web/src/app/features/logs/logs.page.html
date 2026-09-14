@@ -15,7 +15,7 @@
   </header>
 
   <div class="toolbar">
-    <gp-select class="server" name="server" [options]="serverOptions()" [ngModel]="serverId() ?? ''" (ngModelChange)="onServer($event)" />
+    <gp-select class="server" name="server" [ariaLabel]="'server' | t" [options]="serverOptions()" [ngModel]="serverId() ?? ''" (ngModelChange)="onServer($event)" />
     <gp-input class="filter" name="q" autocomplete="off" [placeholder]="'filterLog' | t" [ngModel]="filterText()" (ngModelChange)="onFilter($event)" />
     <gp-segment class="range" [options]="rangeOptions()" [value]="rng()" (valueChange)="onRange($event)" [label]="'range1h' | t" />
   </div>

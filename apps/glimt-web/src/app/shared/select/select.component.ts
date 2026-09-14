@@ -18,6 +18,8 @@ let seq = 0;
 })
 export class SelectComponent<T extends string = string> implements ControlValueAccessor {
   readonly label = input('');
+  /** Navn for skjermleser når ingen synlig etikett finnes (steg 9.3). */
+  readonly ariaLabel = input('');
   readonly error = input('');
   readonly options = input<SelectOption<T>[]>([]);
   readonly name = input('');

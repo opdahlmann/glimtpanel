@@ -44,3 +44,17 @@ public sealed class HealthTests(HubFactory factory) : IClassFixture<HubFactory>
         Assert.Equal(HttpStatusCode.UpgradeRequired, response.StatusCode);
     }
 }
+
+/// <summary>POST /api/client-errors (step 9.5): anonymous, logged, 204; rate-limited per address.</summary>
+public sealed class ClientErrorsTests(HubFactory factory) : IClassFixture<HubFactory>
+{
+    [Fact]
+    public async Task Client_error_is_accepted_without_a_token()
+    {
+        using var client = factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/client-errors", new { message = "TypeError: x is not a function", stack = "at foo (app.js:1:1)", url = "http://localhost:4200/", userAgent = "test", version = "0.1.0" }, Repo.Timeout());
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
+        var empty = await client.PostAsJsonAsync("/api/client-errors", new { }, Repo.Timeout());
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, empty.StatusCode);
+    }
+}

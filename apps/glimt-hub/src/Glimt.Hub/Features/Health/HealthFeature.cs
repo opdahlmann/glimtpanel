@@ -31,6 +31,7 @@ public static class HealthFeature
             (long)(DateTime.UtcNow - StartedAt).TotalSeconds,
             DemoFeature.IsDemoMode(options),
             new BufferHealth(buffers.ServerCount, buffers.TotalPoints, buffers.LastSavedAt?.UtcDateTime.ToString("o")))));
+        app.MapClientErrors();
         return app;
     }
 }

@@ -1,5 +1,6 @@
 import {
   ApplicationConfig,
+  ErrorHandler,
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
@@ -8,6 +9,7 @@ import {
 import { provideHttpClient, withFetch } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { ConfigService } from '@core/config.service';
+import { GlobalErrorHandler } from '@core/error-handler';
 import { SessionService } from '@core/session.service';
 import { routes } from './app.routes';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -15,6 +17,8 @@ import { provideServiceWorker } from '@angular/service-worker';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    // Uventede feil (steg 9.5): toast «Something went wrong · Reload» og POST /api/client-errors, begrenset.
+    { provide: ErrorHandler, useClass: GlobalErrorHandler },
     // Ingen withViewTransitions: dekor står stille (6.7).
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(withFetch()),

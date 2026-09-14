@@ -82,6 +82,7 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 
 | Sti | Hva |
 |---|---|
+| `POST /api/client-errors` | – | `{ message?, stack?, url?, userAgent?, version? }` fra nettleserens globale feilhåndterer (steg 9.5): logges som advarsel (avkortet), lagres ikke, 204. Egen policy `errors` (20/min per adresse) |
 | `GET /healthz` | `{ status, version, env, mongo: "ok" \| "unavailable", agentsConnected, uptimeSec, demoMode, buffer: { servers, points, lastSavedAt } }` (`agentsConnected` teller ekte agenter, ikke demoservere) |
 | `GET /install` | Installasjonsskript for agenten (plassholder til steg 1.11), `text/plain` |
 | `WS /agent/ws` | Agentprotokollen v1 (`packages/protocol/agent-hub.schema.json`): første melding må være `hello` innen 10 s, maks 1 MB per ramme, tekstrammer. Se «Sanntid» under |

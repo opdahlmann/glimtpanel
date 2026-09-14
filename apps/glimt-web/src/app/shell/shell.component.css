@@ -1,4 +1,8 @@
 :host { display: flex; min-height: 100dvh; position: relative; }
+/* «Hopp til innholdet» (steg 9.3): usynlig til den får fokus. */
+.skip { position: absolute; left: 12px; top: -80px; z-index: 40; display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: var(--radius-card); background: var(--w-100); color: var(--color-ink); font-size: 12px; font-weight: 600; text-decoration: none; transition: top var(--t-hover); }
+.skip:focus-visible { top: 12px; }
+main:focus { outline: none; }
 .content { flex: 1; min-width: 0; display: flex; flex-direction: column; z-index: 1; }
 main { flex: 1; padding: 24px 28px 40px; max-width: 100%; min-width: 0; }
 :host(.mobile) main { padding: 12px 12px 24px; }

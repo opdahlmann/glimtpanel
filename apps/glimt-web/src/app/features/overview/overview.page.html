@@ -2,7 +2,8 @@
   <header class="head">
     <div class="heading">
       <h1 class="title">{{ titleKey() | t }}</h1>
-      <div class="summary num" data-testid="summary">{{ summary() }}</div>
+      <div class="summary num" data-testid="summary" aria-hidden="true">{{ summary() }}</div>
+      <p class="visually-hidden" aria-live="polite" data-testid="summary-live">{{ summaryLive() }}</p>
     </div>
     @if (canAdd()) {
       <div class="add" data-add-menu>
@@ -35,7 +36,7 @@
   } @else {
     <div class="toolbar">
       <gp-input class="search" [leadingIcon]="true" size="sm" name="search" autocomplete="off" [placeholder]="'search' | t" [ngModel]="search()" (ngModelChange)="onSearch($event)" />
-      <gp-select class="sort" name="sort" [options]="sortOptions()" [ngModel]="sort()" (ngModelChange)="onSort($event)" />
+      <gp-select class="sort" name="sort" [ariaLabel]="'sort' | t" [options]="sortOptions()" [ngModel]="sort()" (ngModelChange)="onSort($event)" />
       @if (showViewSegment()) {
         <gp-segment class="views" [options]="viewOptions()" [value]="view()" (valueChange)="onView($event)" [label]="'view' | t" />
       }

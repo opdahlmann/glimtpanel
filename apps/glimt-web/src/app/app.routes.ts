@@ -44,6 +44,8 @@ export const routes: Routes = [
       { path: 'settings/:tab', loadComponent: () => import('@features/settings/settings.page').then((m) => m.SettingsPage) },
       { path: 'access/accept', loadComponent: () => import('@features/access/accept.page').then((m) => m.AcceptPage) },
       { path: 'welcome', data: { bottomNav: false }, loadComponent: () => import('@features/pwa/welcome.page').then((m) => m.WelcomePage) },
+      // Ukjent adresse innlogget (steg 9.5): egen side i skallet i stedet for stille omdirigering.
+      { path: '**', loadComponent: () => import('./shell/not-found.page').then((m) => m.NotFoundPage) },
     ],
   },
   { path: '**', redirectTo: '' },

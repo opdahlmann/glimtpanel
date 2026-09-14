@@ -12,6 +12,9 @@ import { ToastService } from './toast.service';
             <path d="M5 12l5 5L20 7" />
           </svg>
           <span>{{ t.message }}</span>
+          @if (t.action; as a) {
+            <button type="button" class="act" (click)="run(a)">{{ a.label }}</button>
+          }
         </div>
       }
     </div>
@@ -24,9 +27,17 @@ import { ToastService } from './toast.service';
       box-shadow: inset 0 0 0 .5px var(--s-14), 0 12px 40px #00000080; animation: pdIn var(--t-panel);
     }
     svg { color: var(--color-ram); flex: none; }
+    .pill:has(.act) { pointer-events: auto; }
+    .act { min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--radius-pill); background: var(--w-100); color: var(--color-ink); font: inherit; font-weight: 600; cursor: pointer; }
+    @media (pointer: coarse) { .act { min-height: 44px; } }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ToastHostComponent {
   readonly toast = inject(ToastService);
+
+  run(action: { run: () => void }): void {
+    this.toast.dismiss();
+    action.run();
+  }
 }

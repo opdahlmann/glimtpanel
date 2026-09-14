@@ -6,6 +6,7 @@
     [id]="id"
     class="select"
     [attr.name]="name() || null"
+    [attr.aria-label]="!label() && ariaLabel() ? ariaLabel() : null"
     [disabled]="disabled()"
     [attr.aria-invalid]="error() ? true : null"
     [attr.aria-describedby]="error() ? id + '-err' : null"

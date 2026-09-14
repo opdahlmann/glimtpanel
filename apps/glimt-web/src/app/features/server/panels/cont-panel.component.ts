@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { ConfigService } from '@core/config.service';
 import { I18nService } from '@core/i18n.service';
 import { BadgeComponent } from '@shared/badge/badge.component';
@@ -14,7 +14,7 @@ import { ContainersView, ContainerView } from '../server-view';
  */
 @Component({
   selector: 'gp-cont-panel',
-  imports: [RowComponent, BadgeComponent, LiveDotComponent, RouterLink],
+  imports: [RowComponent, BadgeComponent, LiveDotComponent],
   template: `
     @if (!view().available) {
       <div class="empty">{{ i18n.t('dockerNotAvailable') }} · <a [href]="docsUrl()" target="_blank" rel="noopener">{{ i18n.t('howToEnable') }}</a></div>
@@ -26,7 +26,7 @@ import { ContainersView, ContainerView } from '../server-view';
             <span class="name">{{ c.name }}</span>
             <gp-badge class="image">{{ c.image }}</gp-badge>
             @if (c.nodeId) {
-              <a class="node" [routerLink]="['/servers', c.nodeId]" (click)="$event.stopPropagation()" [attr.aria-label]="i18n.t('asNode') + ' ' + c.name"><gp-badge tone="ok">{{ i18n.t('asNode') }}</gp-badge></a>
+              <gp-badge class="node" tone="ok">{{ i18n.t('asNode') }}</gp-badge>
             }
             <span class="sub">{{ c.status }}</span>
             <span trailing class="strong num nums">{{ c.cpu }} <span class="unit">CPU</span> · {{ c.mem }} <span class="unit">{{ c.limit }}</span></span>
@@ -49,8 +49,8 @@ import { ContainersView, ContainerView } from '../server-view';
   styleUrls: ['./panels.css'],
   styles: `
     .image { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-    /* «node»-badgen (steg 12.8) lenker til containernoden; 44 px treffflate uten å flytte raden. */
-    .node { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; margin: -14px 0; text-decoration: none; }
+    /* «node»-badgen (steg 12.8): containeren er en egen node; lenken til den står på containersiden (ingen lenke i en klikkbar rad, 9.3). */
+    .node { flex: none; }
     /* Mobil: toppraden bryter, tallene på egen linje (6.4). */
     @media (max-width: 759.98px) { .nums { flex-basis: 100%; } }
     .detail { display: flex; flex-direction: column; gap: 6px; width: 100%; }

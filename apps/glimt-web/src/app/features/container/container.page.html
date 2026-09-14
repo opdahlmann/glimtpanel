@@ -8,6 +8,9 @@
         <h1 class="title">{{ v.name }}</h1>
         <span class="status num" data-testid="status"><gp-live-dot [state]="v.dot" />{{ v.status }}</span>
         <gp-badge class="image">{{ v.image }}</gp-badge>
+        @if (nodeId(); as node) {
+          <a class="nodelink" [routerLink]="['/servers', node]" data-testid="open-node">{{ 'asNode' | t }} →</a>
+        }
       </div>
       <div class="meta num" data-testid="meta">
         <span>{{ 'restarts' | t }} <b [class.warn]="v.restartsTone === 'warn'">{{ v.restarts }}</b></span>

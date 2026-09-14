@@ -9,7 +9,7 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
       role="switch"
       class="btn"
       [attr.aria-checked]="checked()"
-      [attr.aria-label]="label() || null"
+      [attr.aria-label]="label() || srLabel() || null"
       [attr.aria-describedby]="describedBy() || null"
       [disabled]="disabled()"
       (click)="checked.set(!checked())"
@@ -37,6 +37,8 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
 export class ToggleComponent {
   readonly checked = model(false);
   readonly label = input('');
+  /** Navn for skjermleser uten synlig tekst (steg 9.3). */
+  readonly srLabel = input('');
   readonly describedBy = input('');
   readonly disabled = input(false);
 }

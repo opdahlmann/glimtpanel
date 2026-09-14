@@ -55,7 +55,7 @@
               <gp-badge tone="new">{{ 'overridden' | t }}</gp-badge>
             }
             <gp-badge [tone]="r.severityKey === 'critical' ? 'crit' : r.severityKey === 'warning' ? 'warn' : 'default'">{{ r.severityKey | t }}</gp-badge>
-            <gp-toggle class="switch" [checked]="r.draft.enabled" (checkedChange)="toggleRule(r.draft.id, $event)" [disabled]="isServer() && useDefaults()" [label]="''" />
+            <gp-toggle class="switch" [checked]="r.draft.enabled" (checkedChange)="toggleRule(r.draft.id, $event)" [disabled]="isServer() && useDefaults()" [label]="''" [srLabel]="r.nameKey | t" />
           </div>
         }
       </div>
@@ -74,14 +74,14 @@
                 <div class="chsub warn">{{ 'pushOff' | t }}</div>
               }
             </div>
-            <gp-toggle [checked]="channels().push" (checkedChange)="setChannel('push', $event)" [label]="''" />
+            <gp-toggle [checked]="channels().push" (checkedChange)="setChannel('push', $event)" [label]="''" [srLabel]="'push' | t" />
           </div>
           <div class="chrow sub">
             <div class="chmain"><div class="chsub">{{ 'thisDevice' | t }}</div></div>
             @if (push.status() === 'denied') {
               <span class="chsub warn">{{ 'pushDenied' | t }}</span>
             } @else {
-              <gp-toggle [checked]="push.isOn()" (checkedChange)="togglePushDevice($event)" [disabled]="!push.supported() || push.status() === 'asking'" [label]="''" data-testid="push-this-device" />
+              <gp-toggle [checked]="push.isOn()" (checkedChange)="togglePushDevice($event)" [disabled]="!push.supported() || push.status() === 'asking'" [label]="''" [srLabel]="'thisDevice' | t" data-testid="push-this-device" />
             }
           </div>
           <div class="chrow">
@@ -89,7 +89,7 @@
               <div class="chname">{{ 'email' | t }}</div>
               <div class="chsub" data-testid="email-line">{{ loaded()!.email }} · {{ 'emailSub' | t }}</div>
             </div>
-            <gp-toggle [checked]="channels().email" (checkedChange)="setChannel('email', $event)" [label]="''" />
+            <gp-toggle [checked]="channels().email" (checkedChange)="setChannel('email', $event)" [label]="''" [srLabel]="'email' | t" />
           </div>
           <div class="chrow column">
             <div class="chmain">
@@ -118,7 +118,7 @@
                 <input type="text" class="time num" inputmode="numeric" maxlength="5" placeholder="08:00" data-testid="digest-time" [value]="channels().digestTime" (input)="setChannel('digestTime', $any($event.target).value)" [attr.aria-label]="'time' | t" [attr.aria-invalid]="timeValid() ? null : true" />
               </label>
             </div>
-            <gp-toggle [checked]="channels().digestEnabled" (checkedChange)="setChannel('digestEnabled', $event)" [label]="''" />
+            <gp-toggle [checked]="channels().digestEnabled" (checkedChange)="setChannel('digestEnabled', $event)" [label]="''" [srLabel]="'dailyDigest' | t" />
           </div>
         </section>
       </div>

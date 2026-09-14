@@ -19,7 +19,7 @@
     <div class="members" role="list">
       @for (m of v.members; track m.id) {
         <button type="button" class="member" role="listitem" (click)="openNode(m.id)" [attr.data-member]="m.name">
-          <gp-live-dot [state]="m.dot" />
+          <gp-live-dot [state]="m.dot" [label]="('statusLabel' | t) + ': ' + (m.status | t)" />
           <span class="mname">{{ m.name }}</span>
           <gp-badge>{{ (m.kind === 'container' ? 'containerLabel' : 'serverLabel') | t }}</gp-badge>
           <span class="mnum num">{{ 'cpu' | t }} {{ m.cpu }}</span>

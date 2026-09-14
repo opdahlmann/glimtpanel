@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { ApiService, errorKey } from '@core/api.service';
 import { ClipboardService } from '@core/clipboard.service';
+import { ClockService } from '@core/clock.service';
 import { I18nKey, I18nService } from '@core/i18n.service';
 import { TPipe } from '@core/t.pipe';
 import { ButtonComponent } from '@shared/button/button.component';
@@ -47,6 +48,7 @@ export class EnrolPanelComponent {
   private readonly api = inject(ApiService);
   private readonly clipboard = inject(ClipboardService);
   private readonly i18n = inject(I18nService);
+  private readonly clock = inject(ClockService);
 
   readonly mode = signal<DockerMode>('proxy');
   readonly key = signal<EnrolKey | null>(null);
@@ -67,7 +69,6 @@ export class EnrolPanelComponent {
   ]);
   readonly dockerNote = computed(() => this.i18n.t(this.mode() === 'proxy' ? 'dockerSecure' : 'dockerSimple'));
 
-  private ticker: ReturnType<typeof setInterval> | null = null;
   private copiedTimer: ReturnType<typeof setTimeout> | null = null;
   private requestSeq = 0;
 
@@ -77,9 +78,9 @@ export class EnrolPanelComponent {
       const mode = this.mode();
       untracked(() => void this.request(mode));
     });
-    this.ticker = setInterval(() => this.now.set(Date.now()), 1000);
+    // Nedtellingen følger den delte sekundklokken (steg 9.2).
+    effect(() => this.now.set(this.clock.second()));
     inject(DestroyRef).onDestroy(() => {
-      if (this.ticker) clearInterval(this.ticker);
       if (this.copiedTimer) clearTimeout(this.copiedTimer);
     });
   }

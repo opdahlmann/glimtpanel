@@ -1,3 +1,4 @@
+<a class="skip" href="#main" (click)="skip($event)">{{ 'skipToContent' | t }}</a>
 <gp-backdrop />
 @if (!isMobile()) {
   <gp-sidebar />
@@ -20,7 +21,7 @@
       <gp-button class="btn" variant="ghost" size="sm" (click)="reconnect()">{{ 'reconnectBtn' | t }}</gp-button>
     </div>
   }
-  <main>
+  <main id="main" tabindex="-1">
     <router-outlet />
   </main>
   @if (showBottomNav()) {

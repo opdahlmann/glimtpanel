@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, input, signal, untracked } from '@angular/core';
-import { HISTORY_CACHE_MS, HistoryService } from '@core/history.service';
+import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
+import { ClockService } from '@core/clock.service';
+import { HistoryService } from '@core/history.service';
 import { BadgeComponent } from '@shared/badge/badge.component';
 import { RowComponent } from '@shared/row/row.component';
 import { SparklineComponent } from '@shared/sparkline/sparkline.component';
@@ -42,27 +43,22 @@ export class NetPanelComponent {
   /** Grensesnitt → siste time inn (MB/s, 120 punkter). */
   readonly sparks = signal<Record<string, number[]>>({});
   readonly sparkMax = signal<Record<string, number>>({});
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private readonly clock = inject(ClockService);
   private names: string[] = [];
 
   constructor() {
+    // Hvert minutt fra den delte klokken (steg 9.2), og ved nye grensesnitt.
     effect(() => {
       const id = this.serverId();
       const names = this.view().ifaces.map((i) => i.name);
+      const minute = this.clock.minute();
       untracked(() => {
-        if (names.join('|') === this.names.join('|')) return;
+        const changed = names.join('|') !== this.names.join('|');
         this.names = names;
-        this.arm(id, names);
+        if (!names.length) return;
+        if (changed || minute > 0) void this.load(id, names);
       });
     });
-    inject(DestroyRef).onDestroy(() => this.clear());
-  }
-
-  private arm(id: string, names: string[]): void {
-    this.clear();
-    if (!names.length) return;
-    void this.load(id, names);
-    this.timer = setInterval(() => void this.load(id, names), HISTORY_CACHE_MS);
   }
 
   private async load(id: string, names: string[]): Promise<void> {
@@ -86,8 +82,4 @@ export class NetPanelComponent {
     }
   }
 
-  private clear(): void {
-    if (this.timer !== null) clearInterval(this.timer);
-    this.timer = null;
-  }
 }

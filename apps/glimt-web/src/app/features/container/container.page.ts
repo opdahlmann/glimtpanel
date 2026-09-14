@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, inject, input, signal, untracked } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ActivityService } from '@core/activity.service';
 import { ApiError, ApiService } from '@core/api.service';
 import { I18nService } from '@core/i18n.service';
@@ -35,7 +35,7 @@ export function findContainer(server: ServerDto | null, cid: string): ContainerI
  */
 @Component({
   selector: 'gp-container-page',
-  imports: [TPipe, BadgeComponent, ButtonComponent, LiveDotComponent, LogViewComponent, HistoryChartComponent],
+  imports: [RouterLink, TPipe, BadgeComponent, ButtonComponent, LiveDotComponent, LogViewComponent, HistoryChartComponent],
   templateUrl: './container.page.html',
   styleUrl: './container.page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -55,6 +55,8 @@ export class ContainerPage {
 
   readonly server = computed<ServerDto | null>(() => this.store.server(this.id())());
   readonly container = computed(() => findContainer(this.server(), this.cid()));
+  /** Containeren er en egen containernode (steg 12.6): lenke til noden. */
+  readonly nodeId = computed(() => this.server()?.linkedNodes?.[this.cid()] ?? null);
   /** Bare id-en, så loggeffekten ikke kjører på nytt for hver `Server`-melding (nytt containerobjekt hvert sekund). */
   readonly containerId = computed(() => this.container()?.id ?? null);
   readonly notFound = signal(false);

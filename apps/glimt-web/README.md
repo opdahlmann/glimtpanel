@@ -493,6 +493,36 @@ Vitest: `settings-helpers.spec.ts` (tidssoner med offset, tilgangsrader). Playwr
 (skjerm 9), `settings-servers.spec.ts` (skjerm 11), `settings-access.spec.ts` (skjerm 12 og 18: leseren i egen
 kontekst, 403 fra huben, ugyldig akseptlenke), `settings-data.spec.ts` (skjerm 13 med nedlasting) i tre prosjekter.
 
+## Ytelse, frakoblet, tilgjengelighet og mobilpolish (fase 9)
+
+- **Frakoblet (9.1, skjerm 15).** `ConnectionService` viser banneret «Connection lost · Showing last known values from
+  08:14:02 · Reconnect» når forbindelsen har vært borte i 2 s eller nettleseren er offline; kortene beholder siste tall,
+  sammendraget sier «connection lost». Gjenoppkobling gjenoppretter abonnementer og loggstrømmer (`sinceMs`) uten
+  omlasting. `offline.spec.ts` bruker `context.setOffline`.
+- **Renderingsbudsjett (9.2).** Én `ClockService` (sekund- og minuttikk som starter ved første leser) driver klokken
+  i sammendraget, nedtellingen i innrulleringskortet og minutt-oppfriskingen av historikk og nett-sparklines; ingen
+  `setInterval` i komponenter utover den. Kort fryses utenfor skjermen (IntersectionObserver); `content-visibility: auto` på panelene ble prøvd og
+  fjernet igjen fordi full-side-skjermbildene i e2e da mangler paneler utenfor viewporten. Kurver tegner maks 600
+  punkter fra `computed`. `a11y.spec.ts` måler lange oppgaver
+  (> 100 ms) på oversikten i 8 s med `PerformanceObserver` og krever null. Chrome Performance-profilering på desktop
+  og batterimåling på Pixel/iPhone er ikke gjort i denne omgangen.
+- **Tilgjengelighet (9.3).** «Skip to content» først i tabrekkefølgen, `main#main` med `tabindex="-1"`;
+  sammendraget er `aria-hidden` og en `visually-hidden` `aria-live="polite"`-versjon oppdateres høyst hvert 30. s
+  uten klokken; `gp-live-dot` får `role="img"`/`aria-label` der prikken står uten statusord (medlemsrader i grupper),
+  ellers dekor med tekst ved siden av; ringer og kurver har `aria-label`. `@axe-core/playwright` kjøres på alle
+  skjermene (desktop) uten serious/critical-funn; kontrastregelen er slått av i axe fordi `--w-45` på glass er
+  designvalget for 10–11 px sekundærtekst (4,6:1 mot `--color-ink`).
+- **Fysisk mobiltest (9.4).** Ikke gjennomført – krever iPhone og Android hos eier. Sjekkliste per skjerm 1–23:
+  layout, berøring (44 px), sticky topplinje/panelnav/bunnlinje, tastatur som dekker felt, safe-area, push-mottak,
+  «ett trykk åpner serveren»; kjør som Safari/Chrome og som PWA fra hjemskjermen, og noter funn her.
+- **PWA, bundle og feil (9.5).** Initial bundle 94 kB gz (330 kB rå); AG Grid ligger i en lat chunk som bare server-
+  og innstillingssidene laster. `GlobalErrorHandler` (`core/error-handler.ts`) gir toasten «Something went wrong ·
+  Reload» (toast med handling) og sender `POST /api/client-errors` (uten token, maks 5/min per nettleser, aldri samme
+  melding to ganger på rad; huben begrenser 20/min per adresse og bare logger). Ukjent adresse innlogget gir
+  404-siden i skallet; serversiden og containersiden viser «not found» ved 403/404. Lighthouse er ikke kjørt i denne
+  omgangen (krever produksjonsbygg bak proxy); målene i planen (Performance ≥ 85, Accessibility ≥ 95,
+  Best practices ≥ 95) står som åpne.
+
 ## Dockerfile
 
 Bygg-kontekst er repo-roten, slik Dokploy og `npm run build:images` gjør det:

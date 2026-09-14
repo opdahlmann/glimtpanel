@@ -32,3 +32,7 @@
 .logtitle { font-size: 11px; font-weight: 600; color: var(--w-85); }
 .logbox { max-height: 420px; overflow: auto; border-radius: var(--radius-chip); }
 .logbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Lenke til containernoden (fase 12/9.3). */
+.nodelink { display: inline-flex; align-items: center; min-height: 44px; margin: -14px 0; padding: 0 6px; color: var(--color-ram); font-size: 11px; font-weight: 600; text-decoration: none; }
+.nodelink:hover { text-decoration: underline; }

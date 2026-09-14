@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, Eleme
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { ClockService } from '@core/clock.service';
 import { ConnectionService } from '@core/connection.service';
 import { FeatureFlags } from '@core/feature-flags';
 import { GroupsStore } from '@core/groups.store';
@@ -55,6 +56,7 @@ export class OverviewPage {
   private readonly serverList = inject(ServerListService);
   private readonly flags = inject(FeatureFlags);
   private readonly conn = inject(ConnectionService);
+  private readonly clock = inject(ClockService);
   private readonly groupsStore = inject(GroupsStore);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -103,8 +105,16 @@ export class OverviewPage {
   readonly showViewSegment = computed(() => this.viewOptions().length > 1);
   readonly groupsView = computed(() => this.view() === 'groups');
 
-  /** Klokken i sammendraget («live · 08:14:05»). */
-  private readonly now = signal(Date.now());
+  /** Klokken i sammendraget («live · 08:14:05»), fra den delte sekundklokken (steg 9.2). */
+  private readonly now = computed(() => this.clock.second());
+  /** Skjermleser-versjonen av sammendraget: oppdateres høyst hvert 30. s, uten klokken (steg 9.3). */
+  readonly summaryLive = computed(() => {
+    const c = this.counts();
+    const t = (k: Parameters<I18nService['t']>[0]) => this.i18n.t(k);
+    const tick = Math.floor(this.clock.second() / 30_000);
+    void tick;
+    return `${c.total} ${t(this.hasNodes() ? 'nodes' : 'servers').toLowerCase()} · ${c.up} ${t('up')} · ${c.down} ${t('down')}`;
+  });
   readonly summary = computed(() => {
     const c = this.counts();
     const t = (k: Parameters<I18nService['t']>[0]) => this.i18n.t(k);
@@ -157,9 +167,7 @@ export class OverviewPage {
       }),
     );
     destroyRef.onDestroy(this.live.onServerRemoved(() => void this.serverList.load().catch(() => undefined)));
-    const clock = setInterval(() => this.now.set(Date.now()), 1000);
     destroyRef.onDestroy(() => {
-      clearInterval(clock);
       if (this.searchTimer) clearTimeout(this.searchTimer);
     });
   }

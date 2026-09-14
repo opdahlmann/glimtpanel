@@ -75,6 +75,12 @@ export class ShellComponent {
     void this.pwa.reload();
   }
 
+  /** Skip-lenken: fokuser innholdet uten å endre adressen. */
+  skip(e: Event): void {
+    e.preventDefault();
+    document.getElementById('main')?.focus();
+  }
+
   reconnect(): void {
     this.conn.reconnect();
   }
