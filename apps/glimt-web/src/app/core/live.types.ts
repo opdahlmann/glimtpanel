@@ -506,6 +506,29 @@ export interface RotateKeyResponse {
   oldTokenValidUntil: string;
 }
 
+/** `GET /api/access` (fase 8): en tilgang eieren har gitt. `scope` er `all` eller tagger. */
+export interface GrantDto {
+  id: string;
+  email: string;
+  scope: 'all' | string[];
+  status: 'pending' | 'accepted';
+  createdAt: string;
+  initials: string;
+}
+
+/** `GET /api/subscription`. */
+export interface SubscriptionDto {
+  slotsUsed: number;
+  slotsFree: number;
+  slotsBeta: number;
+  plan: string;
+  plannedPricePerSlotUsd: number;
+  discountPct: number;
+  wouldCostUsd: number;
+  wouldCostWithDiscountUsd: number;
+  noticeDays: number;
+}
+
 /** `GET /api/groups` (fase 13): en personlig, navngitt samling av noder. `memberIds` er filtrert til det brukeren ser. */
 export interface GroupDto {
   id: string;

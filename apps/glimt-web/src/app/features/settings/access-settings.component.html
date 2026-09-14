@@ -1,0 +1,33 @@
+<div class="grid">
+  <section class="card" aria-labelledby="invite-title" data-testid="invite-card">
+    <h2 id="invite-title" class="section">{{ 'invite' | t }}</h2>
+    <p class="note">{{ 'inviteSub' | t }}</p>
+    <gp-input type="email" [label]="'inviteEmail' | t" [ngModel]="email()" (ngModelChange)="email.set($event)" name="inviteEmail" autocomplete="off" (keydown.enter)="invite()" />
+    <gp-select [label]="'scope' | t" name="scope" [options]="scopeOptions()" [ngModel]="scope()" (ngModelChange)="scope.set($event)" />
+    @if (error(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="row end">
+      <gp-button variant="primary" size="lg" [loading]="inviting()" [disabled]="!email().trim()" (click)="invite()">{{ 'invite' | t }}</gp-button>
+    </div>
+  </section>
+
+  <section class="card wide" aria-labelledby="grants-title" data-testid="grants-card">
+    <h2 id="grants-title" class="section">{{ 'invitations' | t }}</h2>
+    @if (!loaded()) {
+      <p class="muted">{{ 'loading' | t }}</p>
+    } @else {
+      <gp-data-grid [columns]="columns()" [rows]="rows()" [getRowId]="rowId" [mobileRenderer]="mobileTpl() ?? null" [emptyText]="'noInvites' | t" [label]="'invitations' | t" />
+    }
+  </section>
+</div>
+
+<ng-template #mobileRow let-r>
+  <div class="mrow">
+    <div class="mname"><span class="gp-initials">{{ r.initials }}</span>{{ r.email }} <span class="gp-badge-reader">{{ 'reader' | t }}</span></div>
+    <div class="mline">{{ r.scope }} · <span [class.gp-cell-warn]="r.pending" [class.gp-cell-ok]="!r.pending">{{ (r.pending ? 'pendingInvite' : 'accepted') | t }}</span></div>
+    <div class="actions">
+      <gp-button variant="danger" size="md" (click)="remove(r.id)">{{ 'removeAccess' | t }}</gp-button>
+    </div>
+  </div>
+</ng-template>

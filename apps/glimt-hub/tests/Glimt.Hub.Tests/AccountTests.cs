@@ -147,4 +147,41 @@ public sealed class AccountTests(TestHub hub) : IClassFixture<TestHub>
         var readerMe = await reader.Client.GetFromJsonAsync<JsonElement>("/api/auth/me", Repo.Timeout());
         Assert.Equal(0, readerMe.GetProperty("readerOf").GetInt32());
     }
+    [Fact]
+    public async Task Changing_the_email_needs_the_password_and_a_confirmation_from_the_new_mailbox()
+    {
+        using var user = await TestUsers.RegisterAndConfirmAsync(hub);
+        var newEmail = TestUsers.NewEmail("changed");
+
+        var wrong = await user.Client.PutAsJsonAsync("/api/account/email", new { email = newEmail, password = "not-it" }, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
+        var same = await user.Client.PutAsJsonAsync("/api/account/email", new { email = user.Email, password = TestUsers.DefaultPassword }, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.BadRequest, same.StatusCode);
+
+        var accepted = await user.Client.PutAsJsonAsync("/api/account/email", new { email = newEmail.ToUpperInvariant(), password = TestUsers.DefaultPassword }, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+        Assert.Equal(newEmail, (await accepted.Content.ReadFromJsonAsync<JsonElement>(Repo.Timeout())).GetProperty("pendingEmail").GetString());
+
+        // The old address still works until the new mailbox confirms.
+        var me = await user.Client.GetFromJsonAsync<JsonElement>("/api/auth/me", Repo.Timeout());
+        Assert.Equal(user.Email, me.GetProperty("email").GetString());
+
+        var mail = hub.Mails.Last(newEmail);
+        Assert.Contains("Confirm your new e-mail", mail.Subject);
+        var token = System.Text.RegularExpressions.Regex.Match(mail.Text, "token=([A-Za-z0-9_-]+)").Groups[1].Value;
+        using var anonymous = hub.CreateClient();
+        var confirmed = await anonymous.PostAsJsonAsync("/api/auth/confirm", new { token }, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        Assert.Equal(newEmail, (await confirmed.Content.ReadFromJsonAsync<JsonElement>(Repo.Timeout())).GetProperty("user").GetProperty("email").GetString());
+
+        me = await user.Client.GetFromJsonAsync<JsonElement>("/api/auth/me", Repo.Timeout());
+        Assert.Equal(newEmail, me.GetProperty("email").GetString());
+        var again = await anonymous.PostAsJsonAsync("/api/auth/confirm", new { token }, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+
+        // An address another account has is refused up front.
+        using var other = await TestUsers.RegisterAndConfirmAsync(hub);
+        var taken = await user.Client.PutAsJsonAsync("/api/account/email", new { email = other.Email, password = TestUsers.DefaultPassword }, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.Conflict, taken.StatusCode);
+    }
 }

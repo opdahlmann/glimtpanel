@@ -17,7 +17,7 @@
             }
           </span>
         </div>
-        <div class="info num" data-testid="info">{{ h.info }}</div>
+        <div class="info num" data-testid="info">{{ h.info }}@if (item()?.ownerEmail; as owner) { · {{ 'sharedBy' | t }} {{ owner }}}</div>
         <div class="uptime num">
           @if (h.uptime) {
             <span data-testid="uptime">{{ h.uptime }}</span>

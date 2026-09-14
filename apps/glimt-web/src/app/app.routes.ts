@@ -42,6 +42,7 @@ export const routes: Routes = [
       { path: 'alerts', loadComponent: () => import('@features/alerts/alerts.page').then((m) => m.AlertsPage) },
       { path: 'settings', redirectTo: 'settings/account', pathMatch: 'full' },
       { path: 'settings/:tab', loadComponent: () => import('@features/settings/settings.page').then((m) => m.SettingsPage) },
+      { path: 'access/accept', loadComponent: () => import('@features/access/accept.page').then((m) => m.AcceptPage) },
       { path: 'welcome', data: { bottomNav: false }, loadComponent: () => import('@features/pwa/welcome.page').then((m) => m.WelcomePage) },
     ],
   },

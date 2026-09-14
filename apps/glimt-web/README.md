@@ -459,6 +459,40 @@ pauset > oppe). Demokontoen (`demo@glimtpanel.com`) ser gruppene som lesbare (`r
 Vitest: `group-view.spec.ts`. Playwright: skjerm 23 i `overview.spec.ts` (demoens «Acme» og «Edge»; ny gruppe fra
 `cache-01`, nytt navn, vis som kort, slett) i tre prosjekter.
 
+## Innstillinger, tilganger, abonnement og data (fase 8)
+
+`/settings/:tab` (steg 8.1) har fanesegmentet Account, Alerts, Servers, Access, Subscription, Data (ruller horisontalt
+på mobil); innholdet står i kort i `auto-fit minmax(300px, 1fr)`, én kolonne på mobil, `pdIn` ved fanebytte
+(`settings.css`). Servers, Access og Subscription vises bare for eiere (eller kontoer uten noder); lesere får
+«Owners only» med forklaring.
+
+- **Konto (8.2, skjerm 9)** `gp-account-settings`: navn, e-post (dialog med ny adresse + passord → huben sender
+  bekreftelse til den nye innboksen, adressen byttes ved `/confirm`), tidssone-`<select>` fra
+  `Intl.supportedValuesOf('timeZone')` med offset nå («Europe/Oslo (UTC+02:00)»), språksegment som bytter straks,
+  «Save» kun ved endring; «Change password» i dialog (gammelt + nytt, ≥ 10 tegn); tofaktor bak flagget `twofa`;
+  «Delete account» → `gp-delete-account-dialog` med passord og advarselen → `/login`.
+- **Servere (8.3, skjerm 11)** `gp-servers-settings`: plasslinjen «2 slots in use · 2 free forever · 0 beta» fra
+  `GET /api/subscription` (noder av begge typer), `gp-data-grid` med Node (prikk + navn), Type, Tags (rad-dialog med
+  chips og «+»), Status og handlingene «Rotate key» (bekreftelse → toast; containernoder får tokenet vist én gang
+  med «old token works for 24 hours») og «Remove» (dialog → avinstalleringskommando med Copy for servere,
+  «remove the sidecar …» for containernoder; plassen frigjøres straks). Knappene i cellene er HTML-renderere
+  (`data-action`) som komponenten fanger på verten; på mobil en stablet mal med 44 px-knapper. Pause bak flagget `pause`.
+- **Tilganger (8.4, skjerm 12)** `gp-access-settings`: invitasjonskort (e-post, omfang «All servers» + eierens tagger,
+  «Invite» → toast «Invitation sent»), grid med initialer, e-post, badge Reader, omfang, «invited · not accepted yet»
+  i oransje, «Remove access». `/access/accept?token=` (`gp-accept-page`, innlogget rute – authGuard sender til
+  `/login?next=`) → `POST /api/access/accept` → toast «You now have read access to N servers» → oversikten.
+  Leser-opplevelsen: kortet og serversiden viser «shared by eier@…», ingen «Add», ingen varselinnstillinger, ingen
+  redigering; huben håndhever 403 uansett. Grupper er personlige (leseren lager egne av nodene de ser).
+- **Abonnement (8.5, skjerm 13)** `gp-subscription-settings`: grønt kort «Free in beta» med tre chips og «per node»,
+  kortet «What it would cost today» (rabattert pris stort, full pris gjennomstreket, «per year», rabattlinje bare for
+  tidlig-kontoer, «N × 12 USD · 60 days notice …», «Payment options appear here when pricing starts»).
+- **Data (8.6, skjerm 13)** `gp-data-settings`: «Download everything» henter `GET /api/account/export` og lagrer som
+  `Blob` (`glimtpanel-export.json`, virker i PWA); «Delete everything» åpner samme dialog som Konto.
+
+Vitest: `settings-helpers.spec.ts` (tidssoner med offset, tilgangsrader). Playwright: `settings-account.spec.ts`
+(skjerm 9), `settings-servers.spec.ts` (skjerm 11), `settings-access.spec.ts` (skjerm 12 og 18: leseren i egen
+kontekst, 403 fra huben, ugyldig akseptlenke), `settings-data.spec.ts` (skjerm 13 med nedlasting) i tre prosjekter.
+
 ## Dockerfile
 
 Bygg-kontekst er repo-roten, slik Dokploy og `npm run build:images` gjør det:

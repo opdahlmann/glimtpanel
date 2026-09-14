@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { signal, computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ApiService } from '@core/api.service';
@@ -34,6 +34,7 @@ class SessionStub {
 }
 
 class ServerListStub {
+  readonly byId = computed(() => new Map(this.servers().map((s) => [s.id, s])));
   readonly servers = signal<ServerListItem[]>([]);
   readonly loaded = signal(false);
   readonly load = vi.fn(() => Promise.resolve([] as ServerListItem[]));

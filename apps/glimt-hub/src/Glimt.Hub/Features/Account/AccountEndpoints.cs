@@ -5,6 +5,7 @@ using Glimt.Hub.Features.Auth;
 using Glimt.Hub.Features.Servers;
 using Glimt.Hub.Infrastructure;
 using Glimt.Hub.Infrastructure.Auth;
+using Glimt.Hub.Infrastructure.Email;
 using Glimt.Hub.Infrastructure.Servers;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,6 +14,9 @@ namespace Glimt.Hub.Features.Account;
 public sealed record PatchAccountRequest(string? Name, string? Timezone, string? Language);
 
 public sealed record DeleteAccountRequest(string? Password);
+
+/// <summary>PUT /api/account/email (step 8.2): the new address gets a confirmation link; the change happens at confirm.</summary>
+public sealed record ChangeEmailRequest(string? Email, string? Password);
 
 /// <summary>/api/account and /api/subscription (IMPLEMENTERINGSPLAN 4.3, steps 2.3 and 2.9).</summary>
 public static class AccountEndpoints
@@ -29,6 +33,7 @@ public static class AccountEndpoints
             .AddEndpointFilter<RequireDatabase>();
         group.MapGet("/account", GetAsync);
         group.MapPatch("/account", PatchAsync);
+        group.MapPut("/account/email", ChangeEmailAsync);
         group.MapDelete("/account", DeleteAsync);
         group.MapGet("/account/export", ExportAsync);
         group.MapGet("/subscription", SubscriptionAsync);
@@ -86,6 +91,48 @@ public static class AccountEndpoints
 
         var user = await users.UpdateProfileAsync(principal.RequireUserId(), name, timezone, language, cancellationToken);
         return user is null ? Validation.Unauthorized() : Results.Ok(await sessions.MeAsync(user, cancellationToken));
+    }
+
+    private static async Task<IResult> ChangeEmailAsync(
+        ChangeEmailRequest request,
+        ClaimsPrincipal principal,
+        UserStore users,
+        EmailTokenStore emailTokens,
+        AuthSessions sessions,
+        IEmailSender mail,
+        CancellationToken cancellationToken)
+    {
+        var email = Validation.NormalizeEmail(request.Email);
+        if (email is null)
+        {
+            return Validation.ValidationProblem("email", "Enter a valid e-mail address.");
+        }
+
+        var user = await users.FindByIdAsync(principal.RequireUserId(), cancellationToken);
+        if (user is null)
+        {
+            return Validation.Unauthorized();
+        }
+
+        if (!PasswordHasher.Verify(request.Password ?? "", user.PasswordHash))
+        {
+            return Validation.ValidationProblem("password", "Password is wrong.");
+        }
+
+        if (string.Equals(email, user.Email, StringComparison.Ordinal))
+        {
+            return Validation.ValidationProblem("email", "That is already your e-mail.");
+        }
+
+        if (await users.FindByEmailAsync(email, cancellationToken) is not null)
+        {
+            return Validation.Problem(StatusCodes.Status409Conflict, "An account with this e-mail already exists", code: "emailTaken");
+        }
+
+        // The address changes only when the new mailbox confirms; until then the old one stays.
+        var token = await emailTokens.CreateAsync(user.Id, EmailTokenDocument.PurposeEmailChange, cancellationToken, email);
+        await mail.SendAsync(EmailTemplates.ConfirmNewEmail(email, user.Language, sessions.WebLink("/confirm", token)), cancellationToken);
+        return Results.Accepted(value: new { pendingEmail = email });
     }
 
     private static async Task<IResult> SubscriptionAsync(ClaimsPrincipal principal, UserStore users, IServerStore servers, CancellationToken cancellationToken)

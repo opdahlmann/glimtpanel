@@ -31,6 +31,9 @@ public sealed class EmailTokenDocument
     public const string PurposeConfirm = "confirm";
     public const string PurposeReset = "reset";
 
+    /// <summary>Changing the account's e-mail (step 8.2): the token carries the new address in <see cref="Payload"/>.</summary>
+    public const string PurposeEmailChange = "email-change";
+
     [BsonId]
     public string Id { get; set; } = Guid.NewGuid().ToString();
 
@@ -39,6 +42,9 @@ public sealed class EmailTokenDocument
     public string TokenHash { get; set; } = "";
     public DateTime ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>Purpose-specific data (the new e-mail for email-change).</summary>
+    public string? Payload { get; set; }
 }
 
 /// <summary>Collection `counters`: atomic sequences, e.g. _id "users" for the early-adopter limit.</summary>

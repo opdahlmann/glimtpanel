@@ -116,6 +116,23 @@ public sealed class UserStore(MongoContext mongo) : IUserLookup
             cancellationToken);
     }
 
+    /// <summary>Sets a new (already confirmed) e-mail; false when another account has it (unique index).</summary>
+    public async Task<bool> UpdateEmailAsync(string userId, string email, DateTime now, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await Users.UpdateOneAsync(
+                u => u.Id == userId,
+                Builders<UserDocument>.Update.Set(u => u.Email, email).Set(u => u.EmailConfirmedAt, now),
+                cancellationToken: cancellationToken);
+            return result.MatchedCount > 0;
+        }
+        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return false;
+        }
+    }
+
     public async Task<bool> DeleteAsync(string userId, CancellationToken cancellationToken)
     {
         var result = await Users.DeleteOneAsync(u => u.Id == userId, cancellationToken);

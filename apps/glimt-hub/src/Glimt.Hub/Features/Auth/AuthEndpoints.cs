@@ -111,10 +111,25 @@ public static class AuthEndpoints
         var userId = await emailTokens.ConsumeAsync(request.Token ?? "", EmailTokenDocument.PurposeConfirm, cancellationToken);
         if (userId is null)
         {
-            return Validation.Problem(StatusCodes.Status400BadRequest, "Invalid or expired confirmation link", code: "invalidToken");
+            // The same link shape confirms a changed e-mail (step 8.2): the token carries the new address.
+            var change = await emailTokens.ConsumeWithPayloadAsync(request.Token ?? "", EmailTokenDocument.PurposeEmailChange, cancellationToken);
+            if (change is not { Payload: { Length: > 0 } newEmail })
+            {
+                return Validation.Problem(StatusCodes.Status400BadRequest, "Invalid or expired confirmation link", code: "invalidToken");
+            }
+
+            if (!await users.UpdateEmailAsync(change.Value.UserId, newEmail, clock.GetUtcNow().UtcDateTime, cancellationToken))
+            {
+                return Validation.Problem(StatusCodes.Status409Conflict, "An account with this e-mail already exists", code: "emailTaken");
+            }
+
+            userId = change.Value.UserId;
+        }
+        else
+        {
+            await users.ConfirmEmailAsync(userId, clock.GetUtcNow().UtcDateTime, cancellationToken);
         }
 
-        await users.ConfirmEmailAsync(userId, clock.GetUtcNow().UtcDateTime, cancellationToken);
         var user = await users.FindByIdAsync(userId, cancellationToken);
         if (user is null)
         {

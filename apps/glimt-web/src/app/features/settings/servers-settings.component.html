@@ -1,0 +1,101 @@
+@if (!loaded()) {
+  <p class="muted">{{ 'loading' | t }}</p>
+} @else if (owned().length === 0) {
+  <p class="hint" data-testid="no-owned">{{ 'noOwnedServers' | t }}</p>
+} @else {
+  <p class="note num" data-testid="slots-line">{{ slotsLine() }}</p>
+  <gp-data-grid [columns]="columns()" [rows]="rows()" [getRowId]="rowId" [mobileRenderer]="mobileTpl() ?? null" [emptyText]="'noServersYet' | t" [label]="'servers' | t" />
+}
+
+<ng-template #mobileRow let-r>
+  <div class="mrow" [attr.data-node]="r.name">
+    <div class="mname"><span class="gp-dot" [class.up]="r.dot === 'up'" [class.down]="r.dot === 'down'"></span>{{ r.name }} <span class="gp-badge-kind">{{ (r.kind === 'container' ? 'containerLabel' : 'serverLabel') | t }}</span></div>
+    <div class="mline">{{ r.tagText }} · {{ r.statusText }}</div>
+    <div class="actions">
+      <gp-button variant="ghost" size="md" (click)="openTags(r.id)">{{ 'editTags' | t }}</gp-button>
+      <gp-button variant="ghost" size="md" (click)="openRotate(r.id)">{{ 'rotateKey' | t }}</gp-button>
+      <gp-button variant="danger" size="md" (click)="openRemove(r.id)">{{ 'removeNode' | t }}</gp-button>
+    </div>
+  </div>
+</ng-template>
+
+<gp-modal [(open)]="tagsOpen" [title]="('editTags' | t) + ' · ' + (target()?.name ?? '')" [maxWidth]="440" [closeLabel]="'close' | t">
+  @if (tagsOpen()) {
+    <div class="tags" role="group" [attr.aria-label]="'tags' | t">
+      @for (tag of allTags(); track tag) {
+        <button type="button" class="tag" [class.on]="hasTag(tag)" [attr.aria-pressed]="hasTag(tag)" (click)="toggleTag(tag)">{{ tag }}</button>
+      }
+      @if (addingTag()) {
+        <input class="tag-input" type="text" [value]="newTag()" (input)="onTagInput($event)" (keydown)="onTagKeydown($event)" (blur)="commitTag()" [attr.aria-label]="'addTag' | t" [attr.aria-invalid]="tagError() ? true : null" autocomplete="off" autocapitalize="off" spellcheck="false" gpAutofocus />
+      } @else if (canAddTag()) {
+        <button type="button" class="tag add" (click)="startTag()" [attr.aria-label]="'addTag' | t">+</button>
+      }
+    </div>
+    @if (tagError(); as e) {
+      <div class="error">{{ e | t }}</div>
+    }
+    @if (error(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="row end">
+      <gp-button variant="ghost" size="lg" (click)="tagsOpen.set(false)">{{ 'cancel' | t }}</gp-button>
+      <gp-button variant="primary" size="lg" [loading]="busy()" (click)="saveTags()">{{ 'save' | t }}</gp-button>
+    </div>
+  }
+</gp-modal>
+
+<gp-modal [(open)]="rotateOpen" [title]="('rotateKey' | t) + ' · ' + (target()?.name ?? '')" [maxWidth]="440" [closeLabel]="'close' | t">
+  @if (rotateOpen()) {
+    @if (newToken(); as token) {
+      <p class="note">{{ 'rotateNodeToken' | t }} · {{ 'tokenOnce' | t }}</p>
+      <pre class="cmd" data-testid="rotated-token">{{ token }}</pre>
+      <div class="row end">
+        <gp-button variant="ghost" size="lg" (click)="copy(token)">{{ (copied() ? 'copiedShort' : 'copy') | t }}</gp-button>
+        <gp-button variant="primary" size="lg" (click)="rotateOpen.set(false)">{{ 'done' | t }}</gp-button>
+      </div>
+    } @else {
+      <p class="note">{{ (target()?.kind === 'container' ? 'rotateNodeToken' : 'rotateConfirm') | t }}</p>
+      @if (error(); as e) {
+        <div class="error" role="alert">{{ e | t }}</div>
+      }
+      <div class="row end">
+        <gp-button variant="ghost" size="lg" (click)="rotateOpen.set(false)">{{ 'cancel' | t }}</gp-button>
+        <gp-button variant="primary" size="lg" [loading]="busy()" (click)="rotate()">{{ 'rotateKey' | t }}</gp-button>
+      </div>
+    }
+  }
+</gp-modal>
+
+<gp-modal [(open)]="removeOpen" [title]="('removeNode' | t) + ' · ' + (target()?.name ?? '')" [maxWidth]="440" [closeLabel]="'close' | t">
+  @if (removeOpen()) {
+    @if (removed(); as r) {
+      @if (r.uninstallCommand) {
+        <p class="note">{{ 'runToUninstall' | t }}</p>
+        <pre class="cmd" data-testid="uninstall-command">{{ r.uninstallCommand }}</pre>
+        <div class="row end">
+          <gp-button variant="ghost" size="lg" (click)="copy(r.uninstallCommand)">{{ (copied() ? 'copiedShort' : 'copy') | t }}</gp-button>
+          <gp-button variant="primary" size="lg" (click)="removeOpen.set(false)">{{ 'done' | t }}</gp-button>
+        </div>
+      } @else {
+        <p class="note" data-testid="remove-hint">{{ 'removeSidecar' | t }}</p>
+        <div class="row end">
+          <gp-button variant="primary" size="lg" (click)="removeOpen.set(false)">{{ 'done' | t }}</gp-button>
+        </div>
+      }
+    } @else {
+      <p class="note">{{ 'removeConfirm' | t }}</p>
+      @if (target()?.kind !== 'container') {
+        <p class="note">{{ 'uninstall' | t }}: <code class="num">sudo /usr/local/bin/glimt-agent uninstall</code></p>
+      } @else {
+        <p class="note">{{ 'removeSidecar' | t }}</p>
+      }
+      @if (error(); as e) {
+        <div class="error" role="alert">{{ e | t }}</div>
+      }
+      <div class="row end">
+        <gp-button variant="ghost" size="lg" (click)="removeOpen.set(false)">{{ 'cancel' | t }}</gp-button>
+        <gp-button variant="danger" size="lg" [loading]="busy()" (click)="remove()">{{ 'removeNode' | t }}</gp-button>
+      </div>
+    }
+  }
+</gp-modal>

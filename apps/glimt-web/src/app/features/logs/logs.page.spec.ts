@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { signal, computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { ActivityMode, ActivityService } from '@core/activity.service';
@@ -27,6 +27,7 @@ class LiveStub {
 }
 
 class ServerListStub {
+  readonly byId = computed(() => new Map(this.servers().map((s) => [s.id, s])));
   readonly servers = signal<ServerListItem[]>([
     { id: 'demo-web-02', name: 'web-02', hostname: 'web-02', tags: [], status: 'up', lastSeenAt: null, role: 'owner' },
     { id: 'demo-worker-01', name: 'worker-01', hostname: 'worker-01', tags: [], status: 'up', lastSeenAt: null, role: 'owner' },

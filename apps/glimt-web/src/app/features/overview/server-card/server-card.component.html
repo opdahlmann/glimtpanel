@@ -14,7 +14,7 @@
         <gp-node-menu [id]="v.id" [name]="v.name" />
       </div>
     </div>
-    <div class="info num">{{ v.info }}</div>
+    <div class="info num">{{ v.info }}@if (sharedBy(); as owner) { · {{ 'sharedBy' | t }} {{ owner }}}</div>
     <div class="rings">
       <gp-ring [value]="v.cpu" color="cpu" [label]="'cpu' | t" [sub]="v.cpuSub" (pressed)="openPanel('cpu')" />
       <gp-ring [value]="v.mem" color="ram" [label]="'memory' | t" [sub]="v.memSub" (pressed)="openPanel('mem')" />

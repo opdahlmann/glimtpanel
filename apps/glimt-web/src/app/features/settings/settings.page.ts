@@ -4,28 +4,59 @@ import { I18nService } from '@core/i18n.service';
 import { TPipe } from '@core/t.pipe';
 import { SegmentComponent, SegmentOption } from '@shared/segment/segment.component';
 import { TitleService } from '../../shell/title.service';
+import { SessionService } from '@core/session.service';
+import { AccessSettingsComponent } from './access-settings.component';
+import { AccountSettingsComponent } from './account-settings.component';
 import { AlertSettingsComponent } from './alert-settings.component';
+import { DataSettingsComponent } from './data-settings.component';
+import { ServersSettingsComponent } from './servers-settings.component';
+import { SubscriptionSettingsComponent } from './subscription-settings.component';
 
 export const SETTINGS_TABS = ['account', 'alerts', 'servers', 'access', 'subscription', 'data'] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 /**
- * Innstillingsskallet (skjerm 9–13): fanesegmentet som ruller, og fanens innhold. Fase 7 fyller «Alerts» (steg 7.4);
- * de andre fanene kommer i fase 8 og viser til da bare en linje. `?server=` på Alerts gir per-server-visningen.
+ * Innstillingsskallet (steg 8.1, skjerm 9–13): fanesegmentet som ruller, og fanens innhold i grid (`auto-fit minmax(300px, 1fr)`,
+ * én kolonne på mobil, `pdIn` ved fanebytte). Servers, Access og Subscription krever eier av minst én node; lesere
+ * får en forklaring i stedet. `?server=` på Alerts gir per-server-visningen.
  */
 @Component({
   selector: 'gp-settings-page',
-  imports: [TPipe, SegmentComponent, AlertSettingsComponent],
+  imports: [TPipe, SegmentComponent, AlertSettingsComponent, AccountSettingsComponent, ServersSettingsComponent, AccessSettingsComponent, SubscriptionSettingsComponent, DataSettingsComponent],
   template: `
     <div class="page">
       <h1 class="title">{{ 'settings' | t }}</h1>
       <gp-segment [options]="tabOptions()" [value]="current()" (valueChange)="goTab($event)" [scroll]="true" [label]="'settings' | t" />
       @switch (current()) {
+        @case ('account') {
+          <gp-account-settings />
+        }
         @case ('alerts') {
           <gp-alert-settings [server]="server()" />
         }
-        @default {
-          <p class="soon" data-testid="settings-soon">{{ current() | t }} · {{ 'notYet' | t }}</p>
+        @case ('servers') {
+          @if (ownerTabs()) {
+            <gp-servers-settings />
+          } @else {
+            <p class="soon" data-testid="owners-only">{{ 'ownersOnly' | t }} · {{ 'readerTabHint' | t }}</p>
+          }
+        }
+        @case ('access') {
+          @if (ownerTabs()) {
+            <gp-access-settings />
+          } @else {
+            <p class="soon" data-testid="owners-only">{{ 'ownersOnly' | t }} · {{ 'readerTabHint' | t }}</p>
+          }
+        }
+        @case ('subscription') {
+          @if (ownerTabs()) {
+            <gp-subscription-settings />
+          } @else {
+            <p class="soon" data-testid="owners-only">{{ 'ownersOnly' | t }} · {{ 'readerTabHint' | t }}</p>
+          }
+        }
+        @case ('data') {
+          <gp-data-settings />
         }
       }
     </div>
@@ -46,6 +77,10 @@ export class SettingsPage {
 
   private readonly i18n = inject(I18nService);
   private readonly router = inject(Router);
+  private readonly session = inject(SessionService);
+
+  /** Servers, Access og Subscription: eier av minst én node, eller en konto uten noder (som skal legge til sin første). */
+  readonly ownerTabs = computed(() => this.session.ownsAnyServer() || !(this.session.user()?.readerOf ?? 0));
 
   /** Ukjent fane → Account. Fanenavnene er også ordboksnøkler. */
   readonly current = computed<SettingsTab>(() => ((SETTINGS_TABS as readonly string[]).includes(this.tab()) ? (this.tab() as SettingsTab) : 'account'));

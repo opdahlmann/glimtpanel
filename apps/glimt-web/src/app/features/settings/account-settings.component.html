@@ -1,0 +1,83 @@
+<div class="grid">
+  <section class="card" aria-labelledby="profile-title" data-testid="profile-card">
+    <h2 id="profile-title" class="section">{{ 'profile' | t }}</h2>
+    <gp-input [label]="'name' | t" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" autocomplete="name" />
+    <div class="field">
+      <span class="label">{{ 'email' | t }}</span>
+      <div class="row">
+        <span class="num" data-testid="email">{{ user()?.email }}</span>
+        <gp-button variant="ghost" size="sm" (click)="openEmail()">{{ 'edit' | t }}</gp-button>
+      </div>
+      @if (pendingEmail(); as pending) {
+        <span class="success" data-testid="pending-email">{{ 'emailChangeSent' | t }} · {{ pending }}</span>
+      } @else {
+        <span class="note">{{ 'emailChangeHint' | t }}</span>
+      }
+    </div>
+    <gp-select [label]="'timezone' | t" name="timezone" [options]="timezoneOptions()" [ngModel]="timezone()" (ngModelChange)="timezone.set($event)" />
+    <div class="field">
+      <span class="label">{{ 'language' | t }}</span>
+      <gp-segment [options]="langOptions()" [value]="lang()" (valueChange)="setLang($event)" [label]="'language' | t" />
+    </div>
+    @if (error(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="row end">
+      @if (saved()) {
+        <span class="success" role="status">{{ 'saved' | t }}</span>
+      }
+      <gp-button variant="primary" size="lg" [disabled]="!dirty()" [loading]="saving()" (click)="save()">{{ 'save' | t }}</gp-button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="pw-title">
+    <h2 id="pw-title" class="section">{{ 'password' | t }}</h2>
+    <div class="row">
+      <gp-button variant="ghost" size="lg" (click)="openPassword()">{{ 'changePw' | t }}</gp-button>
+    </div>
+    @if (flags.twofa()) {
+      <h2 class="section">{{ 'twofa' | t }}</h2>
+      <p class="note">{{ 'twofaSub' | t }} · {{ 'twofaFlag' | t }}</p>
+    }
+  </section>
+
+  <section class="card danger" aria-labelledby="del-title">
+    <h2 id="del-title" class="section">{{ 'deleteAcc' | t }}</h2>
+    <p class="note">{{ 'deleteAccountWarning' | t }}</p>
+    <div class="row">
+      <gp-button variant="danger" size="lg" (click)="deleteOpen.set(true)">{{ 'deleteAcc' | t }}</gp-button>
+    </div>
+  </section>
+</div>
+
+<gp-modal [(open)]="emailOpen" [title]="'newEmail' | t" [maxWidth]="440" [closeLabel]="'close' | t">
+  @if (emailOpen()) {
+    <gp-input type="email" [label]="'newEmail' | t" [ngModel]="newEmail()" (ngModelChange)="newEmail.set($event)" name="newEmail" autocomplete="email" />
+    <gp-input type="password" [label]="'confirmWithPassword' | t" [ngModel]="emailPassword()" (ngModelChange)="emailPassword.set($event)" name="emailPassword" autocomplete="current-password" (keydown.enter)="changeEmail()" />
+    <p class="note">{{ 'emailChangeHint' | t }}</p>
+    @if (emailError(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="row end">
+      <gp-button variant="ghost" size="lg" (click)="emailOpen.set(false)">{{ 'cancel' | t }}</gp-button>
+      <gp-button variant="primary" size="lg" [loading]="emailBusy()" [disabled]="!newEmail().trim() || !emailPassword()" (click)="changeEmail()">{{ 'save' | t }}</gp-button>
+    </div>
+  }
+</gp-modal>
+
+<gp-modal [(open)]="pwOpen" [title]="'changePw' | t" [maxWidth]="440" [closeLabel]="'close' | t">
+  @if (pwOpen()) {
+    <gp-input type="password" [label]="'currentPassword' | t" [ngModel]="currentPassword()" (ngModelChange)="currentPassword.set($event)" name="currentPassword" autocomplete="current-password" />
+    <gp-input type="password" [label]="'newPassword' | t" [ngModel]="newPassword()" (ngModelChange)="newPassword.set($event)" name="newPassword" autocomplete="new-password" (keydown.enter)="changePassword()" />
+    <p class="note">{{ 'passwordTooShort' | t }}</p>
+    @if (pwError(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="row end">
+      <gp-button variant="ghost" size="lg" (click)="pwOpen.set(false)">{{ 'cancel' | t }}</gp-button>
+      <gp-button variant="primary" size="lg" [loading]="pwBusy()" [disabled]="!currentPassword() || !newPassword()" (click)="changePassword()">{{ 'changePw' | t }}</gp-button>
+    </div>
+  }
+</gp-modal>
+
+<gp-delete-account-dialog [(open)]="deleteOpen" />

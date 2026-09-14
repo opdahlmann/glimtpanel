@@ -29,6 +29,20 @@ public static class EmailTemplates
                 link, "Confirm e-mail",
                 "If you did not sign up for Glimtpanel, you can ignore this e-mail.");
 
+    /// <summary>Sent to the *new* address when the account's e-mail is changed (step 8.2).</summary>
+    public static EmailMessage ConfirmNewEmail(string to, string? language, string link) =>
+        Language(language) == Norwegian
+            ? Build(to, "Bekreft den nye e-postadressen din hos Glimtpanel",
+                "Hei!",
+                "Du har bedt om å bytte e-postadressen på Glimtpanel-kontoen din til denne adressen. Bekreft byttet ved å åpne lenken under. Lenken virker i 24 timer.",
+                link, "Bekreft ny e-post",
+                "Har du ikke bedt om dette, kan du se bort fra denne e-posten; adressen endres ikke.")
+            : Build(to, "Confirm your new e-mail address for Glimtpanel",
+                "Hello!",
+                "You asked to change the e-mail address of your Glimtpanel account to this one. Confirm the change by opening the link below. The link works for 24 hours.",
+                link, "Confirm new e-mail",
+                "If you did not ask for this, you can ignore this e-mail; the address stays as it is.");
+
     public static EmailMessage Reset(string to, string? language, string link) =>
         Language(language) == Norwegian
             ? Build(to, "Tilbakestill passordet ditt hos Glimtpanel",

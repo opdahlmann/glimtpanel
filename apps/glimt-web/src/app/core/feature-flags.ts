@@ -2,7 +2,7 @@ import { computed, inject, Injectable } from '@angular/core';
 import { ConfigService } from './config.service';
 
 /** Flaggene fra GLIMT_FEATURE_FLAGS (example.env): textmode,snapshot,share,compact,whatsnew,certs,containersPage,crossLogs. `groups` er levert (fase 13) og finnes ikke lenger som flagg. */
-export type FeatureFlag = 'textmode' | 'snapshot' | 'share' | 'compact' | 'whatsnew' | 'certs' | 'containersPage' | 'crossLogs';
+export type FeatureFlag = 'textmode' | 'snapshot' | 'share' | 'compact' | 'whatsnew' | 'certs' | 'containersPage' | 'crossLogs' | 'twofa' | 'pause';
 
 @Injectable({ providedIn: 'root' })
 export class FeatureFlags {
@@ -17,6 +17,9 @@ export class FeatureFlags {
   readonly whatsNew = computed(() => this.all().has('whatsnew'));
   readonly certs = computed(() => this.all().has('certs'));
   readonly crossLogs = computed(() => this.all().has('crossLogs'));
+  /** Fase 8: tofaktor og pause av noder er Neste og finnes bare bak flagg. */
+  readonly twofa = computed(() => this.all().has('twofa'));
+  readonly pause = computed(() => this.all().has('pause'));
 
   has(flag: FeatureFlag | string): boolean {
     return this.all().has(flag);

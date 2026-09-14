@@ -4,6 +4,7 @@ import { I18nService } from '@core/i18n.service';
 import { LastHour, LiveStore } from '@core/live.store';
 import { CardDto } from '@core/live.types';
 import { PrefsService } from '@core/prefs.service';
+import { ServerListService } from '@core/server-list.service';
 import { TPipe } from '@core/t.pipe';
 import { BadgeComponent } from '@shared/badge/badge.component';
 import { ChipComponent } from '@shared/chip/chip.component';
@@ -48,6 +49,9 @@ export class ServerCardComponent {
   private readonly router = inject(Router);
   private readonly prefs = inject(PrefsService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly serverList = inject(ServerListService);
+  /** Leseren ser hvem som eier serveren (steg 8.4). */
+  readonly sharedBy = computed(() => this.serverList.byId().get(this.id())?.ownerEmail ?? null);
 
   /** Synlig i viewport (IntersectionObserver). Uten observer (jsdom) alltid synlig. */
   readonly visible = signal(true);
