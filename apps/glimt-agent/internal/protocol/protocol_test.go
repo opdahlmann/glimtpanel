@@ -111,7 +111,7 @@ func TestDecodeErrors(t *testing.T) {
 }
 
 func TestDecodeAllTypes(t *testing.T) {
-	for _, typ := range []string{TypeHello, TypeSnapshot, TypeStream, TypeLog, TypeLogEnd, TypePong,
+	for _, typ := range []string{TypeHello, TypeSnapshot, TypeStream, TypeLog, TypeLogEnd, TypePong, TypeBye,
 		TypeWelcome, TypeAuthFailed, TypePing, TypeSubscribe, TypeUnsubscribe, TypeLogStart, TypeLogStop, TypeRotate} {
 		msg, err := Decode([]byte(`{"type":"` + typ + `","extraField":true}`))
 		if err != nil {

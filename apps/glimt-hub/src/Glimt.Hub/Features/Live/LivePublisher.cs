@@ -21,6 +21,7 @@ internal sealed class LivePublisher(
     SubscriptionCounter subscriptions,
     BufferStore buffers,
     ActiveAlertCounts alerts,
+    NodeLinker linker,
     IAccessService access,
     UserDirectory users,
     GlimtOptions options,
@@ -76,13 +77,13 @@ internal sealed class LivePublisher(
     public async Task SnapshotAsync(AgentSession session, CancellationToken cancellationToken)
     {
         // TODO(optimisation): send only the snapshot-only sections when a stream is running (snapshotVersion).
-        await hub.Clients.Group(LiveHub.ServerGroup(session.ServerId)).Server(Projections.Server(session));
+        await hub.Clients.Group(LiveHub.ServerGroup(session.ServerId)).Server(Projections.Server(session, linker, clock.GetUtcNow()));
         await SendCardAsync(session, await UserGroupsAsync(session.ServerId, session.OwnerId, cancellationToken), force: false);
     }
 
     public async Task StreamAsync(AgentSession session, CancellationToken cancellationToken)
     {
-        await hub.Clients.Group(LiveHub.ServerGroup(session.ServerId)).Server(Projections.Server(session));
+        await hub.Clients.Group(LiveHub.ServerGroup(session.ServerId)).Server(Projections.Server(session, linker, clock.GetUtcNow()));
         await SendCardAsync(session, await UserGroupsAsync(session.ServerId, session.OwnerId, cancellationToken), force: false);
     }
 
@@ -123,7 +124,7 @@ internal sealed class LivePublisher(
         }
     }
 
-    private CardDto Card(AgentSession session) => Projections.Card(session, buffers.Get(session.ServerId), clock.GetUtcNow(), alerts.Get(session.ServerId));
+    private CardDto Card(AgentSession session) => Projections.Card(session, buffers.Get(session.ServerId), clock.GetUtcNow(), alerts.Get(session.ServerId), linker);
 
     /// <summary>
     /// user:{id} groups for: the access service's readers (cached 30 s), the owner, the dev user for

@@ -76,10 +76,21 @@ public sealed class ContainerTracker
     }
 }
 
+/// <summary>
+/// What the evaluator knows about a container node beyond its snapshot (step 12.7): how many times it started within
+/// a window (every start is a hello) and, when a host agent sees the container, the container's state and name.
+/// </summary>
+public sealed record NodeContext(Func<TimeSpan, int> Restarts, string? HostContainerState, string? HostContainerName)
+{
+    public static NodeContext For(Agents.AgentSession session, DateTimeOffset now, Agents.NodeLink? link) =>
+        new(window => session.Restarts(window, now), link?.Container.State, link?.Container.Name);
+}
+
 /// <summary>The snapshot-driven rules as pure functions over one snapshot (IMPLEMENTERINGSPLAN 4.6). server_down lives in the engine's sweep.</summary>
 public static class RuleEvaluator
 {
-    public static IReadOnlyList<RuleObservation> Evaluate(Snapshot snapshot, ServerAlertConfig config, ContainerTracker containers, DateTimeOffset now)
+    /// <summary>Evaluates a snapshot; <paramref name="node"/> is set for container nodes, which skip the server-only rules and count restarts from hellos.</summary>
+    public static IReadOnlyList<RuleObservation> Evaluate(Snapshot snapshot, ServerAlertConfig config, ContainerTracker containers, DateTimeOffset now, NodeContext? node = null)
     {
         var result = new List<RuleObservation>();
         var host = snapshot.Host;
@@ -114,13 +125,46 @@ public static class RuleEvaluator
         }
 
         var cont = config.Rule(AlertRuleIds.ContRestart);
-        if (cont.Enabled)
+        if (node is not null)
+        {
+            // A container node is the container: restarts are its own hellos, and a host agent may report it stopped.
+            if (cont.Enabled)
+            {
+                var window = TimeSpan.FromSeconds(cont.DurationSec ?? 600);
+                var restarts = node.Restarts(window);
+                var windowMinutes = ((int)window.TotalMinutes).ToString(CultureInfo.InvariantCulture);
+                if (restarts > (cont.Threshold ?? 3))
+                {
+                    result.Add(new RuleObservation(AlertRuleIds.ContRestart, "", $"{restarts} restarts / {windowMinutes} min"));
+                }
+                else if (node.HostContainerState is "exited" or "dead" or "stopped")
+                {
+                    result.Add(new RuleObservation(AlertRuleIds.ContRestart, "", $"{node.HostContainerName} · stopped"));
+                }
+                else if (node.HostContainerState == "restarting")
+                {
+                    result.Add(new RuleObservation(AlertRuleIds.ContRestart, "", $"{node.HostContainerName} · restarting"));
+                }
+            }
+        }
+        else if (cont.Enabled)
         {
             result.AddRange(containers.Observe(snapshot.Containers, now, cont.Threshold ?? 3, TimeSpan.FromSeconds(cont.DurationSec ?? 600)));
         }
         else
         {
             containers.Observe(snapshot.Containers, now, double.MaxValue, TimeSpan.FromSeconds(600));
+        }
+
+        var health = config.Rule(AlertRuleIds.HealthFailed);
+        if (health.Enabled && snapshot.Health is { Ok: false } unhealthy)
+        {
+            result.Add(new RuleObservation(AlertRuleIds.HealthFailed, "", HealthDetail(unhealthy)));
+        }
+
+        if (node is not null)
+        {
+            return result;
         }
 
         var svc = config.Rule(AlertRuleIds.SvcFailed);
@@ -175,6 +219,15 @@ public static class RuleEvaluator
         }
 
         return "last seen " + local.ToString("HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>"GET /healthz · 503 · 1 240 ms" (the error text instead of a status when nothing answered).</summary>
+    public static string HealthDetail(HealthInfo health)
+    {
+        var path = Uri.TryCreate(health.Url, UriKind.Absolute, out var uri) ? uri.PathAndQuery : health.Url;
+        var outcome = health.Status is { } status ? status.ToString(CultureInfo.InvariantCulture) : health.Error ?? "no answer";
+        var ms = health.Ms is { } m ? " · " + m.ToString("N0", CultureInfo.InvariantCulture).Replace(',', '\u202f') + " ms" : "";
+        return $"GET {path} · {outcome}{ms}";
     }
 
     private static string Pct(double value) => Math.Round(value).ToString(CultureInfo.InvariantCulture);

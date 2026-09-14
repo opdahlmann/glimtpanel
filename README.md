@@ -35,7 +35,9 @@ npm run dev                           # hub (dotnet watch) + Ubuntu-container me
 ```
 
 `npm run dev` åpner dashbordet på http://localhost:4200, huben lytter på http://localhost:5080, og agent-containeren
-`glimt-agent-dev` kobler seg til huben med `GLIMT_DEV_ENROL_KEY`. Flagg: `--no-agent`, `--no-web`, `--no-hub`, `--site`, `--plain-agent`.
+`glimt-agent-dev` kobler seg til huben med `GLIMT_DEV_ENROL_KEY`. Flagg: `--no-agent`, `--no-web`, `--no-hub`, `--site`, `--plain-agent`, `--sidecar`
+(starter i tillegg nginx-containeren `glimt-app-dev` med agenten som sidecar `glimt-sidecar-dev`, som containernoden
+`sidecar-dev` på dev-kontoen via `GLIMT_DEV_CONTAINER_TOKEN`).
 
 | Kommando | Gjør |
 |---|---|
@@ -46,6 +48,29 @@ npm run dev                           # hub (dotnet watch) + Ubuntu-container me
 | `npm run lint` | ESLint og `dotnet format` |
 | `npm run build:images` | Bygger Docker-imagene slik Dokploy gjør det |
 | `npm run dev:agent -- --logs` / `--shell` / `--measure` | Journal, shell eller ressursmåling i agent-containeren |
+| `node scripts/agent-container.mjs --sidecar` / `--sidecar-logs` / `--sidecar-snapshot` / `--sidecar-stop` | Sidecar-containeren (fase 12) mot den lokale huben |
+
+### Overvåke en container
+
+Servere legges til med `curl`-kommandoen fra «Add server». En container (sidecar i Compose, eller binæren i ditt eget
+image) legges til med «Add container» i dashbordet, som gir et token og denne snutten:
+
+```yaml
+services:
+  app:
+    image: your-app:latest
+  glimt-agent:
+    image: ghcr.io/opdahlmann/glimt-agent:latest
+    pid: "service:app"
+    network_mode: "service:app"
+    read_only: true
+    environment:
+      GLIMT_HUB: wss://hub.example.com/agent/ws
+      GLIMT_TOKEN: agt_…
+      GLIMT_NODE_NAME: api-1
+```
+
+Se `apps/glimt-agent/README.md` («Containernoder») for valgfrie variabler og hva agenten ser inne i en container.
 
 ## Miljøfiler
 

@@ -33,11 +33,11 @@ test.describe('innstillinger › varsler', () => {
     await expect(page.getByRole('radio', { name: 'Alerts' })).toHaveAttribute('aria-checked', 'true');
 
     // Sju regler med standardene fra ordboken, alle på.
-    await expect(page.locator('.rrow')).toHaveCount(7);
+    await expect(page.locator('.rrow')).toHaveCount(8);
     await expect(ruleRow(page, 'mem_pressure').locator('.rdef')).toHaveText('> 95 % for 5 min');
     await expect(ruleRow(page, 'disk_full').locator('.rdef')).toHaveText('> 90 % on a mount');
     await expect(ruleRow(page, 'server_down').locator('.rdef')).toHaveText('No heartbeat for 2 min');
-    await expect(page.locator('.rrow [role="switch"][aria-checked="true"]')).toHaveCount(7);
+    await expect(page.locator('.rrow [role="switch"][aria-checked="true"]')).toHaveCount(8);
     const save = page.getByRole('button', { name: 'Save' });
     await expect(save).toBeDisabled();
 
@@ -74,7 +74,7 @@ test.describe('innstillinger › varsler', () => {
     await expect(page.locator('.rrow[data-rule="reboot"] gp-badge', { hasText: 'Off' })).toBeVisible();
 
     await page.goto('/settings/alerts');
-    await expect(page.locator('.rrow')).toHaveCount(7);
+    await expect(page.locator('.rrow')).toHaveCount(8);
     await expectMobileRules(page, testInfo);
     expect(errors, 'sidefeil').toEqual([]);
     await page.evaluate(() => document.fonts.ready);
@@ -90,7 +90,7 @@ test.describe('innstillinger › varsler', () => {
     await expect(page.getByTestId('alerts-for')).toHaveText(`Alerts for ${hostname}`);
     const useDefaults = page.getByRole('switch', { name: 'Use account defaults' });
     await expect(useDefaults).toHaveAttribute('aria-checked', 'true');
-    await expect(page.locator('.rrow')).toHaveCount(7);
+    await expect(page.locator('.rrow')).toHaveCount(8);
     // Kontostandarder: reglene kan ikke redigeres.
     await expect(ruleRow(page, 'disk_full').locator('button.rdef')).toHaveCount(0);
 

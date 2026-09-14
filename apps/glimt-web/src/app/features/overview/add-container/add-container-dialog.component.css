@@ -1,0 +1,19 @@
+/* «Legg til container» (skjerm 22): token og snutt i samme mørke kodeboks som innrulleringskommandoen. Kun tokens. */
+.once { font-weight: 400; color: var(--color-warn); }
+.cmd-row { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.cmd {
+  flex: 1; min-width: 0; margin: 0; background: var(--color-ink); border-radius: var(--radius-card); padding: 12px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--w-90); word-break: break-all; line-height: 1.5;
+}
+.snippet { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; word-break: normal; }
+.copy {
+  flex: none; background: var(--w-100); color: var(--color-ink); border: 0; border-radius: var(--radius-card);
+  padding: 0 16px; min-width: 44px; min-height: 44px; font-size: 12px; font-weight: 600; cursor: pointer;
+  box-shadow: var(--glow-primary); transition: transform var(--t-panel) var(--ease-out-expo);
+}
+.copy:hover { transform: translateY(-1px); }
+.fields { display: flex; flex-direction: column; gap: 8px; }
+.waiting { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--w-70); }
+.wdot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-cpu); animation: blink 1.4s infinite; flex: none; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .wdot { animation: none; } .copy { transition: none; } }

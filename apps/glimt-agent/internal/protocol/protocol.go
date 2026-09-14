@@ -12,9 +12,10 @@ import (
 // Version is the protocol version carried in hello.v.
 const Version = 1
 
-// Message types. Agent → hub: hello, snapshot, stream, log, logEnd, pong.
+// Message types. Agent → hub: hello, snapshot, stream, log, logEnd, pong, bye.
 // Hub → agent: welcome, authFailed, subscribe, unsubscribe, logStart, logStop, rotate, ping.
 const (
+	TypeBye         = "bye"
 	TypeHello       = "hello"
 	TypeSnapshot    = "snapshot"
 	TypeStream      = "stream"
@@ -31,6 +32,15 @@ const (
 	TypePing        = "ping"
 )
 
+// Node kinds reported in hello.kind (fase 12). Missing means server.
+const (
+	KindServer    = "server"
+	KindContainer = "container"
+)
+
+// ByeReasonShutdown is the only bye reason so far.
+const ByeReasonShutdown = "shutdown"
+
 // Docker modes reported in hello.dockerMode.
 const (
 	DockerNone   = "none"
@@ -44,6 +54,8 @@ const (
 	ReasonExpiredKey    = "expiredKey"
 	ReasonInvalidToken  = "invalidToken"
 	ReasonServerRemoved = "serverRemoved"
+	// ReasonContainerNeedsToken: a container node sent an enrolment key; it needs GLIMT_TOKEN (fase 12).
+	ReasonContainerNeedsToken = "containerNeedsToken"
 )
 
 // logEnd reasons.
@@ -85,6 +97,24 @@ type Hello struct {
 	RAMBytes     int64  `json:"ramBytes"`
 	BootTime     int64  `json:"bootTime"`
 	DockerMode   string `json:"dockerMode"`
+
+	// Fase 12: container nodes. Kind is "container"; ContainerID comes from
+	// /proc/1/cgroup (or the hostname); Capabilities say what the agent could
+	// read where it runs; Image is GLIMT_IMAGE when set.
+	Kind         string        `json:"kind,omitempty"`
+	ContainerID  string        `json:"containerId,omitempty"`
+	Capabilities *Capabilities `json:"capabilities,omitempty"`
+	Image        string        `json:"image,omitempty"`
+	// LogPaths are the files logStart source file may tail (GLIMT_LOG_PATHS), fase 12.
+	LogPaths []string `json:"logPaths,omitempty"`
+}
+
+// Capabilities is what a container agent can read where it runs.
+type Capabilities struct {
+	Cgroup  bool `json:"cgroup"`
+	ProcAll bool `json:"procAll"`
+	Netns   bool `json:"netns"`
+	Health  bool `json:"health"`
 }
 
 // OSInfo comes from /etc/os-release.
@@ -103,6 +133,29 @@ type Snapshot struct {
 	Services    *Services    `json:"services,omitempty"`
 	Maintenance *Maintenance `json:"maintenance,omitempty"`
 	Security    *Security    `json:"security,omitempty"`
+
+	// Fase 12: container nodes only.
+	Health *Health `json:"health,omitempty"`
+	Checks []Check `json:"checks,omitempty"`
+}
+
+// Health is the result of GET GLIMT_HEALTH_URL.
+type Health struct {
+	URL       string `json:"url"`
+	OK        bool   `json:"ok"`
+	Status    int    `json:"status,omitempty"`
+	Ms        int64  `json:"ms,omitempty"`
+	CheckedAt int64  `json:"checkedAt"`
+	Error     string `json:"error,omitempty"`
+}
+
+// Check is one TCP reachability check from GLIMT_CHECKS.
+type Check struct {
+	Name   string `json:"name"`
+	Target string `json:"target"`
+	OK     bool   `json:"ok"`
+	Ms     int64  `json:"ms,omitempty"`
+	Error  string `json:"error,omitempty"`
 }
 
 // Stream is the fast-changing subset, sent every intervalMs while subscribed.
@@ -142,6 +195,13 @@ type LogEnd struct {
 
 // Pong answers Ping.
 type Pong struct{ Header }
+
+// Bye is sent before the socket is closed at a planned stop (SIGTERM), so
+// the hub can tell "sleeping" from "down".
+type Bye struct {
+	Header
+	Reason string `json:"reason"`
+}
 
 // --- Hub → agent -----------------------------------------------------------
 
@@ -208,6 +268,17 @@ type Host struct {
 	UptimeSec int64     `json:"uptimeSec"`
 	Mounts    []Mount   `json:"mounts,omitempty"`
 	Ifaces    []Iface   `json:"ifaces,omitempty"`
+
+	// Fase 12: container nodes. Approx marks cpu/mem summed over visible
+	// processes (no readable cgroup); Limits are the container's allotment.
+	Approx bool    `json:"approx,omitempty"`
+	Limits *Limits `json:"limits,omitempty"`
+}
+
+// Limits are a container's cpu.max cores and memory.max bytes; zero = none.
+type Limits struct {
+	CPUCores float64 `json:"cpuCores,omitempty"`
+	MemBytes int64   `json:"memBytes,omitempty"`
 }
 
 // CPU percentages since the previous reading.
@@ -380,6 +451,7 @@ func (*Stream) MessageType() string      { return TypeStream }
 func (*Log) MessageType() string         { return TypeLog }
 func (*LogEnd) MessageType() string      { return TypeLogEnd }
 func (*Pong) MessageType() string        { return TypePong }
+func (*Bye) MessageType() string         { return TypeBye }
 func (*Welcome) MessageType() string     { return TypeWelcome }
 func (*AuthFailed) MessageType() string  { return TypeAuthFailed }
 func (*Ping) MessageType() string        { return TypePing }
@@ -404,6 +476,8 @@ func New(typ string) Message {
 		return &LogEnd{}
 	case TypePong:
 		return &Pong{}
+	case TypeBye:
+		return &Bye{}
 	case TypeWelcome:
 		return &Welcome{}
 	case TypeAuthFailed:

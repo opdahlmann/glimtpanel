@@ -57,3 +57,16 @@
 .glass {
   width: 100%; max-width: 560px; padding: 14px; background: var(--color-glass); border-radius: var(--radius-window); box-shadow: var(--shadow-window);
 }
+
+/* «+ Add»-menyen (steg 12.10): Server / Container under knappen. */
+.add { position: relative; }
+.menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 160px; display: flex; flex-direction: column; padding: 6px;
+  background: var(--color-glass); border-radius: var(--radius-card); box-shadow: var(--shadow-window);
+}
+.item {
+  display: flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; border-radius: var(--radius-chip); background: transparent;
+  color: var(--w-85); font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; transition: background var(--t-hover), color var(--t-hover);
+}
+.item:hover { background: var(--s-5); color: var(--w-100); }
+.or { display: flex; justify-content: center; }

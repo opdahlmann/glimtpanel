@@ -1,4 +1,4 @@
-import { CardDto, ServerStatus } from '@core/live.types';
+import { CardDto, NodeKind, ServerStatus } from '@core/live.types';
 import { OverviewFilters, SortKey } from '@core/prefs.service';
 
 /**
@@ -20,7 +20,7 @@ function byName(a: Pick<CardDto, 'name' | 'id'>, b: Pick<CardDto, 'name' | 'id'>
   return n !== 0 ? n : a.id.localeCompare(b.id);
 }
 
-const STATUS_ORDER: Record<ServerStatus, number> = { down: 0, paused: 1, up: 2 };
+const STATUS_ORDER: Record<ServerStatus, number> = { down: 0, sleeping: 1, paused: 2, up: 3 };
 
 export const SORTERS: Record<SortKey, (a: CardDto, b: CardDto) => number> = {
   name: byName,
@@ -42,10 +42,11 @@ export function matchesSearch(card: Pick<CardDto, 'name' | 'tags'>, search: stri
   return card.name.toLowerCase().includes(q) || tagString(card).toLowerCase().includes(q);
 }
 
-export function matchesFilters(card: Pick<CardDto, 'tags' | 'status' | 'activeAlerts'>, filters: OverviewFilters): boolean {
+export function matchesFilters(card: Pick<CardDto, 'tags' | 'status' | 'activeAlerts' | 'kind'>, filters: OverviewFilters): boolean {
   if (filters.tag && !card.tags.includes(filters.tag)) return false;
   if (filters.status && card.status !== filters.status) return false;
   if (filters.alert && !(card.activeAlerts > 0)) return false;
+  if (filters.kind && (card.kind ?? 'server') !== filters.kind) return false;
   return true;
 }
 
@@ -65,12 +66,24 @@ export interface StatusCounts {
   up: number;
   down: number;
   paused: number;
+  sleeping: number;
+  servers: number;
+  containers: number;
 }
 
-export function countByStatus(cards: readonly Pick<CardDto, 'status'>[]): StatusCounts {
-  const counts: StatusCounts = { total: cards.length, up: 0, down: 0, paused: 0 };
-  for (const c of cards) counts[c.status]++;
+export function countByStatus(cards: readonly Pick<CardDto, 'status' | 'kind'>[]): StatusCounts {
+  const counts: StatusCounts = { total: cards.length, up: 0, down: 0, paused: 0, sleeping: 0, servers: 0, containers: 0 };
+  for (const c of cards) {
+    counts[c.status]++;
+    if ((c.kind ?? 'server') === 'container') counts.containers++;
+    else counts.servers++;
+  }
   return counts;
+}
+
+/** Klikk på «servers»/«containers»: samme type igjen slår den av. */
+export function toggleKind(filters: OverviewFilters, kind: NodeKind): OverviewFilters {
+  return { ...filters, kind: filters.kind === kind ? '' : kind };
 }
 
 /** Klikk på en filterchip: samme tagg/status igjen slår den av (prototypen). */
@@ -87,9 +100,9 @@ export function toggleAlert(filters: OverviewFilters): OverviewFilters {
 }
 
 export function clearFilters(): OverviewFilters {
-  return { tag: '', status: '', alert: false };
+  return { tag: '', status: '', alert: false, kind: '' };
 }
 
 export function isAllActive(filters: OverviewFilters): boolean {
-  return !filters.tag && !filters.status && !filters.alert;
+  return !filters.tag && !filters.status && !filters.alert && !filters.kind;
 }

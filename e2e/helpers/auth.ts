@@ -7,7 +7,8 @@ export const DEV_USER = {
 };
 
 /** Overskriften på oversikten på begge språk (profilspråket kan være norsk mens språktesten kjører). */
-export const SERVERS_HEADING = /^(Servers|Servere)$/;
+/** Oversiktens tittel: «Nodes» når kontoen har containernoder (demoen har tre), ellers «Servers». */
+export const SERVERS_HEADING = /^(Nodes|Noder|Servers|Servere)$/;
 
 /**
  * Logger inn gjennom API-et med sidens request-kontekst: cookien `glimt_refresh` havner i nettleserkonteksten,

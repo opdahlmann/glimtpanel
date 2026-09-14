@@ -30,7 +30,21 @@
     <gp-segment class="priority" size="sm" [options]="priorityOptions()" [value]="pri()" (valueChange)="onPriority($event)" [label]="'severity' | t" />
   </div>
 
-  @if (src() === 'cont') {
+  @if (src() === 'files') {
+    <div class="chips" role="group" [attr.aria-label]="'files' | t" data-testid="path-chips">
+      @for (p of logPaths(); track p) {
+        <button type="button" class="chip mono" [class.on]="isPathSelected(p)" [attr.aria-pressed]="isPathSelected(p)" (click)="togglePath(p)">{{ p }}</button>
+      } @empty {
+        <span class="hint">{{ (containersLoaded() ? 'noLogPaths' : 'loading') | t }}</span>
+      }
+    </div>
+  }
+
+  @if (src() === 'cont' && isContainerNode()) {
+    <div class="chips" role="group" data-testid="container-chips">
+      <span class="hint">{{ (linked() ? 'stdoutViaHost' : 'stdoutNeedsHost') | t }}</span>
+    </div>
+  } @else if (src() === 'cont') {
     <div class="chips" role="group" [attr.aria-label]="'chooseContainers' | t" data-testid="container-chips">
       @for (c of containers(); track c.id) {
         <button type="button" class="chip" [class.on]="isSelected(c.name)" [attr.aria-pressed]="isSelected(c.name)" [style.--chip-color]="containerColor(c.name)" (click)="toggleContainer(c.name)">

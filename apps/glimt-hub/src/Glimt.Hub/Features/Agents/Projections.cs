@@ -40,7 +40,26 @@ public sealed record CardDto(
     int ActiveAlerts,
     string? AlertSeverity,
     int?[] CpuLastHour,
-    int?[] MemLastHour);
+    int?[] MemLastHour,
+    string Kind = NodeKinds.Server,
+    string? Health = null,
+    bool? Approx = null,
+    string? OnHost = null,
+    string? Image = null,
+    int? Restarts24h = null,
+    long? MemLimit = null,
+    int? Ports = null);
+
+/// <summary>Card.health for container nodes: the last health check's outcome, or none without a health URL.</summary>
+public static class HealthStates
+{
+    public const string Ok = "ok";
+    public const string Fail = "fail";
+    public const string None = "none";
+}
+
+/// <summary>The host agent a container node is linked to (step 12.6).</summary>
+public sealed record HostLinkDto(string ServerId, string Name);
 
 /// <summary>The full server page model: the last snapshot merged with the last stream.</summary>
 public sealed record ServerDto(
@@ -68,14 +87,28 @@ public sealed record ServerDto(
     MaintenanceInfo? Maintenance,
     SecurityInfo? Security,
     string? SnapshotAt,
-    string? StreamAt);
+    string? StreamAt,
+    string Kind = NodeKinds.Server,
+    string? ContainerId = null,
+    Capabilities? Capabilities = null,
+    string? Image = null,
+    HealthInfo? Health = null,
+    IReadOnlyList<CheckInfo>? Checks = null,
+    bool? Approx = null,
+    int? Restarts24h = null,
+    int? Restarts10m = null,
+    HostLinkDto? HostServer = null,
+    ContainerInfo? HostContainer = null,
+    IReadOnlyDictionary<string, string>? LinkedNodes = null,
+    IReadOnlyList<string>? LogPaths = null);
 
 /// <summary>Builds the Card and Server projections from a session (and the buffer for the sparklines).</summary>
 public static class Projections
 {
-    public static CardDto Card(AgentSession session, ServerBuffer? buffer, DateTimeOffset now, AlertSummary? alerts = null)
+    public static CardDto Card(AgentSession session, ServerBuffer? buffer, DateTimeOffset now, AlertSummary? alerts = null, NodeLinker? linker = null)
     {
         alerts ??= AlertSummary.None;
+        var link = session.IsContainer ? linker?.LinkOf(session.ServerId) : null;
         var snapshot = session.LastSnapshot;
         var host = MergedHost(session);
         var containers = MergedContainers(session);
@@ -135,14 +168,26 @@ public static class Projections
             alerts.Count,
             alerts.WorstSeverity,
             HistoryQuery.LastHourPercent(buffer, "cpu", now),
-            HistoryQuery.LastHourPercent(buffer, "mem", now));
+            HistoryQuery.LastHourPercent(buffer, "mem", now),
+            session.Kind,
+            session.IsContainer ? HealthState(snapshot?.Health) : null,
+            session.IsContainer ? host?.Approx : null,
+            link?.HostName,
+            session.IsContainer ? session.Image ?? link?.Container.Image : null,
+            session.IsContainer ? session.Restarts(AgentSession.RestartWindow, now) : null,
+            session.IsContainer ? host?.Limits?.MemBytes : null,
+            session.IsContainer ? snapshot?.Security?.ListeningPorts?.Count : null);
     }
 
-    public static ServerDto Server(AgentSession session)
+    public static string HealthState(HealthInfo? health) => health is null ? HealthStates.None : health.Ok ? HealthStates.Ok : HealthStates.Fail;
+
+    public static ServerDto Server(AgentSession session, NodeLinker? linker = null, DateTimeOffset? now = null)
     {
         var snapshot = session.LastSnapshot;
         var stream = session.LastStream;
         var host = MergedHost(session);
+        var link = session.IsContainer ? linker?.LinkOf(session.ServerId) : null;
+        var at = now ?? DateTimeOffset.UtcNow;
         return new ServerDto(
             session.ServerId,
             session.Name,
@@ -168,7 +213,20 @@ public static class Projections
             snapshot?.Maintenance,
             snapshot?.Security,
             Iso(session.SnapshotAt),
-            Iso(session.StreamAt));
+            Iso(session.StreamAt),
+            session.Kind,
+            session.ContainerId,
+            session.Capabilities,
+            session.IsContainer ? session.Image ?? link?.Container.Image : null,
+            snapshot?.Health,
+            snapshot?.Checks,
+            session.IsContainer ? host?.Approx : null,
+            session.IsContainer ? session.Restarts(AgentSession.RestartWindow, at) : null,
+            session.IsContainer ? session.Restarts(TimeSpan.FromMinutes(10), at) : null,
+            link is null ? null : new HostLinkDto(link.HostId, link.HostName),
+            link?.Container,
+            session.IsContainer ? null : linker?.LinkedNodes(session.ServerId),
+            session.IsContainer ? session.LogPaths : null);
     }
 
     /// <summary>The newest host block; mounts/ifaces fall back to the other frame when the newest lacks them.</summary>

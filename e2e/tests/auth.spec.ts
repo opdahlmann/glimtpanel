@@ -102,7 +102,7 @@ test.describe('innlogging', () => {
     const saved = page.waitForResponse((r) => r.url().includes('/api/account') && r.request().method() === 'PATCH');
     await scope.getByRole('radio', { name: 'NO' }).click();
     try {
-      await expect(page.getByRole('heading', { name: 'Servere' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Noder' })).toBeVisible();
       if (!isMobileProject(testInfo)) {
         // «Varsler» har badgen med antall aktive varsler etter seg (fase 7).
         await expect(page.locator('gp-sidebar nav a')).toHaveText([/^Servere$/, /^Logger$/, /^Varsler\d*$/, /^Innstillinger$/]);
@@ -113,11 +113,11 @@ test.describe('innlogging', () => {
       expect((await saved).ok()).toBeTruthy();
       // valget huskes i localStorage
       await page.reload();
-      await expect(page.getByRole('heading', { name: 'Servere' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Noder' })).toBeVisible();
     } finally {
       // Tilbake til engelsk i profilen så de andre testene ikke arver norsk.
       await scope.getByRole('radio', { name: 'EN' }).click();
-      await expect(page.getByRole('heading', { name: 'Servers' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: SERVERS_HEADING })).toBeVisible();
     }
   });
 });

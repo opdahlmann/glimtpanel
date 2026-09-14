@@ -4,188 +4,1146 @@
   "title": "Glimtpanel agent ↔ hub protocol v1",
   "description": "Én JSON-melding per WebSocket-ramme. Feltet `type` først. Tider er Unix-millisekunder UTC. Byte-rater er byte per sekund.",
   "type": "object",
-  "required": ["type"],
+  "required": [
+    "type"
+  ],
   "oneOf": [
-    { "$ref": "#/$defs/hello" }, { "$ref": "#/$defs/snapshot" }, { "$ref": "#/$defs/stream" },
-    { "$ref": "#/$defs/log" }, { "$ref": "#/$defs/logEnd" }, { "$ref": "#/$defs/pong" },
-    { "$ref": "#/$defs/welcome" }, { "$ref": "#/$defs/authFailed" }, { "$ref": "#/$defs/subscribe" },
-    { "$ref": "#/$defs/unsubscribe" }, { "$ref": "#/$defs/logStart" }, { "$ref": "#/$defs/logStop" },
-    { "$ref": "#/$defs/rotate" }, { "$ref": "#/$defs/ping" }
+    {
+      "$ref": "#/$defs/hello"
+    },
+    {
+      "$ref": "#/$defs/snapshot"
+    },
+    {
+      "$ref": "#/$defs/stream"
+    },
+    {
+      "$ref": "#/$defs/log"
+    },
+    {
+      "$ref": "#/$defs/logEnd"
+    },
+    {
+      "$ref": "#/$defs/pong"
+    },
+    {
+      "$ref": "#/$defs/welcome"
+    },
+    {
+      "$ref": "#/$defs/authFailed"
+    },
+    {
+      "$ref": "#/$defs/subscribe"
+    },
+    {
+      "$ref": "#/$defs/unsubscribe"
+    },
+    {
+      "$ref": "#/$defs/logStart"
+    },
+    {
+      "$ref": "#/$defs/logStop"
+    },
+    {
+      "$ref": "#/$defs/rotate"
+    },
+    {
+      "$ref": "#/$defs/ping"
+    },
+    {
+      "$ref": "#/$defs/bye"
+    }
   ],
   "$defs": {
     "hello": {
       "type": "object",
-      "required": ["type", "v", "hostname", "agentVersion", "os", "kernel", "arch", "cores", "ramBytes", "bootTime", "dockerMode"],
+      "required": [
+        "type",
+        "v",
+        "hostname",
+        "agentVersion",
+        "os",
+        "kernel",
+        "arch",
+        "cores",
+        "ramBytes",
+        "bootTime",
+        "dockerMode"
+      ],
       "properties": {
-        "type": { "const": "hello" },
-        "v": { "const": 1 },
-        "enrolKey": { "type": "string", "pattern": "^gp_[A-Za-z0-9_]{4,64}$" },
-        "token": { "type": "string", "minLength": 16 },
-        "hostname": { "type": "string" },
-        "agentVersion": { "type": "string" },
-        "os": { "type": "object", "required": ["id", "versionId", "prettyName"], "properties": { "id": { "type": "string" }, "versionId": { "type": "string" }, "prettyName": { "type": "string" } } },
-        "kernel": { "type": "string" },
-        "arch": { "type": "string", "enum": ["amd64", "arm64", "unknown"] },
-        "cores": { "type": "integer", "minimum": 1 },
-        "ramBytes": { "type": "integer", "minimum": 0 },
-        "bootTime": { "type": "integer" },
-        "dockerMode": { "type": "string", "enum": ["none", "socket", "proxy"] }
+        "type": {
+          "const": "hello"
+        },
+        "v": {
+          "const": 1
+        },
+        "enrolKey": {
+          "type": "string",
+          "pattern": "^gp_[A-Za-z0-9_]{4,64}$"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 16
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "agentVersion": {
+          "type": "string"
+        },
+        "os": {
+          "type": "object",
+          "required": [
+            "id",
+            "versionId",
+            "prettyName"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "versionId": {
+              "type": "string"
+            },
+            "prettyName": {
+              "type": "string"
+            }
+          }
+        },
+        "kernel": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string",
+          "enum": [
+            "amd64",
+            "arm64",
+            "unknown"
+          ]
+        },
+        "cores": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ramBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bootTime": {
+          "type": "integer"
+        },
+        "dockerMode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "socket",
+            "proxy"
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "server",
+            "container"
+          ],
+          "default": "server",
+          "description": "Nodetype (fase 12). Mangler = server."
+        },
+        "containerId": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 64,
+          "description": "kind: container – de 12–64 første tegnene av container-id-en fra /proc/1/cgroup, ellers hostname."
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "cgroup": {
+              "type": "boolean"
+            },
+            "procAll": {
+              "type": "boolean"
+            },
+            "netns": {
+              "type": "boolean"
+            },
+            "health": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "description": "kind: container – hva agenten faktisk kan lese der den kjører."
+        },
+        "image": {
+          "type": "string",
+          "description": "kind: container – GLIMT_IMAGE når satt."
+        },
+        "logPaths": {
+          "description": "Container nodes: the files and directories GLIMT_LOG_PATHS allows logStart source file to tail (fase 12).",
+          "type": "array",
+          "maxItems": 20,
+          "items": { "type": "string", "minLength": 1, "maxLength": 512 }
+        }
       },
-      "anyOf": [{ "required": ["enrolKey"] }, { "required": ["token"] }],
+      "anyOf": [
+        {
+          "required": [
+            "enrolKey"
+          ]
+        },
+        {
+          "required": [
+            "token"
+          ]
+        }
+      ],
       "additionalProperties": false
     },
     "welcome": {
       "type": "object",
-      "required": ["type", "serverId", "snapshotInterval", "maintenanceInterval"],
+      "required": [
+        "type",
+        "serverId",
+        "snapshotInterval",
+        "maintenanceInterval"
+      ],
       "properties": {
-        "type": { "const": "welcome" },
-        "serverId": { "type": "string" },
-        "token": { "type": "string" },
-        "snapshotInterval": { "type": "integer", "minimum": 1000 },
-        "maintenanceInterval": { "type": "integer", "minimum": 60000 }
+        "type": {
+          "const": "welcome"
+        },
+        "serverId": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "snapshotInterval": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "maintenanceInterval": {
+          "type": "integer",
+          "minimum": 60000
+        }
       },
       "additionalProperties": false
     },
-    "authFailed": { "type": "object", "required": ["type", "reason"], "properties": { "type": { "const": "authFailed" }, "reason": { "type": "string", "enum": ["invalidKey", "expiredKey", "invalidToken", "serverRemoved"] } }, "additionalProperties": false },
-    "ping": { "type": "object", "required": ["type"], "properties": { "type": { "const": "ping" } }, "additionalProperties": false },
-    "pong": { "type": "object", "required": ["type"], "properties": { "type": { "const": "pong" } }, "additionalProperties": false },
-    "subscribe": { "type": "object", "required": ["type", "intervalMs"], "properties": { "type": { "const": "subscribe" }, "intervalMs": { "type": "integer", "enum": [1000, 5000] }, "topProcs": { "type": "integer", "minimum": 1, "maximum": 100, "default": 40 } }, "additionalProperties": false },
-    "unsubscribe": { "type": "object", "required": ["type"], "properties": { "type": { "const": "unsubscribe" } }, "additionalProperties": false },
-    "rotate": { "type": "object", "required": ["type", "token"], "properties": { "type": { "const": "rotate" }, "token": { "type": "string", "minLength": 16 } }, "additionalProperties": false },
+    "authFailed": {
+      "type": "object",
+      "required": [
+        "type",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "const": "authFailed"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "invalidKey",
+            "expiredKey",
+            "invalidToken",
+            "serverRemoved",
+            "containerNeedsToken"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ping": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "ping"
+        }
+      },
+      "additionalProperties": false
+    },
+    "pong": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "pong"
+        }
+      },
+      "additionalProperties": false
+    },
+    "subscribe": {
+      "type": "object",
+      "required": [
+        "type",
+        "intervalMs"
+      ],
+      "properties": {
+        "type": {
+          "const": "subscribe"
+        },
+        "intervalMs": {
+          "type": "integer",
+          "enum": [
+            1000,
+            5000
+          ]
+        },
+        "topProcs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 40
+        }
+      },
+      "additionalProperties": false
+    },
+    "unsubscribe": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "unsubscribe"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rotate": {
+      "type": "object",
+      "required": [
+        "type",
+        "token"
+      ],
+      "properties": {
+        "type": {
+          "const": "rotate"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 16
+        }
+      },
+      "additionalProperties": false
+    },
     "logStart": {
       "type": "object",
-      "required": ["type", "streamId", "source"],
+      "required": [
+        "type",
+        "streamId",
+        "source"
+      ],
       "properties": {
-        "type": { "const": "logStart" },
-        "streamId": { "type": "string" },
-        "source": { "type": "string", "enum": ["journal", "auth", "kernel", "packages", "web", "firewall", "container", "file"] },
-        "unit": { "type": "string" },
-        "container": { "type": "string" },
-        "path": { "type": "string" },
-        "priority": { "type": "string", "enum": ["err", "warn", "info"] },
-        "sinceMs": { "type": "integer" },
-        "tail": { "type": "integer", "minimum": 0, "maximum": 1000, "default": 200 }
+        "type": {
+          "const": "logStart"
+        },
+        "streamId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "journal",
+            "auth",
+            "kernel",
+            "packages",
+            "web",
+            "firewall",
+            "container",
+            "file"
+          ]
+        },
+        "unit": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "err",
+            "warn",
+            "info"
+          ]
+        },
+        "sinceMs": {
+          "type": "integer"
+        },
+        "tail": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 200
+        }
       },
       "additionalProperties": false
     },
-    "logStop": { "type": "object", "required": ["type", "streamId"], "properties": { "type": { "const": "logStop" }, "streamId": { "type": "string" } }, "additionalProperties": false },
+    "logStop": {
+      "type": "object",
+      "required": [
+        "type",
+        "streamId"
+      ],
+      "properties": {
+        "type": {
+          "const": "logStop"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "log": {
       "type": "object",
-      "required": ["type", "streamId", "lines"],
+      "required": [
+        "type",
+        "streamId",
+        "lines"
+      ],
       "properties": {
-        "type": { "const": "log" },
-        "streamId": { "type": "string" },
-        "dropped": { "type": "integer", "minimum": 0 },
-        "lines": { "type": "array", "items": { "$ref": "#/$defs/logLine" } }
+        "type": {
+          "const": "log"
+        },
+        "streamId": {
+          "type": "string"
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/logLine"
+          }
+        }
       },
       "additionalProperties": false
     },
     "logLine": {
       "type": "object",
-      "required": ["ts", "message"],
+      "required": [
+        "ts",
+        "message"
+      ],
       "properties": {
-        "ts": { "type": "integer" },
-        "unit": { "type": "string" },
-        "container": { "type": "string" },
-        "priority": { "type": "string", "enum": ["err", "warn", "info"] },
-        "message": { "type": "string" }
+        "ts": {
+          "type": "integer"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "err",
+            "warn",
+            "info"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
       },
       "additionalProperties": false
     },
-    "logEnd": { "type": "object", "required": ["type", "streamId", "reason"], "properties": { "type": { "const": "logEnd" }, "streamId": { "type": "string" }, "reason": { "type": "string", "enum": ["stopped", "unavailable", "error", "eof"] }, "message": { "type": "string" } }, "additionalProperties": false },
+    "logEnd": {
+      "type": "object",
+      "required": [
+        "type",
+        "streamId",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "const": "logEnd"
+        },
+        "streamId": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "stopped",
+            "unavailable",
+            "error",
+            "eof"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "snapshot": {
       "type": "object",
-      "required": ["type", "ts", "host"],
+      "required": [
+        "type",
+        "ts",
+        "host"
+      ],
       "properties": {
-        "type": { "const": "snapshot" },
-        "ts": { "type": "integer" },
-        "host": { "$ref": "#/$defs/host" },
-        "containers": { "type": "array", "items": { "$ref": "#/$defs/container" } },
-        "services": { "$ref": "#/$defs/services" },
-        "maintenance": { "$ref": "#/$defs/maintenance" },
-        "security": { "$ref": "#/$defs/security" }
+        "type": {
+          "const": "snapshot"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "host": {
+          "$ref": "#/$defs/host"
+        },
+        "containers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/container"
+          }
+        },
+        "services": {
+          "$ref": "#/$defs/services"
+        },
+        "maintenance": {
+          "$ref": "#/$defs/maintenance"
+        },
+        "security": {
+          "$ref": "#/$defs/security"
+        },
+        "health": {
+          "$ref": "#/$defs/health"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          }
+        }
       },
       "additionalProperties": false
     },
     "stream": {
       "type": "object",
-      "required": ["type", "ts", "host"],
+      "required": [
+        "type",
+        "ts",
+        "host"
+      ],
       "properties": {
-        "type": { "const": "stream" },
-        "ts": { "type": "integer" },
-        "host": { "$ref": "#/$defs/host" },
-        "containers": { "type": "array", "items": { "$ref": "#/$defs/containerStats" } },
-        "processes": { "type": "array", "items": { "$ref": "#/$defs/process" } },
-        "processTotals": { "type": "object", "properties": { "total": { "type": "integer" }, "running": { "type": "integer" }, "blocked": { "type": "integer" } } }
+        "type": {
+          "const": "stream"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "host": {
+          "$ref": "#/$defs/host"
+        },
+        "containers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/containerStats"
+          }
+        },
+        "processes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/process"
+          }
+        },
+        "processTotals": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "integer"
+            },
+            "running": {
+              "type": "integer"
+            },
+            "blocked": {
+              "type": "integer"
+            }
+          }
+        }
       },
       "additionalProperties": false
     },
     "host": {
       "type": "object",
-      "required": ["cpu", "mem"],
+      "required": [
+        "cpu",
+        "mem"
+      ],
       "properties": {
-        "cpu": { "type": "object", "required": ["total"], "properties": {
-          "total": { "type": "number" }, "user": { "type": "number" }, "system": { "type": "number" }, "iowait": { "type": "number" },
-          "steal": { "type": "number" }, "perCore": { "type": "array", "items": { "type": "number" } } } },
-        "load": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
-        "mem": { "type": "object", "required": ["total", "used", "free"], "properties": {
-          "total": { "type": "integer" }, "used": { "type": "integer" }, "free": { "type": "integer" }, "buffers": { "type": "integer" },
-          "cached": { "type": "integer" }, "swapTotal": { "type": "integer" }, "swapUsed": { "type": "integer" } } },
-        "uptimeSec": { "type": "integer" },
-        "mounts": { "type": "array", "items": { "type": "object", "required": ["path", "fs", "total", "used"], "properties": {
-          "path": { "type": "string" }, "fs": { "type": "string" }, "device": { "type": "string" }, "total": { "type": "integer" }, "used": { "type": "integer" },
-          "inodesTotal": { "type": "integer" }, "inodesUsed": { "type": "integer" }, "readBps": { "type": "number" }, "writeBps": { "type": "number" } } } },
-        "ifaces": { "type": "array", "items": { "type": "object", "required": ["name"], "properties": {
-          "name": { "type": "string" }, "ips": { "type": "array", "items": { "type": "string" } }, "rxBps": { "type": "number" }, "txBps": { "type": "number" } } } }
+        "cpu": {
+          "type": "object",
+          "required": [
+            "total"
+          ],
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "user": {
+              "type": "number"
+            },
+            "system": {
+              "type": "number"
+            },
+            "iowait": {
+              "type": "number"
+            },
+            "steal": {
+              "type": "number"
+            },
+            "perCore": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "load": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "mem": {
+          "type": "object",
+          "required": [
+            "total",
+            "used",
+            "free"
+          ],
+          "properties": {
+            "total": {
+              "type": "integer"
+            },
+            "used": {
+              "type": "integer"
+            },
+            "free": {
+              "type": "integer"
+            },
+            "buffers": {
+              "type": "integer"
+            },
+            "cached": {
+              "type": "integer"
+            },
+            "swapTotal": {
+              "type": "integer"
+            },
+            "swapUsed": {
+              "type": "integer"
+            }
+          }
+        },
+        "uptimeSec": {
+          "type": "integer"
+        },
+        "mounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "fs",
+              "total",
+              "used"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "fs": {
+                "type": "string"
+              },
+              "device": {
+                "type": "string"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "used": {
+                "type": "integer"
+              },
+              "inodesTotal": {
+                "type": "integer"
+              },
+              "inodesUsed": {
+                "type": "integer"
+              },
+              "readBps": {
+                "type": "number"
+              },
+              "writeBps": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "ifaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "ips": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rxBps": {
+                "type": "number"
+              },
+              "txBps": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "approx": {
+          "type": "boolean",
+          "description": "Container uten egen cgroup: cpu og mem er summert over synlige prosesser."
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "cpuCores": {
+              "type": "number",
+              "minimum": 0
+            },
+            "memBytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "description": "Container: tildelte kjerner (cpu.max) og minnegrense (memory.max). Mangler = ingen grense."
+        }
       }
     },
     "container": {
       "type": "object",
-      "required": ["id", "name", "image", "state"],
+      "required": [
+        "id",
+        "name",
+        "image",
+        "state"
+      ],
       "properties": {
-        "id": { "type": "string" }, "name": { "type": "string" }, "image": { "type": "string" }, "imageCreated": { "type": "integer" },
-        "state": { "type": "string", "enum": ["running", "stopped", "restarting", "paused", "created", "exited", "dead"] },
-        "health": { "type": "string", "enum": ["healthy", "unhealthy", "starting", "none"] },
-        "restartCount": { "type": "integer" }, "startedAt": { "type": "integer" },
-        "cpuPct": { "type": "number" }, "memBytes": { "type": "integer" }, "memLimit": { "type": "integer" },
-        "rxBps": { "type": "number" }, "txBps": { "type": "number" },
-        "ports": { "type": "array", "items": { "type": "string" } }, "mounts": { "type": "array", "items": { "type": "string" } },
-        "compose": { "type": "string" }
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "imageCreated": {
+          "type": "integer"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "running",
+            "stopped",
+            "restarting",
+            "paused",
+            "created",
+            "exited",
+            "dead"
+          ]
+        },
+        "health": {
+          "type": "string",
+          "enum": [
+            "healthy",
+            "unhealthy",
+            "starting",
+            "none"
+          ]
+        },
+        "restartCount": {
+          "type": "integer"
+        },
+        "startedAt": {
+          "type": "integer"
+        },
+        "cpuPct": {
+          "type": "number"
+        },
+        "memBytes": {
+          "type": "integer"
+        },
+        "memLimit": {
+          "type": "integer"
+        },
+        "rxBps": {
+          "type": "number"
+        },
+        "txBps": {
+          "type": "number"
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mounts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "compose": {
+          "type": "string"
+        }
       }
     },
     "containerStats": {
       "type": "object",
-      "required": ["id"],
-      "properties": { "id": { "type": "string" }, "cpuPct": { "type": "number" }, "memBytes": { "type": "integer" }, "memLimit": { "type": "integer" }, "rxBps": { "type": "number" }, "txBps": { "type": "number" }, "state": { "type": "string" } }
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "cpuPct": {
+          "type": "number"
+        },
+        "memBytes": {
+          "type": "integer"
+        },
+        "memLimit": {
+          "type": "integer"
+        },
+        "rxBps": {
+          "type": "number"
+        },
+        "txBps": {
+          "type": "number"
+        },
+        "state": {
+          "type": "string"
+        }
+      }
     },
     "process": {
       "type": "object",
-      "required": ["pid", "name", "user", "cpuPct", "rssBytes"],
-      "properties": { "pid": { "type": "integer" }, "name": { "type": "string" }, "user": { "type": "string" }, "cpuPct": { "type": "number" }, "rssBytes": { "type": "integer" }, "startedAt": { "type": "integer" }, "cmdline": { "type": "string" } }
+      "required": [
+        "pid",
+        "name",
+        "user",
+        "cpuPct",
+        "rssBytes"
+      ],
+      "properties": {
+        "pid": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "cpuPct": {
+          "type": "number"
+        },
+        "rssBytes": {
+          "type": "integer"
+        },
+        "startedAt": {
+          "type": "integer"
+        },
+        "cmdline": {
+          "type": "string"
+        }
+      }
     },
     "services": {
       "type": "object",
       "properties": {
-        "units": { "type": "array", "items": { "type": "object", "required": ["name", "state"], "properties": { "name": { "type": "string" }, "state": { "type": "string", "enum": ["running", "stopped", "failed"] }, "needsRestart": { "type": "boolean" } } } },
-        "failed": { "type": "array", "items": { "type": "string" } },
-        "needsRestart": { "type": "array", "items": { "type": "string" } }
+        "units": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "state"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "running",
+                  "stopped",
+                  "failed"
+                ]
+              },
+              "needsRestart": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "needsRestart": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "maintenance": {
       "type": "object",
       "properties": {
-        "rebootRequired": { "type": "boolean" }, "rebootPkgs": { "type": "array", "items": { "type": "string" } },
-        "updates": { "type": "integer" }, "securityUpdates": { "type": "integer" }, "checkedAt": { "type": "integer" }, "needrestartAvailable": { "type": "boolean" }
+        "rebootRequired": {
+          "type": "boolean"
+        },
+        "rebootPkgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "updates": {
+          "type": "integer"
+        },
+        "securityUpdates": {
+          "type": "integer"
+        },
+        "checkedAt": {
+          "type": "integer"
+        },
+        "needrestartAvailable": {
+          "type": "boolean"
+        }
       }
     },
     "security": {
       "type": "object",
       "properties": {
-        "listeningPorts": { "type": "array", "items": { "type": "object", "required": ["port", "proto"], "properties": { "port": { "type": "integer" }, "proto": { "type": "string", "enum": ["tcp", "tcp6", "udp", "udp6"] }, "process": { "type": "string" }, "pid": { "type": "integer" } } } },
-        "loggedIn": { "type": "array", "items": { "type": "object", "required": ["user"], "properties": { "user": { "type": "string" }, "from": { "type": "string" }, "tty": { "type": "string" }, "since": { "type": "integer" } } } },
-        "sshFailed": { "type": "object", "properties": { "hour": { "type": "integer" }, "day": { "type": "integer" }, "last": { "type": "array", "items": { "type": "object", "properties": { "user": { "type": "string" }, "from": { "type": "string" }, "at": { "type": "integer" } } } } } },
-        "firewall": { "type": "object", "properties": { "ufw": { "type": "string", "enum": ["active", "inactive", "notFound"] }, "fail2ban": { "type": "string", "enum": ["active", "inactive", "notFound"] }, "banned": { "type": "integer" }, "blocked": { "type": "integer" } } }
+        "listeningPorts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "port",
+              "proto"
+            ],
+            "properties": {
+              "port": {
+                "type": "integer"
+              },
+              "proto": {
+                "type": "string",
+                "enum": [
+                  "tcp",
+                  "tcp6",
+                  "udp",
+                  "udp6"
+                ]
+              },
+              "process": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "loggedIn": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "user"
+            ],
+            "properties": {
+              "user": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              },
+              "tty": {
+                "type": "string"
+              },
+              "since": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "sshFailed": {
+          "type": "object",
+          "properties": {
+            "hour": {
+              "type": "integer"
+            },
+            "day": {
+              "type": "integer"
+            },
+            "last": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "user": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "firewall": {
+          "type": "object",
+          "properties": {
+            "ufw": {
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive",
+                "notFound"
+              ]
+            },
+            "fail2ban": {
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive",
+                "notFound"
+              ]
+            },
+            "banned": {
+              "type": "integer"
+            },
+            "blocked": {
+              "type": "integer"
+            }
+          }
+        }
       }
+    },
+    "health": {
+      "type": "object",
+      "required": [
+        "url",
+        "ok",
+        "checkedAt"
+      ],
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "ms": {
+          "type": "integer"
+        },
+        "checkedAt": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "kind: container – GET GLIMT_HEALTH_URL hvert 30. s."
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "name",
+        "target",
+        "ok"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "ms": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "kind: container – TCP-connect mot et mål fra GLIMT_CHECKS."
+    },
+    "bye": {
+      "type": "object",
+      "required": [
+        "type",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "const": "bye"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "shutdown"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Agent → hub før socketen lukkes ved planlagt stopp (SIGTERM), så huben kan skille «sover» fra «nede»."
     }
   }
 }

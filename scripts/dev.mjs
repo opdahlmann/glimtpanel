@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // `npm run dev`: starter hub (dotnet watch), agent-container (Ubuntu + systemd + glimt-agent) og web (ng serve).
-// Flagg: --no-agent --no-web --no-hub --site --plain-agent --stop
+// Flagg: --no-agent --no-web --no-hub --site --plain-agent --sidecar --stop
 import { spawn, execSync } from 'node:child_process';
 import path from 'node:path';
 import { loadEnv, requireKeys, repoRoot } from './env.mjs';
@@ -81,6 +81,11 @@ else {
       log('dev', 'bygger og starter agent-container');
       try { execSync(`node scripts/agent-container.mjs --start${has('--plain-agent') ? ' --plain' : ''}`, { cwd: repoRoot, stdio: 'inherit' }); }
       catch { log('agent', 'kunne ikke starte containeren (se over). Fortsetter uten agent.'); }
+      if (has('--sidecar')) {
+        log('dev', 'bygger og starter sidecar (containernode sidecar-dev)');
+        try { execSync('node scripts/agent-container.mjs --sidecar', { cwd: repoRoot, stdio: 'inherit' }); }
+        catch { log('agent', 'kunne ikke starte sidecaren (se over). Fortsetter uten.'); }
+      }
     } else {
       log('agent', 'Docker-daemonen kjører ikke. Fortsetter uten agent (start Docker Desktop og kjør `npm run dev:agent`).');
     }

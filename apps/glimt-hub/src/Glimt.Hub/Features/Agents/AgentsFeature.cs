@@ -14,6 +14,7 @@ public static class AgentsFeature
         services.AddSingleton<AgentIngest>();
         services.AddSingleton<SubscriptionCounter>();
         services.AddSingleton<LogRelay>();
+        services.AddSingleton<NodeLinker>();
         services.AddSingleton<IServerLifecycle, AgentLifecycle>();
         services.AddTransient<AgentConnection>();
         services.AddSingleton<DownDetector>();

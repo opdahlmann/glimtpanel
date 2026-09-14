@@ -8,8 +8,10 @@ export type ViewKey = 'cards' | 'compact' | 'groups';
 
 export interface OverviewFilters {
   tag: string;
-  status: '' | 'up' | 'down' | 'paused';
+  status: '' | 'up' | 'down' | 'paused' | 'sleeping';
   alert: boolean;
+  /** Nodetype (fase 12): tom = begge. */
+  kind: '' | 'server' | 'container';
 }
 
 /** Nøklene i localStorage, alle med prefiks `gp.` (FB 5.2 «husk valg»). */
@@ -31,7 +33,7 @@ export interface Prefs {
 export const PREF_DEFAULTS: Prefs = {
   lang: null,
   sort: 'name',
-  filters: { tag: '', status: '', alert: false },
+  filters: { tag: '', status: '', alert: false, kind: '' },
   view: 'cards',
   collapsed: {},
   sparklines: true,

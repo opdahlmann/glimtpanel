@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/collect"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/docker"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/journal"
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/protocol"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/state"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/sysinfo"
 )
@@ -42,8 +44,14 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		info.Hostname = o.name
 	}
 	p("glimt-agent %s check", version)
+	p("kind:            %s (%s)", o.kind, strings.Join(o.kindReasons, ", "))
 	p("hostname:        %s", info.Hostname)
 	p("os:              %s (%s %s), kernel %s, %s, %d cores, %s RAM", info.OS.PrettyName, info.OS.ID, info.OS.VersionID, info.Kernel, info.Arch, info.Cores, humanBytes(info.RAMBytes))
+
+	if o.kind == protocol.KindContainer {
+		checkContainer(p, yes, o)
+		return 0
+	}
 
 	host, err := collect.NewHost().Host()
 	switch {
@@ -104,6 +112,38 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	p("state dir:       %s (%s, %s)", o.stateDir, writable(o.stateDir), tokenState)
 	p("hub:             %s", orNone(o.hub))
 	return 0
+}
+
+// checkContainer prints what the container profile found (fase 12).
+func checkContainer(p func(string, ...any), yes func(bool) string, o *options) {
+	log := quietLog()
+	sys := collect.NewContainerSystem(collect.ContainerOptions{Logger: log})
+	caps := sys.Capabilities()
+	p("container id:    %s", sysinfo.ContainerID(detectProc, ""))
+	p("cgroup:          %s (dir %s)", yes(caps.Cgroup), orNone(sys.CgroupDir()))
+	if l := sys.Limits(); l.CPUCores > 0 || l.MemBytes > 0 {
+		p("limits:          %.2f cores, %s", l.CPUCores, humanBytes(l.MemBytes))
+	} else {
+		p("limits:          none readable")
+	}
+	p("processes:       %s (shared pid namespace)", map[bool]string{true: "all", false: "only the agent's own"}[caps.ProcAll])
+	p("network:         %s", yes(caps.Netns))
+	host, err := sys.Host(context.Background())
+	if err != nil {
+		p("host:            partly readable (%v)", err)
+	}
+	p("memory:          %s of %s%s", humanBytes(host.Mem.Used), humanBytes(host.Mem.Total), map[bool]string{true: " (approx, summed over processes)", false: ""}[host.Approx])
+	p("mounts:          %d", len(host.Mounts))
+	p("health url:      %s", orNone(o.healthURL))
+	p("checks:          %s", orNone(o.checks))
+	p("log paths:       %s", orNone(o.logPaths))
+	p("image:           %s", orNone(o.image))
+	p("token:           %s", map[bool]string{true: "GLIMT_TOKEN set", false: "GLIMT_TOKEN missing"}[o.token != ""])
+	p("hub:             %s", orNone(o.hub))
+}
+
+func quietLog() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 }
 
 // readEnvFile parses KEY=VALUE lines; missing or unreadable files give an empty map.

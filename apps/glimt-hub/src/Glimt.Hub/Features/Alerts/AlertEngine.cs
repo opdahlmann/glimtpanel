@@ -25,6 +25,7 @@ public sealed class AlertEngine(
     ActiveAlertCounts counts,
     AgentRegistry registry,
     IEnumerable<IAlertSink> sinks,
+    NodeLinker linker,
     TimeProvider clock,
     ILogger<AlertEngine> logger)
 {
@@ -85,12 +86,13 @@ public sealed class AlertEngine(
                 _containers[session.ServerId] = tracker;
             }
 
-            var observed = RuleEvaluator.Evaluate(snapshot, serverConfig, tracker, now);
+            var node = session.IsContainer ? NodeContext.For(session, now, linker.LinkOf(session.ServerId)) : null;
+            var observed = RuleEvaluator.Evaluate(snapshot, serverConfig, tracker, now, node);
             var trueKeys = observed.ToDictionary(o => (o.Rule, o.Key), o => o.Detail);
 
             foreach (var definition in AlertRules.All)
             {
-                if (definition.Id == AlertRuleIds.ServerDown)
+                if (definition.Id == AlertRuleIds.ServerDown || (session.IsContainer && AlertRules.ServerOnly(definition.Id)))
                 {
                     continue;
                 }
@@ -134,9 +136,10 @@ public sealed class AlertEngine(
             {
                 var now = clock.GetUtcNow();
                 var rule = serverConfig.Rule(AlertRuleIds.ServerDown);
+                // A sleeping node stopped on purpose (bye): no server_down until it is back and then gone for real.
                 var down = rule.Enabled
                     && !session.Connected
-                    && session.Status != "paused"
+                    && session.Status is not (ServerStatuses.Paused or ServerStatuses.Sleeping)
                     && session.LastSeenAt is { } seen
                     && now - seen >= TimeSpan.FromSeconds(rule.DurationSec ?? 120);
                 if (down)

@@ -376,7 +376,8 @@ public sealed class FakeServer
 
     private static double Round(double v) => Math.Round(v, 1);
 
-    private static string ContainerId(string key) => Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(key)))[..12];
+    /// <summary>The demo container id for "server/container" (12 hex characters), shared with <see cref="FakeNode"/> for linking.</summary>
+    internal static string ContainerId(string key) => Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes(key)))[..12];
 }
 
 public sealed class FakeMount(string path, string fs, long totalBytes, double pct, double inodePct, double readMBps, double writeMBps)

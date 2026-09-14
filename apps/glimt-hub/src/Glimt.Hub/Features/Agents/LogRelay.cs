@@ -19,14 +19,18 @@ public sealed record LogRequest(
     string? Container = null,
     string? Priority = null,
     long? SinceMs = null,
-    int? Tail = null);
+    int? Tail = null,
+    string? Path = null);
 
 /// <summary>
 /// Maps log streams to the one SignalR connection that opened them: logStart/logStop to the agent,
 /// log/logEnd back to that connection only. Limits: 4 streams per connection, 8 per agent (step 2.7).
 /// </summary>
-public sealed class LogRelay(AgentRegistry registry, ILogReceiver receiver, ILogger<LogRelay> logger)
+public sealed class LogRelay(AgentRegistry registry, ILogReceiver receiver, NodeLinker linker, ILogger<LogRelay> logger)
 {
+    /// <summary>LogEnded message for a container node's stdout when no host agent sees the container (step 12.6).</summary>
+    public const string NeedsHostAgent = "stdout logs need the host agent";
+
     public const int MaxPerConnection = 4;
     public const int MaxPerAgent = 8;
     public const int DefaultTail = 200;
@@ -70,23 +74,45 @@ public sealed class LogRelay(AgentRegistry registry, ILogReceiver receiver, ILog
             return streamId;
         }
 
-        if (!registry.TryGet(request.ServerId, out var session) || session.Link is not { } link)
+        if (!registry.TryGet(request.ServerId, out var session))
         {
             await receiver.LogEndedAsync(connectionId, streamId, LogEndReasons.Unavailable, "agent is not connected", cancellationToken);
             return streamId;
         }
 
+        // A container node has no Docker socket: its stdout comes from the host agent that sees the container,
+        // so the stream is opened on the host with the container's id and answers arrive from the host.
+        var container = request.Container;
+        if (session.IsContainer && request.Source == "container")
+        {
+            if (linker.LinkOf(session.ServerId) is not { } nodeLink || !registry.TryGet(nodeLink.HostId, out var host))
+            {
+                await receiver.LogEndedAsync(connectionId, streamId, LogEndReasons.Unavailable, NeedsHostAgent, cancellationToken);
+                return streamId;
+            }
+
+            session = host;
+            container = nodeLink.Container.Id;
+        }
+
+        if (session.Link is not { } link)
+        {
+            await receiver.LogEndedAsync(connectionId, streamId, LogEndReasons.Unavailable, "agent is not connected", cancellationToken);
+            return streamId;
+        }
+
+        var agentId = session.ServerId;
         lock (_lock)
         {
             var perConnection = _streams.Values.Count(s => s.ConnectionId == connectionId);
-            var perAgent = _streams.Values.Count(s => s.ServerId == request.ServerId);
+            var perAgent = _streams.Values.Count(s => s.ServerId == agentId);
             if (perConnection >= MaxPerConnection || perAgent >= MaxPerAgent)
             {
                 streamId = "";
             }
             else
             {
-                _streams[streamId] = new StreamEntry(streamId, request.ServerId, connectionId);
+                _streams[streamId] = new StreamEntry(streamId, agentId, connectionId);
             }
         }
 
@@ -101,15 +127,15 @@ public sealed class LogRelay(AgentRegistry registry, ILogReceiver receiver, ILog
             streamId,
             request.Source,
             request.Unit,
-            request.Container,
-            null,
+            container,
+            request.Path,
             request.Priority,
             request.SinceMs,
             request.Tail is > 0 and <= 1000 ? request.Tail : DefaultTail);
         try
         {
             await link.SendAsync(start, cancellationToken);
-            logger.LogDebug("log stream {StreamId} started on {ServerId} for {ConnectionId} ({Source} {Unit}{Container})", streamId, request.ServerId, connectionId, request.Source, request.Unit, request.Container);
+            logger.LogDebug("log stream {StreamId} started on {ServerId} for {ConnectionId} ({Source} {Unit}{Container}{Path})", streamId, agentId, connectionId, request.Source, request.Unit, container, request.Path);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

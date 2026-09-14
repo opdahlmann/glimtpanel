@@ -1,0 +1,76 @@
+<gp-modal [(open)]="open" [title]="'addContainer' | t" [maxWidth]="560" [closeLabel]="'close' | t">
+  @if (open() && step() === 0) {
+    <div class="label">{{ 'nodeName' | t }}</div>
+    <gp-input [label]="'name' | t" [ngModel]="name()" (ngModelChange)="name.set($event)" name="nodeName" autocomplete="off" placeholder="api-1" (keydown.enter)="create()" />
+    @if (error(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="foot">
+      <gp-button variant="primary" size="lg" [loading]="creating()" [disabled]="!canCreate()" (click)="create()">{{ 'createNode' | t }}</gp-button>
+    </div>
+  } @else if (open() && step() === 1) {
+    @if (created(); as c) {
+      <div class="label">{{ 'nodeToken' | t }} <span class="once">· {{ 'tokenOnce' | t }}</span></div>
+      <div class="cmd-row">
+        <code class="cmd" data-testid="node-token">{{ c.token }}</code>
+        <button type="button" class="copy" (click)="copyToken()">{{ (copiedToken() ? 'copiedShort' : 'copy') | t }}</button>
+      </div>
+      <gp-segment [options]="variantOptions()" [value]="variant()" (valueChange)="onVariant($event)" [label]="'view' | t" size="sm" />
+      <div class="fields">
+        <div class="label small">{{ 'optionalEnv' | t }}</div>
+        <gp-input [label]="'healthUrl' | t" [ngModel]="healthUrl()" (ngModelChange)="healthUrl.set($event)" name="healthUrl" autocomplete="off" placeholder="http://127.0.0.1:8080/healthz" />
+        <gp-input [label]="'checksField' | t" [ngModel]="checks()" (ngModelChange)="checks.set($event)" name="checks" autocomplete="off" placeholder="db=postgres:5432,cache=redis:6379" />
+        <gp-input [label]="'logPathsField' | t" [ngModel]="logPaths()" (ngModelChange)="logPaths.set($event)" name="logPaths" autocomplete="off" placeholder="/var/log/app" />
+      </div>
+      <div class="cmd-row">
+        <pre class="cmd snippet" data-testid="node-snippet">{{ snippet() }}</pre>
+        <button type="button" class="copy" (click)="copySnippet()">{{ (copiedSnippet() ? 'copiedShort' : 'copy') | t }}</button>
+      </div>
+      <div class="waiting" role="status" aria-live="polite">
+        <span class="wdot" aria-hidden="true"></span>
+        <span>{{ 'waitingContainer' | t }}</span>
+      </div>
+    }
+  } @else if (open()) {
+    @if (card(); as s) {
+      <div class="connected" role="status">
+        <span class="cdot" aria-hidden="true"></span>
+        <span class="cname">{{ s.name }}</span>
+        <span class="cline num">{{ 'connected' | t }}@if (s.image) { · {{ s.image }}}</span>
+      </div>
+    }
+    <div class="label small">{{ 'tags' | t }}</div>
+    <div class="tags" role="group" [attr.aria-label]="'tags' | t">
+      @for (tag of allTags(); track tag) {
+        <button type="button" class="tag" [class.on]="hasTag(tag)" [attr.aria-pressed]="hasTag(tag)" (click)="toggleTag(tag)">{{ tag }}</button>
+      }
+      @if (addingTag()) {
+        <input
+          class="tag-input"
+          type="text"
+          [value]="newTag()"
+          (input)="onTagInput($event)"
+          (keydown)="onTagKeydown($event)"
+          (blur)="commitTag()"
+          [attr.aria-label]="'addTag' | t"
+          [attr.aria-invalid]="tagError() ? true : null"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          gpAutofocus
+        />
+      } @else if (canAddTag()) {
+        <button type="button" class="tag add" (click)="startTag()" [attr.aria-label]="'addTag' | t">+</button>
+      }
+    </div>
+    @if (tagError(); as e) {
+      <div class="error">{{ e | t }}</div>
+    }
+    @if (error(); as e) {
+      <div class="error" role="alert">{{ e | t }}</div>
+    }
+    <div class="foot">
+      <gp-button variant="primary" size="lg" [loading]="saving()" (click)="done()">{{ 'done' | t }}</gp-button>
+    </div>
+  }
+</gp-modal>

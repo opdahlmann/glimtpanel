@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+# Sidecar-imaget for containernoder (IMPLEMENTERINGSPLAN steg 12.4): kun binæren og CA-sertifikater, ingen
+# skall, kjører som uid 65532. Under 15 MB. Byggkonteksten er repo-roten:
+#   docker build -f apps/glimt-agent/Dockerfile.sidecar -t glimt-agent-sidecar .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f apps/glimt-agent/Dockerfile.sidecar \
+#     --build-arg VERSION=0.1.0 -t ghcr.io/opdahlmann/glimt-agent:0.1.0 --push .
+# Bruk: pid- og nettverksnamespace fra app-containeren, miljøet fra README («Containernoder»).
+
+FROM --platform=$BUILDPLATFORM golang:1.25 AS build
+ARG VERSION=0.0.0-dev
+ARG TARGETARCH
+WORKDIR /src
+COPY apps/glimt-agent/go.mod apps/glimt-agent/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY apps/glimt-agent/ ./
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -trimpath \
+      -ldflags "-s -w -X main.version=${VERSION}" -o /out/glimt-agent ./cmd/glimt-agent
+
+FROM scratch
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/glimt-agent /glimt-agent
+# Bare tokenet og hub-adressen trengs; alt annet er valgfritt (se README).
+ENV GLIMT_KIND=container GLIMT_STATE_DIR=/var/lib/glimt-agent
+USER 65532:65532
+ENTRYPOINT ["/glimt-agent", "run"]

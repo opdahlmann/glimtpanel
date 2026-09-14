@@ -27,7 +27,7 @@ Alt kjøres fra repo-roten. `npm install` først. Krav: Node 22+, .NET SDK 10, D
 
 ```sh
 npm run doctor                  # sjekker verktøyene
-npm run dev                     # hub (dotnet watch, :5080) + agent-container + web (ng serve, :4200). Flagg: --no-agent --no-web --no-hub --site --plain-agent
+npm run dev                     # hub (dotnet watch, :5080) + agent-container + web (ng serve, :4200). Flagg: --no-agent --no-web --no-hub --site --plain-agent --sidecar
 npm run dev:hub | dev:web | dev:agent | dev:site
 npm run dev:stop                # stopper container og løpende prosesser
 npm test                        # test:web + test:hub + test:agent
@@ -53,6 +53,7 @@ dotnet run --project apps/glimt-hub/src/Glimt.Hub -- vapid-keys
 docker run --rm -v "$PWD/apps/glimt-agent":/src -w /src -v glimt-go-cache:/go/pkg/mod -v glimt-go-build:/root/.cache/go-build \
   -e CGO_ENABLED=0 golang:1.25 go test ./internal/collect/ -run TestDisk
 npm run dev:agent -- --logs | --shell | --measure   # journal, bash eller systemd-cgtop i containeren
+node scripts/agent-container.mjs --sidecar | --sidecar-check | --sidecar-snapshot | --sidecar-logs | --sidecar-stop   # containernode (fase 12)
 docker exec glimt-agent-dev glimt-agent snapshot     # én snapshot-melding som JSON
 
 # protokoll
@@ -126,7 +127,9 @@ Sti-alias: `@core/*`, `@shared/*`, `@i18n/*`, `@features/*`.
 
 **Agent.** `cmd/glimt-agent` (run, check, snapshot, stream, logs, uninstall) og `internal/` (collect fra /proc og
 systemctl, docker via socket/proxy og cgroup v2, journal, logs-manager, ws-klient med backoff og sendekø, sched med
-injiserbar klokke, protocol som speiler skjemaet). Parsere testes mot fixtures i `internal/collect/testdata/`.
+injiserbar klokke, protocol som speiler skjemaet, health for helse-URL og TCP-sjekker). `--kind auto|server|container`:
+containerprofilen (fase 12) leser `GLIMT_TOKEN` fra miljøet, måler cgroup eller summerer prosesser (`approx`), haler filer
+fra `GLIMT_LOG_PATHS` og sender `bye` ved stopp; `Dockerfile.sidecar` er `FROM scratch` med uid 65532. Parsere testes mot fixtures i `internal/collect/testdata/`.
 Dev-containeren (`Dockerfile.dev`) er Ubuntu 24.04 med systemd som PID 1, fordi macOS mangler /proc, journald og cgroup v2.
 
 ## Konvensjoner

@@ -53,7 +53,7 @@ func runOnce(name string, args []string, stdout, stderr io.Writer) int {
 	s.Prime(ctx)
 	if name == "stream" {
 		_, _, _ = d.system.Processes(ctx, *top)
-	} else {
+	} else if d.maint != nil {
 		if err := d.maint.Refresh(ctx); err != nil {
 			log.Warn("maintenance check failed", "err", err)
 		}

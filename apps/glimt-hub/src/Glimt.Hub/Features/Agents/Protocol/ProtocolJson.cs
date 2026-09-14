@@ -53,6 +53,7 @@ public static class ProtocolJson
         MessageTypes.Log => root.Deserialize<Log>(Options),
         MessageTypes.LogEnd => root.Deserialize<LogEnd>(Options),
         MessageTypes.Pong => root.Deserialize<Pong>(Options),
+        MessageTypes.Bye => root.Deserialize<Bye>(Options),
         MessageTypes.Welcome => root.Deserialize<Welcome>(Options),
         MessageTypes.AuthFailed => root.Deserialize<AuthFailed>(Options),
         MessageTypes.Subscribe => root.Deserialize<Subscribe>(Options),

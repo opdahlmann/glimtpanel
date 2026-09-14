@@ -12,6 +12,7 @@ public static class MessageTypes
     public const string Log = "log";
     public const string LogEnd = "logEnd";
     public const string Pong = "pong";
+    public const string Bye = "bye";
 
     // hub → agent
     public const string Welcome = "welcome";
@@ -24,6 +25,15 @@ public static class MessageTypes
     public const string Ping = "ping";
 }
 
+/// <summary>Node kinds in <see cref="Hello"/> (fase 12); missing means server.</summary>
+public static class NodeKinds
+{
+    public const string Server = "server";
+    public const string Container = "container";
+
+    public static string Normalize(string? kind) => kind == Container ? Container : Server;
+}
+
 /// <summary>Reasons in <see cref="AuthFailed"/>.</summary>
 public static class AuthFailures
 {
@@ -31,6 +41,9 @@ public static class AuthFailures
     public const string ExpiredKey = "expiredKey";
     public const string InvalidToken = "invalidToken";
     public const string ServerRemoved = "serverRemoved";
+
+    /// <summary>A container node sent an enrolment key; it must use the node token from the dashboard (fase 12).</summary>
+    public const string ContainerNeedsToken = "containerNeedsToken";
 }
 
 /// <summary>Base of every protocol message. `type` is always serialized first.</summary>
@@ -50,7 +63,15 @@ public sealed record Hello(
     int Cores,
     long RamBytes,
     long BootTime,
-    string DockerMode) : AgentMessage(MessageTypes.Hello);
+    string DockerMode,
+    string? Kind = null,
+    string? ContainerId = null,
+    Capabilities? Capabilities = null,
+    string? Image = null,
+    IReadOnlyList<string>? LogPaths = null) : AgentMessage(MessageTypes.Hello);
+
+/// <summary>What a container agent could read where it runs (fase 12).</summary>
+public sealed record Capabilities(bool Cgroup, bool ProcAll, bool Netns, bool Health);
 
 public sealed record OsInfo(string Id, string VersionId, string PrettyName);
 
@@ -60,7 +81,15 @@ public sealed record Snapshot(
     IReadOnlyList<ContainerInfo>? Containers,
     ServicesInfo? Services,
     MaintenanceInfo? Maintenance,
-    SecurityInfo? Security) : AgentMessage(MessageTypes.Snapshot);
+    SecurityInfo? Security,
+    HealthInfo? Health = null,
+    IReadOnlyList<CheckInfo>? Checks = null) : AgentMessage(MessageTypes.Snapshot);
+
+/// <summary>GET GLIMT_HEALTH_URL (fase 12).</summary>
+public sealed record HealthInfo(string Url, bool Ok, int? Status, long? Ms, long CheckedAt, string? Error);
+
+/// <summary>One TCP reachability check from GLIMT_CHECKS (fase 12).</summary>
+public sealed record CheckInfo(string Name, string Target, bool Ok, long? Ms, string? Error);
 
 public sealed record Stream(
     long Ts,
@@ -76,6 +105,9 @@ public sealed record LogLine(long Ts, string? Unit, string? Container, string? P
 public sealed record LogEnd(string StreamId, string Reason, string? Message) : AgentMessage(MessageTypes.LogEnd);
 
 public sealed record Pong() : AgentMessage(MessageTypes.Pong);
+
+/// <summary>Planned stop (SIGTERM) announced before the socket closes: the node goes to sleeping, not down (fase 12).</summary>
+public sealed record Bye(string Reason) : AgentMessage(MessageTypes.Bye);
 
 // ---- hub → agent -------------------------------------------------------------------------------
 
@@ -112,7 +144,12 @@ public sealed record HostMetrics(
     MemMetrics Mem,
     long? UptimeSec,
     IReadOnlyList<MountMetrics>? Mounts,
-    IReadOnlyList<IfaceMetrics>? Ifaces);
+    IReadOnlyList<IfaceMetrics>? Ifaces,
+    bool? Approx = null,
+    LimitsInfo? Limits = null);
+
+/// <summary>A container's cpu.max cores and memory.max bytes (fase 12); null = no limit.</summary>
+public sealed record LimitsInfo(double? CpuCores, long? MemBytes);
 
 public sealed record CpuMetrics(
     double Total,

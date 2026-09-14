@@ -100,6 +100,7 @@ export function demoServer(over: Partial<ServerDto> = {}): ServerDto {
       firewall: { ufw: 'active', fail2ban: 'active', banned: 14, blocked: 42 },
     },
     snapshotAt: new Date(NOW - 10_000).toISOString(),
+    kind: 'server',
     streamAt: new Date(NOW).toISOString(),
     ...over,
   };

@@ -23,7 +23,10 @@ public sealed class AgentAuthenticator(
     {
         if (!string.IsNullOrEmpty(hello.EnrolKey))
         {
-            return await EnrolAsync(hello, cancellationToken);
+            // Container nodes are created in the dashboard and get a long-lived token; there is no enrolment (fase 12).
+            return NodeKinds.Normalize(hello.Kind) == NodeKinds.Container
+                ? AuthResult.Failed(AuthFailures.ContainerNeedsToken)
+                : await EnrolAsync(hello, cancellationToken);
         }
 
         if (!string.IsNullOrEmpty(hello.Token))

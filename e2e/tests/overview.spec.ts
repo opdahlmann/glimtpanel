@@ -1,5 +1,5 @@
-// Oversikten (IMPLEMENTERINGSPLAN fase 4, steg 4.5): skjerm 4 (oversikten med de 16 demoserverne), 16 (server nede),
-// 18 (leser) og 19 (norsk) i alle tre prosjektene, med skjermbilder og mobilsjekklisten. Levende tall (ringer, chips,
+// Oversikten (IMPLEMENTERINGSPLAN fase 4, steg 4.5; fase 12, steg 12.8): skjerm 4 (oversikten med de 16 demoserverne),
+// 16 (server nede), 18 (leser), 19 (norsk) og 20 (containernoder) i alle tre prosjektene, med skjermbilder og mobilsjekklisten. Levende tall (ringer, chips,
 // sparklines og klokken i sammendraget) maskeres i skjermbildene.
 import { test, expect, type Page } from '@playwright/test';
 import { gotoOverviewLoggedIn, loginViaApi } from '../helpers/auth';
@@ -9,7 +9,7 @@ import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-
 const DEMO_NAMES = ['web-01', 'web-02', 'api-prod', 'db-prod', 'worker-01', 'cache-01', 'staging-web', 'staging-db', 'acme-app', 'acme-db', 'nordic-shop', 'nordic-db', 'nas', 'pi-hole', 'media', 'backup'];
 
 function liveMasks(page: Page) {
-  return [page.locator('gp-ring'), page.locator('gp-chip'), page.locator('gp-sparkline'), page.getByTestId('summary'), page.locator('gp-server-card .info'), ...navMasks(page)];
+  return [page.locator('gp-ring'), page.locator('gp-chip'), page.locator('gp-sparkline'), page.getByTestId('summary'), page.locator('gp-server-card .info'), page.locator('gp-container-card .info'), page.locator('gp-container-card .status'), ...navMasks(page)];
 }
 
 /** Alle 16 demoserverne står i oversikten (første Card kommer rett etter SubscribeOverview). */
@@ -25,13 +25,15 @@ test.describe('oversikten', () => {
     await gotoOverviewLoggedIn(page);
     await waitForCards(page);
 
-    await expect(page.getByTestId('summary')).toHaveText(/^\d+ servers · \d+ up · 1 down · \d+ paused · live · \d\d:\d\d:\d\d$/);
-    await expect(page.getByRole('button', { name: 'Add server' })).toBeVisible();
+    // Fase 12: demoen har tre containernoder, så tittelen sier «Nodes» og sammendraget teller begge typer.
+    await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
+    await expect(page.getByTestId('summary')).toHaveText(/^19 nodes · 16 servers · 3 containers · \d+ up · 1 down · \d sleeping · \d+ paused · live · \d\d:\d\d:\d\d$/);
+    await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
     await expect(page.getByPlaceholder('Search servers…')).toBeVisible();
     await expect(page.locator('gp-select select')).toHaveValue('name');
     await expect(page.locator('main gp-segment')).toHaveCount(0); // språkbyttet i sidepanelet er også et segment
     const chips = page.locator('.chip');
-    await expect(chips).toHaveText(['All', 'client-a', 'client-b', 'homelab', 'prod', 'staging', 'up', 'down', 'paused', 'Has alert']);
+    await expect(chips).toHaveText(['All', 'client-a', 'client-b', 'edge', 'homelab', 'prod', 'staging', 'up', 'down', 'paused', 'sleeping', 'Servers', 'Containers', 'Has alert']);
 
     // Kortet: tagger, navn, status, tre ringer, fem chips, to sparklines. Tallene lever (ringen endrer seg innen få sekunder).
     const web02 = page.locator('gp-server-card[aria-label^="web-02:"]');
@@ -125,11 +127,13 @@ test.describe('oversikten', () => {
     await page.keyboard.press('/');
     await expect(page.getByPlaceholder('Search servers…')).toBeFocused();
     await page.keyboard.press('Escape');
-    await page.locator('gp-server-card').first().focus();
+    // Piltastene går over begge korttypene (acme-backend er et containerkort rett etter acme-app).
+    const anyCard = page.locator('gp-server-card, gp-container-card');
+    await anyCard.first().focus();
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('gp-server-card').nth(1)).toBeFocused();
+    await expect(anyCard.nth(1)).toBeFocused();
     await page.keyboard.press('End');
-    await expect(page.locator('gp-server-card').last()).toBeFocused();
+    await expect(anyCard.last()).toBeFocused();
     await page.keyboard.press('Home');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/servers\/demo-acme-app$/);
@@ -148,9 +152,9 @@ test.describe('oversikten', () => {
     await forceLang(page, 'en');
     await loginViaApi(page, reader);
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Servers' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
     await waitForCards(page);
-    await expect(page.getByRole('button', { name: 'Add server' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add', exact: true })).toHaveCount(0);
     if (!isMobileProject(testInfo)) {
       await expect(page.locator('gp-sidebar .role')).toHaveText('Reader');
     }
@@ -163,12 +167,12 @@ test.describe('oversikten', () => {
   test('skjerm 19: norsk bytter alle tekstene i oversikten', async ({ page }, testInfo) => {
     await forceLang(page, 'no');
     await gotoOverviewLoggedIn(page);
-    await expect(page.getByRole('heading', { name: 'Servere' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Noder' })).toBeVisible();
     await waitForCards(page);
-    await expect(page.getByTestId('summary')).toHaveText(/^\d+ servere · \d+ oppe · 1 nede · \d+ pauset · live · \d\d:\d\d:\d\d$/);
-    await expect(page.getByRole('button', { name: 'Legg til server' })).toBeVisible();
+    await expect(page.getByTestId('summary')).toHaveText(/^19 noder · 16 servere · 3 containere · \d+ oppe · 1 nede · \d sover · \d+ pauset · live · \d\d:\d\d:\d\d$/);
+    await expect(page.getByRole('button', { name: 'Legg til' })).toBeVisible();
     await expect(page.getByPlaceholder('Søk i servere…')).toBeVisible();
-    await expect(page.locator('.chip')).toHaveText(['Alle', 'client-a', 'client-b', 'homelab', 'prod', 'staging', 'oppe', 'nede', 'pauset', 'Har varsel']);
+    await expect(page.locator('.chip')).toHaveText(['Alle', 'client-a', 'client-b', 'edge', 'homelab', 'prod', 'staging', 'oppe', 'nede', 'pauset', 'sover', 'Servere', 'Containere', 'Har varsel']);
     const web02 = page.locator('gp-server-card[aria-label^="web-02:"]');
     await expect(web02.locator('gp-ring .label')).toHaveText(['Prosessor', 'Minne', 'Disk']);
     await expect(web02.locator('gp-chip .label')).toHaveText(['Nett MB/s', 'Containere', 'Oppdat.', 'Omstart', 'Tjenester']);
@@ -178,5 +182,58 @@ test.describe('oversikten', () => {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(700);
     await expect(page).toHaveScreenshot('overview-no.png', { fullPage: true, mask: liveMasks(page) });
+  });
+});
+
+test.describe('containernoder i oversikten (fase 12)', () => {
+  test('skjerm 20: tre containerkort med image, ringer, chips og typefilter', async ({ page }, testInfo) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await forceLang(page, 'en');
+    await gotoOverviewLoggedIn(page);
+    await waitForCards(page);
+    const nodes = page.locator('gp-container-card');
+    await expect(nodes).toHaveCount(3);
+
+    // acme-backend er lenket til web-02 (12.6): «on web-02», helse ok, to ringer, fire chips, to sparklines.
+    const backend = page.locator('gp-container-card[aria-label^="acme-backend:"]');
+    await expect(backend).toHaveAttribute('data-kind', 'container');
+    await expect(backend.locator('.info')).toHaveText(/^container · ghcr\.io\/acme\/backend:2\.4\.1 · up \d+d \d+h · on web-02$/);
+    await expect(backend.locator('gp-ring')).toHaveCount(2);
+    await expect(backend.locator('gp-ring').first().locator('.sub')).toHaveText(/of 2 cores$/);
+    await expect(backend.locator('gp-ring').nth(1).locator('.sub')).toHaveText(/of 1 GB$/);
+    await expect(backend.locator('gp-chip .label')).toHaveText(['Net MB/s', 'restarts', 'health', 'Listening ports']);
+    await expect(backend.locator('gp-chip').nth(2).locator('.value')).toHaveText('ok');
+    await expect(backend.locator('gp-sparkline')).toHaveCount(2);
+    await expect(backend.locator('gp-badge')).toHaveText(['prod', 'client-a']);
+
+    // acme-frontend har ingen grense; edge-worker mangler cgroup (≈) og sover 02–06.
+    const frontend = page.locator('gp-container-card[aria-label^="acme-frontend:"]');
+    await expect(frontend.locator('gp-ring').nth(1).locator('.sub')).toHaveText(/no limit$/);
+    const edge = page.locator('gp-container-card[aria-label^="edge-worker:"]');
+    await expect(edge.locator('.info')).toHaveAttribute('title', 'Summed over visible processes: no readable cgroup on this platform');
+    await expect(edge.locator('.status')).toHaveText(/^(live|sleeping since .+)$/);
+
+    // Typefilteret: bare containere, så bare servere.
+    const chip = (name: string) => page.locator('.chip', { hasText: new RegExp(`^${name}$`) });
+    await chip('Containers').click();
+    await expect(page.locator('gp-server-card')).toHaveCount(0);
+    await expect(nodes).toHaveCount(3);
+    await chip('Servers').click();
+    await expect(nodes).toHaveCount(0);
+    await expect(page.locator('gp-server-card')).toHaveCount(16);
+    await chip('All').click();
+
+    // «+ Add» har menyen Server / Container.
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'Server' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Container' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('add-menu')).toHaveCount(0);
+
+    await expectMobileRules(page, testInfo);
+    expect(errors, 'sidefeil').toEqual([]);
+    await page.evaluate(() => document.fonts.ready);
+    await expect(backend).toHaveScreenshot('card-container.png', { mask: [backend.locator('gp-ring'), backend.locator('gp-chip'), backend.locator('gp-sparkline'), backend.locator('.info'), backend.locator('.stripe')] });
   });
 });

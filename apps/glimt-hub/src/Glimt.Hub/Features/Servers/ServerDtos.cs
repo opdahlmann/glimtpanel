@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Agents.Protocol;
 using Glimt.Hub.Infrastructure;
 
 namespace Glimt.Hub.Features.Servers;
@@ -30,7 +31,10 @@ public sealed record ServerDto(
     string? DockerMode,
     DateTimeOffset CreatedAt,
     DateOnly? SupportUntil,
-    bool Eol)
+    bool Eol,
+    string Kind = NodeKinds.Server,
+    string? Image = null,
+    string? ContainerId = null)
 {
     /// <summary>Builds the projection; status and last seen come from the live session when the registry knows the server.</summary>
     public static ServerDto From(ServerDocument doc, string role, string? ownerEmail, AgentSession? live, DateOnly today)
@@ -59,9 +63,21 @@ public sealed record ServerDto(
             doc.DockerMode,
             new DateTimeOffset(DateTime.SpecifyKind(doc.CreatedAt, DateTimeKind.Utc)),
             supportUntil,
-            UbuntuSupport.IsEol(supportUntil, today));
+            UbuntuSupport.IsEol(supportUntil, today),
+            NodeKinds.Normalize(doc.Kind),
+            doc.Image ?? live?.Image,
+            doc.ContainerId ?? live?.ContainerId);
     }
 }
+
+/// <summary>POST /api/servers (step 12.5): only container nodes are created here; servers come through an enrol key.</summary>
+public sealed record CreateNodeRequest(string? Kind, string? Name);
+
+/// <summary>The token is returned exactly once; only its hash is stored.</summary>
+public sealed record CreateNodeResponse(string Id, string Name, string Kind, string Token, string HubUrl, string AgentImage, string Compose, string Dockerfile);
+
+/// <summary>POST /api/servers/{id}/rotate-key for a container node: the new token, and how long the old one still works.</summary>
+public sealed record RotateKeyResponse(string Token, DateTimeOffset OldTokenValidUntil);
 
 public sealed record EnrolKeyRequest(string? DockerMode);
 
@@ -69,7 +85,8 @@ public sealed record EnrolKeyResponse(string Key, string Command, DateTimeOffset
 
 public sealed record PatchServerRequest(string? Name, List<string>? Tags);
 
-public sealed record DeleteServerResponse(string UninstallCommand);
+/// <summary>Servers get the uninstall command; container nodes get a hint instead (remove the sidecar from the compose file).</summary>
+public sealed record DeleteServerResponse(string? UninstallCommand, string Kind = NodeKinds.Server, string? Hint = null);
 
 /// <summary>Tag rules shared by servers and access scopes: ≤ 10 tags of ^[a-z0-9-]{1,24}$, lowercased and deduplicated.</summary>
 public static partial class ServerTags

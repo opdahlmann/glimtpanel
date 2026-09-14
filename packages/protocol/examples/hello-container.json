@@ -1,0 +1,30 @@
+{
+  "type": "hello",
+  "v": 1,
+  "token": "agt_c0nt41n3rt0k3n_examplexx",
+  "kind": "container",
+  "containerId": "8e49456bd7f9",
+  "hostname": "acme-backend",
+  "agentVersion": "0.2.0",
+  "os": {
+    "id": "debian",
+    "versionId": "12",
+    "prettyName": "Debian GNU/Linux 12 (bookworm)"
+  },
+  "kernel": "6.8.0-45-generic",
+  "arch": "amd64",
+  "cores": 2,
+  "ramBytes": 1073741824,
+  "bootTime": 1757395200000,
+  "dockerMode": "none",
+  "capabilities": {
+    "cgroup": true,
+    "procAll": true,
+    "netns": true,
+    "health": true
+  },
+  "image": "ghcr.io/acme/backend:1.4.2",
+  "logPaths": [
+    "/var/log/app"
+  ]
+}

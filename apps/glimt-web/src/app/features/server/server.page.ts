@@ -23,18 +23,30 @@ import { PanelNavComponent, PanelNavItem } from './panel-nav.component';
 import { ContPanelComponent } from './panels/cont-panel.component';
 import { CpuPanelComponent } from './panels/cpu-panel.component';
 import { DiskPanelComponent } from './panels/disk-panel.component';
+import { HealthPanelComponent } from './panels/health-panel.component';
+import { HostPanelComponent } from './panels/host-panel.component';
 import { LogsPanelComponent } from './panels/logs-panel.component';
+import { PortsPanelComponent } from './panels/ports-panel.component';
 import { MaintPanelComponent } from './panels/maint-panel.component';
 import { MemPanelComponent } from './panels/mem-panel.component';
 import { NetPanelComponent } from './panels/net-panel.component';
 import { ProcPanelComponent } from './panels/proc-panel.component';
 import { SecPanelComponent } from './panels/sec-panel.component';
 import { SvcPanelComponent } from './panels/svc-panel.component';
-import { containersView, cpuView, diskView, headerView, maintView, memView, netView, procView, rememberPorts, securityView, servicesView, snapshotText } from './server-view';
+import { containersView, cpuView, diskView, headerView, healthView, hostView, maintView, memView, netView, procView, rememberPorts, securityView, servicesView, snapshotText } from './server-view';
 
-/** Panelene i rekkefølge (steg 5.2). `cert` er Forslag og utelatt. */
-export const PANEL_KEYS = ['cpu', 'mem', 'disk', 'net', 'proc', 'cont', 'svc', 'maint', 'sec', 'logs'] as const;
+/** Panelene i rekkefølge (steg 5.2). `cert` er Forslag og utelatt. `ports`, `health` og `host` er containernodens (steg 12.9). */
+export const PANEL_KEYS = ['cpu', 'mem', 'disk', 'net', 'proc', 'cont', 'svc', 'maint', 'sec', 'logs', 'ports', 'health', 'host'] as const;
 export type PanelKey = (typeof PANEL_KEYS)[number];
+/** Serverens paneler (skjerm 5) og containernodens (skjerm 21): Volumes er diskpanelet, Host bare når lenket. */
+export const SERVER_PANELS: readonly PanelKey[] = ['cpu', 'mem', 'disk', 'net', 'proc', 'cont', 'svc', 'maint', 'sec', 'logs'];
+export const CONTAINER_PANELS: readonly PanelKey[] = ['cpu', 'mem', 'disk', 'net', 'proc', 'ports', 'health', 'host', 'logs'];
+
+/** Panellisten etter nodetype; verten utelates når noden ikke er lenket (steg 12.9). */
+export function panelsFor(kind: 'server' | 'container', linked: boolean): PanelKey[] {
+  if (kind !== 'container') return [...SERVER_PANELS];
+  return CONTAINER_PANELS.filter((k) => k !== 'host' || linked);
+}
 /** Kortets ringer bruker `#cpu`, `#mem`, `#disk`; alle panelnøklene godtas som fragment. */
 export const PANEL_ID_PREFIX = 'panel-';
 /** Panelet legges så langt under toppen (sticky panelnav) ved rulling. */
@@ -66,10 +78,13 @@ export const SCROLL_OFFSET = 70;
     MaintPanelComponent,
     SecPanelComponent,
     LogsPanelComponent,
+    PortsPanelComponent,
+    HealthPanelComponent,
+    HostPanelComponent,
   ],
   templateUrl: './server.page.html',
   styleUrl: './server.page.css',
-  host: { '[class.mobile]': 'isMobile()', '[attr.data-status]': 'header()?.status' },
+  host: { '[class.mobile]': 'isMobile()', '[attr.data-status]': 'header()?.status', '[attr.data-kind]': 'kind()' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ServerPage {
@@ -113,6 +128,16 @@ export class ServerPage {
   });
   readonly header = computed(() => (this.server() ? headerView(this.server() as ServerDto, this.item(), this.texts()) : null));
   readonly down = computed(() => this.header()?.down ?? false);
+  /** Nodetype fra strømmen, ellers listen (containernoden vises riktig også før første Server). */
+  readonly kind = computed<'server' | 'container'>(() => this.server()?.kind ?? this.item()?.kind ?? 'server');
+  readonly isContainer = computed(() => this.kind() === 'container');
+  readonly health = computed(() => (this.server() ? healthView(this.server() as ServerDto, this.texts()) : null));
+  readonly hostLink = computed(() => (this.server() ? hostView(this.server() as ServerDto, this.texts(), Date.now()) : null));
+  readonly logPaths = computed(() => this.server()?.logPaths ?? []);
+  /** `capabilities` (steg 12.9): paneler uten data sier «not readable on this platform». */
+  readonly procReadable = computed(() => this.server()?.capabilities?.procAll !== false);
+  readonly netReadable = computed(() => this.server()?.capabilities?.netns !== false);
+  readonly panels = computed(() => panelsFor(this.kind(), this.hostLink() !== null));
   readonly cpu = computed(() => (this.server() ? cpuView(this.server() as ServerDto, this.texts()) : null));
   readonly mem = computed(() => (this.server() ? memView(this.server() as ServerDto, this.texts()) : null));
   readonly disk = computed(() => (this.server() ? diskView(this.server() as ServerDto, this.texts()) : null));
@@ -127,6 +152,22 @@ export class ServerPage {
     const t = this.texts();
     const failed = (this.services()?.failed ?? 0) > 0;
     const neutral = 'var(--w-60)';
+    if (this.isContainer()) {
+      const healthTone = this.health()?.tone;
+      const all: PanelNavItem[] = [
+        { key: 'cpu', label: t.t('cpu'), color: 'var(--color-cpu)' },
+        { key: 'mem', label: t.t('memory'), color: 'var(--color-ram)' },
+        { key: 'disk', label: t.t('volumes'), color: 'var(--color-disk)' },
+        { key: 'net', label: t.t('network'), color: 'var(--color-net)' },
+        { key: 'proc', label: t.t('processes'), color: neutral },
+        { key: 'ports', label: t.t('ports'), color: neutral },
+        { key: 'health', label: t.t('healthChecks'), color: healthTone === 'crit' ? 'var(--color-crit)' : healthTone === 'ok' ? 'var(--color-ram)' : neutral },
+        { key: 'host', label: t.t('host'), color: 'var(--color-swap)' },
+        { key: 'logs', label: t.t('logs'), color: neutral },
+      ];
+      const keys = this.panels();
+      return all.filter((i) => keys.includes(i.key as PanelKey));
+    }
     return [
       { key: 'cpu', label: t.t('cpu'), color: 'var(--color-cpu)' },
       { key: 'mem', label: t.t('memory'), color: 'var(--color-ram)' },
@@ -141,7 +182,12 @@ export class ServerPage {
     ];
   });
   readonly svcTone = computed<PanelTone>(() => ((this.services()?.failed ?? 0) > 0 ? 'crit' : 'neutral'));
-  readonly logsMeta = computed(() => `journald · ${this.texts().t('streaming')}`);
+  readonly healthTone = computed<PanelTone>(() => {
+    const tone = this.health()?.tone;
+    return tone === 'crit' ? 'crit' : tone === 'ok' ? 'ram' : 'neutral';
+  });
+  readonly portsMeta = computed(() => String(this.security()?.ports?.length ?? 0));
+  readonly logsMeta = computed(() => (this.isContainer() ? `${this.texts().t('files')} · ${this.texts().t('streaming')}` : `journald · ${this.texts().t('streaming')}`));
   readonly secMeta = computed(() => {
     const t = this.texts();
     return `${t.t('ports')} · ${t.t('loggedIn')} · SSH · ${t.t('firewall')}`;
@@ -272,6 +318,11 @@ export class ServerPage {
 
   back(): void {
     void this.router.navigate(['/']);
+  }
+
+  openHost(): void {
+    const link = this.header()?.onHost;
+    if (link) void this.router.navigate(['/servers', link.serverId]);
   }
 
   alertSettings(): void {

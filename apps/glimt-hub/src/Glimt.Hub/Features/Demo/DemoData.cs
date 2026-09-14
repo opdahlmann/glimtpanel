@@ -53,6 +53,17 @@ public static class DemoData
         new("backup", ["homelab"], 2, 4, "20.04", 4, 23, [new("/", "ext4", 40, 31), new("/backup", "ext4", 4000, 78)], 0, new(Eol: true)),
     ];
 
+    /// <summary>
+    /// The three demo container nodes (step 12.11): acme-backend is linked to web-02's api container with a health
+    /// check and two TCP checks; acme-frontend runs without limits; edge-worker has no cgroup (approx) and sleeps 02–06.
+    /// </summary>
+    public static readonly DemoNodeDefinition[] Nodes =
+    [
+        new("acme-backend", ["prod", "client-a"], "ghcr.io/acme/backend:2.4.1", 2, 1024, true, "http://127.0.0.1:3000/healthz", [new("db", "postgres:5432"), new("cache", "redis:6379")], "web-02", "web-api", null, null, 31, 58, ["/var/log/app/app.log", "/var/log/app/access.log"], [3000]),
+        new("acme-frontend", ["prod", "client-a"], "ghcr.io/acme/frontend:1.9.0", 0, 0, true, "http://127.0.0.1:8080/", [], null, null, null, null, 9, 22, ["/var/log/nginx/access.log"], [8080]),
+        new("edge-worker", ["edge"], "ghcr.io/acme/edge-worker:0.7.3", 1, 512, false, null, [new("queue", "rabbit:5672")], null, null, "02:00", "06:00", 17, 44, [], [9100]),
+    ];
+
     public static readonly string[] ContainerKinds = ["web", "api", "db", "redis", "worker", "proxy", "cron", "mail", "search", "queue", "cache"];
 
     public static readonly Dictionary<string, string> Images = new(StringComparer.Ordinal)

@@ -32,6 +32,8 @@ public sealed class FakeAgentService(
     private readonly Lock _lock = new();
     private readonly List<FakeServer> _servers = [];
     private readonly Dictionary<string, FakeAgentLink> _links = new(StringComparer.Ordinal);
+    private readonly List<FakeNode> _nodes = [];
+    private readonly Dictionary<string, FakeNodeLink> _nodeLinks = new(StringComparer.Ordinal);
     private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Random _rng = new();
 
@@ -51,6 +53,26 @@ public sealed class FakeAgentService(
             {
                 return _servers.ToArray();
             }
+        }
+    }
+
+    /// <summary>The demo container nodes (step 12.11) plus those connected by POST /api/e2e/connect-fake-container.</summary>
+    public IReadOnlyList<FakeNode> Nodes
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _nodes.ToArray();
+            }
+        }
+    }
+
+    public FakeNode? FindNode(string? serverId)
+    {
+        lock (_lock)
+        {
+            return _nodes.FirstOrDefault(n => n.ServerId == serverId || n.Name == serverId);
         }
     }
 
@@ -86,7 +108,18 @@ public sealed class FakeAgentService(
                 await StartServerAsync(fake, ownerId, now, stoppingToken);
             }
 
-            logger.LogInformation("demo mode: {Count} fake servers started (owner {OwnerId}, seed {Seed})", _servers.Count, ownerId, options.Env == GlimtOptions.E2e ? E2eSeed : "random");
+            foreach (var definition in DemoData.Nodes)
+            {
+                var node = new FakeNode(definition, _rng, now);
+                lock (_lock)
+                {
+                    _nodes.Add(node);
+                }
+
+                await StartNodeAsync(node, ownerId, now, stoppingToken);
+            }
+
+            logger.LogInformation("demo mode: {Count} fake servers and {Nodes} container nodes started (owner {OwnerId}, seed {Seed})", _servers.Count, _nodes.Count, ownerId, options.Env == GlimtOptions.E2e ? E2eSeed : "random");
             _ready.TrySetResult();
             await LoopAsync(stoppingToken);
         }
@@ -166,6 +199,71 @@ public sealed class FakeAgentService(
         await ingest.SnapshotAsync(session, fake.Snapshot(now.ToUnixTimeMilliseconds()), cancellationToken);
     }
 
+    /// <summary>A demo container node: session with the node's tags, 24 h of history, hello with kind container, first snapshot. Sleeping nodes start asleep.</summary>
+    private async Task StartNodeAsync(FakeNode node, string ownerId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var session = registry.GetOrAddDemo(node.ServerId);
+        session.SetIdentity(node.Name, node.Definition.Tags);
+        session.OwnerId = ownerId;
+        var link = new FakeNodeLink(node, this);
+        lock (_lock)
+        {
+            _nodeLinks[node.ServerId] = link;
+        }
+
+        const int n = ServerBuffer.Capacity;
+        var step = HistoryQuery.Step1hMs;
+        var end = now.ToUnixTimeMilliseconds() / step * step;
+        for (var i = 0; i < n; i++)
+        {
+            buffers.Record(node.ServerId, node.HistoryPoint(i, n, end - (n - 1 - i) * step));
+        }
+
+        session.Attach(link, node.Hello(), now);
+        await ingest.ConnectedAsync(session, isNew: true, cancellationToken);
+        await ingest.SnapshotAsync(session, node.Snapshot(now.ToUnixTimeMilliseconds()), cancellationToken);
+        if (IsSleepTime(node, now))
+        {
+            await PutToSleepAsync(node, session, cancellationToken);
+        }
+    }
+
+    /// <summary>The node says bye and detaches: the hub shows it as sleeping (step 12.5).</summary>
+    private async Task PutToSleepAsync(FakeNode node, AgentSession session, CancellationToken cancellationToken)
+    {
+        node.Online = false;
+        await ingest.ByeAsync(session, new Bye("shutdown"), cancellationToken);
+        if (session.Detach(NodeLink(node).ConnectionId))
+        {
+            await ingest.DisconnectedAsync(session);
+        }
+    }
+
+    /// <summary>The node is back: a new hello (counted as a restart), up again.</summary>
+    private async Task WakeAsync(FakeNode node, AgentSession session, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+        node.Online = true;
+        node.Restart(now);
+        session.Attach(NodeLink(node), node.Hello(), now);
+        await ingest.ConnectedAsync(session, isNew: false, cancellationToken);
+        await ingest.SnapshotAsync(session, node.Snapshot(now.ToUnixTimeMilliseconds()), cancellationToken);
+    }
+
+    /// <summary>Inside the node's sleep window (hub local time), e.g. 02:00–06:00.</summary>
+    internal static bool IsSleepTime(FakeNode node, DateTimeOffset now)
+    {
+        if (node.Definition.SleepFrom is not { } from || node.Definition.SleepTo is not { } to)
+        {
+            return false;
+        }
+
+        var local = TimeZoneInfo.ConvertTime(now, TimeZoneInfo.Local).TimeOfDay;
+        var start = TimeSpan.Parse(from, System.Globalization.CultureInfo.InvariantCulture);
+        var end = TimeSpan.Parse(to, System.Globalization.CultureInfo.InvariantCulture);
+        return start <= end ? local >= start && local < end : local >= start || local < end;
+    }
+
     private void FillHistory(FakeServer fake, DateTimeOffset now, DateTimeOffset? until)
     {
         const int n = ServerBuffer.Capacity;
@@ -205,6 +303,43 @@ public sealed class FakeAgentService(
                 if (snapshot)
                 {
                     await ingest.SnapshotAsync(session, fake.Snapshot(ts), cancellationToken);
+                }
+            }
+
+            var now = clock.GetUtcNow();
+            foreach (var node in Nodes)
+            {
+                if (!registry.TryGet(node.ServerId, out var session))
+                {
+                    continue;
+                }
+
+                // The sleep window is only for the demo definitions; nodes put to sleep by e2e stay asleep.
+                if (node.Definition.SleepFrom is not null)
+                {
+                    var asleep = IsSleepTime(node, now);
+                    if (asleep && session.Connected)
+                    {
+                        await PutToSleepAsync(node, session, cancellationToken);
+                        continue;
+                    }
+
+                    if (!asleep && !session.Connected && !node.Online)
+                    {
+                        await WakeAsync(node, session, cancellationToken);
+                    }
+                }
+
+                if (!node.Online || !session.Connected)
+                {
+                    continue;
+                }
+
+                node.Tick();
+                await ingest.StreamAsync(session, node.Stream(ts), cancellationToken);
+                if (snapshot)
+                {
+                    await ingest.SnapshotAsync(session, node.Snapshot(ts), cancellationToken);
                 }
             }
         }
@@ -324,7 +459,102 @@ public sealed class FakeAgentService(
         return EnrolFakeResult.Ok(fake.ServerId, name, info.OwnerId);
     }
 
+    /// <summary>
+    /// POST /api/e2e/connect-fake-container: a fake agent connects with the token from POST /api/servers exactly like
+    /// the sidecar would (hello with kind container). The node goes up, the owner sees ServerStatus, and the «Add
+    /// container» dialog moves to step 2 (step 12.10).
+    /// </summary>
+    public async Task<EnrolFakeResult> ConnectContainerAsync(string? token, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return EnrolFakeResult.Fail(StatusCodes.Status400BadRequest, "token is required");
+        }
+
+        var now = clock.GetUtcNow();
+        var hash = AgentTokens.Hash(token.Trim());
+        var session = registry.FindByTokenHash(hash, now);
+        if (session is null && await store.FindByTokenHashAsync(hash, cancellationToken) is { } doc)
+        {
+            session = registry.GetOrAdd(doc.Id);
+            if (session.TokenHash.Length == 0)
+            {
+                session.Restore(doc);
+            }
+        }
+
+        if (session is null || !session.IsContainer)
+        {
+            return EnrolFakeResult.Fail(StatusCodes.Status404NotFound, "no container node with that token");
+        }
+
+        FakeNode node;
+        lock (_lock)
+        {
+            var existing = _nodes.FirstOrDefault(n => n.ServerId == session.ServerId);
+            if (existing is null)
+            {
+                var definition = new DemoNodeDefinition(session.Name, [], "ghcr.io/acme/app:1.0.0", 1, 512, true, "http://127.0.0.1:8080/healthz", [new("db", "postgres:5432")], null, null, null, null, 12, 41, ["/var/log/app/app.log"], [8080]);
+                existing = new FakeNode(definition, new Random(), now, session.ServerId);
+                _nodes.Add(existing);
+                _nodeLinks[session.ServerId] = new FakeNodeLink(existing, this);
+            }
+
+            node = existing;
+        }
+
+        node.Online = true;
+        session.Attach(NodeLink(node), node.Hello(), now);
+        await ingest.ConnectedAsync(session, isNew: false, cancellationToken);
+        await ingest.SnapshotAsync(session, node.Snapshot(now.ToUnixTimeMilliseconds()), cancellationToken);
+        logger.LogInformation("e2e: fake container node {Name} connected as {ServerId}", session.Name, session.ServerId);
+        return EnrolFakeResult.Ok(session.ServerId, session.Name, session.OwnerId ?? "");
+    }
+
+    /// <summary>POST /api/e2e/sleep-node: the node says bye (planned stop) and stays asleep.</summary>
+    public async Task<bool> SleepNodeAsync(string? serverId, CancellationToken cancellationToken)
+    {
+        if (FindNode(serverId) is not { } node || !registry.TryGet(node.ServerId, out var session) || !session.Connected)
+        {
+            return false;
+        }
+
+        await PutToSleepAsync(node, session, cancellationToken);
+        return true;
+    }
+
+    /// <summary>POST /api/e2e/fail-health: the health check answers 503 (or 200 again with ok: true) from the next snapshot on.</summary>
+    public async Task<bool> FailHealthAsync(string? serverId, bool ok, CancellationToken cancellationToken)
+    {
+        if (FindNode(serverId) is not { } node || !registry.TryGet(node.ServerId, out var session))
+        {
+            return false;
+        }
+
+        node.HealthOk = ok;
+        if (session.Connected)
+        {
+            await ingest.SnapshotAsync(session, node.Snapshot(clock.GetUtcNow().ToUnixTimeMilliseconds()), cancellationToken);
+        }
+
+        return true;
+    }
+
     // ---- fake agent side -------------------------------------------------------------------------
+
+    internal Task EmitNodeLogAsync(string serverId, Log log, CancellationToken cancellationToken) =>
+        registry.TryGet(serverId, out var session) ? ingest.LogAsync(session, log, cancellationToken) : Task.CompletedTask;
+
+    internal Task EmitNodeLogEndAsync(string serverId, LogEnd end) =>
+        registry.TryGet(serverId, out var session) ? ingest.LogEndAsync(session, end, CancellationToken.None) : Task.CompletedTask;
+
+    private FakeNodeLink NodeLink(FakeNode node)
+    {
+        lock (_lock)
+        {
+            return _nodeLinks[node.ServerId];
+        }
+    }
 
     internal Task EmitLogAsync(FakeServer fake, Log log, CancellationToken cancellationToken) =>
         registry.TryGet(fake.ServerId, out var session) ? ingest.LogAsync(session, log, cancellationToken) : Task.CompletedTask;
@@ -467,5 +697,123 @@ internal sealed class FakeAgentLink(FakeServer fake, FakeAgentService service) :
 
             await service.EmitLogEndAsync(fake, new LogEnd(start.StreamId, reason, null));
         }
+    }
+}
+
+/// <summary>
+/// The "socket" of a fake container node: `logStart` with `source: file` on one of the node's GLIMT_LOG_PATHS
+/// gives a tail of application lines and then one line every two seconds until `logStop`; other sources end
+/// with `unavailable`, as the real container profile answers.
+/// </summary>
+internal sealed class FakeNodeLink(FakeNode node, FakeAgentService service) : IAgentLink
+{
+    private static readonly string[] Lines =
+    [
+        "INFO  request completed method=GET path=/api/orders status=200 duration=12ms",
+        "INFO  request completed method=POST path=/api/orders status=201 duration=48ms",
+        "WARN  slow query took 812ms: SELECT * FROM orders WHERE customer_id = $1",
+        "INFO  cache hit ratio 0.94 (last 60 s)",
+        "INFO  request completed method=GET path=/healthz status=200 duration=1ms",
+        "ERROR upstream timeout after 2000ms: payments:8443",
+        "INFO  worker picked job id=48213 kind=invoice",
+        "INFO  worker finished job id=48213 in 340ms",
+    ];
+
+    private readonly Lock _lock = new();
+    private readonly Dictionary<string, CancellationTokenSource> _streams = new(StringComparer.Ordinal);
+    private readonly string _serverId = node.ServerId;
+
+    public string ConnectionId { get; } = "demo-node-" + node.Name;
+
+    public Task SendAsync(AgentMessage message, CancellationToken cancellationToken = default)
+    {
+        switch (message)
+        {
+            case LogStart start:
+                Start(start);
+                break;
+            case LogStop stop:
+                Stop(stop.StreamId);
+                break;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task CloseAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            foreach (var cts in _streams.Values)
+            {
+                cts.Cancel();
+            }
+
+            _streams.Clear();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void Start(LogStart start)
+    {
+        if (start.Source != "file" || start.Path is null || !node.Definition.LogPaths.Contains(start.Path))
+        {
+            _ = service.EmitNodeLogEndAsync(_serverId, new LogEnd(start.StreamId, LogEndReasons.Unavailable, start.Source == "file" ? "path is not in GLIMT_LOG_PATHS" : $"source '{start.Source}' is not available on a container node"));
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        lock (_lock)
+        {
+            _streams[start.StreamId] = cts;
+        }
+
+        _ = RunAsync(start, cts.Token);
+    }
+
+    private async Task RunAsync(LogStart start, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var count = Math.Clamp(start.Tail is > 0 ? start.Tail.Value : 200, 1, 200);
+            var now = service.NowMs;
+            var tail = new List<LogLine>(count);
+            for (var i = count - 1; i >= 0; i--)
+            {
+                tail.Add(Line(now - i * 1500L, count - 1 - i));
+            }
+
+            await service.EmitNodeLogAsync(_serverId, new Log(start.StreamId, null, tail), cancellationToken);
+            var n = count;
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(2000, cancellationToken);
+                await service.EmitNodeLogAsync(_serverId, new Log(start.StreamId, null, [Line(service.NowMs, n++)]), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // logStop or close
+        }
+    }
+
+    private static LogLine Line(long ts, int i)
+    {
+        var text = Lines[i % Lines.Length];
+        var priority = text.StartsWith("ERROR", StringComparison.Ordinal) ? "err" : text.StartsWith("WARN", StringComparison.Ordinal) ? "warning" : "info";
+        return new LogLine(ts, null, null, priority, text);
+    }
+
+    private void Stop(string streamId)
+    {
+        CancellationTokenSource? cts;
+        lock (_lock)
+        {
+            _streams.Remove(streamId, out cts);
+        }
+
+        cts?.Cancel();
+        _ = service.EmitNodeLogEndAsync(_serverId, new LogEnd(streamId, LogEndReasons.Stopped, null));
     }
 }

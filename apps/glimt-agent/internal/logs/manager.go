@@ -35,6 +35,7 @@ type Config struct {
 	Journal   Opener // journal, auth, kernel, packages, firewall; nil = unavailable
 	Web       Opener // web; nil = unavailable
 	Container Opener // container; nil = unavailable
+	File      Opener // file (fase 12, paths under GLIMT_LOG_PATHS); nil = unavailable
 	Logger    *slog.Logger
 
 	MaxStreams    int           // default 8
@@ -162,8 +163,9 @@ func (m *Manager) route(source string) Opener {
 		return m.cfg.Web
 	case "container":
 		return m.cfg.Container
+	case "file":
+		return m.cfg.File
 	}
-	// "file" (custom paths) is reserved for a later version.
 	return nil
 }
 

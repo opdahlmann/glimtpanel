@@ -1,0 +1,12 @@
+Name:	node
+Umask:	0022
+State:	S (sleeping)
+Pid:	1
+PPid:	0
+Uid:	1000	1000	1000	1000
+Gid:	1000	1000	1000	1000
+Threads:	8
+VmRSS:	   81920 kB
+RssAnon:	   61440 kB
+RssFile:	   16384 kB
+RssShmem:	    4096 kB

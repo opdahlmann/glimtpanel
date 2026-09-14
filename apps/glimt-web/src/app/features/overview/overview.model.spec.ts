@@ -43,12 +43,12 @@ describe('overview.model (16 demoservere)', () => {
   });
 
   it('filtrerer på én tagg, én status og «Has alert» uavhengig', () => {
-    expect(filterCards(DEMO_CARDS, '', { tag: 'homelab', status: '', alert: false })).toHaveLength(4);
-    expect(names(filterCards(DEMO_CARDS, '', { tag: '', status: 'down', alert: false }))).toEqual(['nordic-db']);
-    expect(names(filterCards(DEMO_CARDS, '', { tag: '', status: 'paused', alert: false }))).toEqual(['media']);
-    expect(filterCards(DEMO_CARDS, '', { tag: '', status: 'up', alert: false })).toHaveLength(14);
-    expect(names(filterCards(DEMO_CARDS, '', { tag: '', status: '', alert: true }))).toEqual(['web-02', 'api-prod', 'worker-01', 'acme-app', 'nordic-db']);
-    expect(names(filterCards(DEMO_CARDS, '', { tag: 'prod', status: 'up', alert: true }))).toEqual(['web-02', 'api-prod', 'worker-01']);
+    expect(filterCards(DEMO_CARDS, '', { tag: 'homelab', status: '', alert: false, kind: '' })).toHaveLength(4);
+    expect(names(filterCards(DEMO_CARDS, '', { tag: '', status: 'down', alert: false, kind: '' }))).toEqual(['nordic-db']);
+    expect(names(filterCards(DEMO_CARDS, '', { tag: '', status: 'paused', alert: false, kind: '' }))).toEqual(['media']);
+    expect(filterCards(DEMO_CARDS, '', { tag: '', status: 'up', alert: false, kind: '' })).toHaveLength(14);
+    expect(names(filterCards(DEMO_CARDS, '', { tag: '', status: '', alert: true, kind: '' }))).toEqual(['web-02', 'api-prod', 'worker-01', 'acme-app', 'nordic-db']);
+    expect(names(filterCards(DEMO_CARDS, '', { tag: 'prod', status: 'up', alert: true, kind: '' }))).toEqual(['web-02', 'api-prod', 'worker-01']);
   });
 
   it('samler taggene alfabetisk uten duplikater', () => {
@@ -57,7 +57,7 @@ describe('overview.model (16 demoservere)', () => {
   });
 
   it('teller opp status til sammendraget', () => {
-    expect(countByStatus(DEMO_CARDS)).toEqual({ total: 16, up: 14, down: 1, paused: 1 });
+    expect(countByStatus(DEMO_CARDS)).toEqual({ total: 16, up: 14, down: 1, paused: 1, sleeping: 0, servers: 16, containers: 0 });
   });
 
   it('chips slår av og på som prototypen', () => {

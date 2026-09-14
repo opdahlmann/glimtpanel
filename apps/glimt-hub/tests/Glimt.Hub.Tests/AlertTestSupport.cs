@@ -149,6 +149,12 @@ public sealed class InMemoryServerStore : IServerStore
 
     public Task<ServerDocument?> FindByTokenHashAsync(string tokenHash, CancellationToken cancellationToken) => Task.FromResult(Docs.Values.FirstOrDefault(d => d.TokenHash == tokenHash));
 
+    public Task InsertAsync(ServerDocument doc, CancellationToken cancellationToken)
+    {
+        Docs[doc.Id] = doc;
+        return Task.CompletedTask;
+    }
+
     public Task UpsertAsync(ServerDocument doc, CancellationToken cancellationToken)
     {
         Docs[doc.Id] = doc;
@@ -253,7 +259,8 @@ public sealed class AlertEngineHarness
         var mongo = new MongoContext(options, NullLogger<MongoContext>.Instance);
         var directory = new UserDirectory(mongo, options, Clock, NullLogger<UserDirectory>.Instance);
         Config = new AlertConfigProvider(Servers, Store, new OwnerLookup(), directory, Clock, NullLogger<AlertConfigProvider>.Instance);
-        Engine = new AlertEngine(Store, Config, Counts, Registry, [Sink], Clock, NullLogger<AlertEngine>.Instance);
+        Linker = new NodeLinker(Registry);
+        Engine = new AlertEngine(Store, Config, Counts, Registry, [Sink], Linker, Clock, NullLogger<AlertEngine>.Instance);
     }
 
     public FakeTimeProvider Clock { get; }
@@ -267,6 +274,8 @@ public sealed class AlertEngineHarness
     public ActiveAlertCounts Counts { get; } = new();
 
     public AgentRegistry Registry { get; } = new();
+
+    public NodeLinker Linker { get; }
 
     public AlertConfigProvider Config { get; }
 
@@ -284,6 +293,49 @@ public sealed class AlertEngineHarness
     }
 
     public static Hello Hello(string hostname) => new(1, null, null, hostname, "0.1.0", new OsInfo("ubuntu", "24.04", "Ubuntu 24.04"), "6.8", "amd64", 4, 8L << 30, 0, "none");
+
+    /// <summary>A connected container node (kind container) in the registry and the store, owned by <see cref="OwnerId"/>.</summary>
+    public AgentSession Node(string id, string name, string? containerId = null)
+    {
+        var session = Registry.GetOrAdd(id);
+        session.OwnerId = OwnerId;
+        session.SetIdentity(name, []);
+        session.Attach(new NullAgentLink("link-" + id), ContainerHello(name, containerId), Clock.GetUtcNow());
+        Servers.Docs[id] = new ServerDocument { Id = id, OwnerId = OwnerId, Name = name, Hostname = name, Kind = NodeKinds.Container, CreatedAt = Clock.GetUtcNow().UtcDateTime };
+        return session;
+    }
+
+    public static Hello ContainerHello(string name, string? containerId = null) =>
+        new(1, null, null, name, "0.1.0", new OsInfo("debian", "12", "Debian 12"), "6.8", "amd64", 2, 1L << 30, 0, "none", NodeKinds.Container, containerId ?? "abc123def456", new Capabilities(true, true, true, true), "ghcr.io/acme/app:1.0");
+
+    /// <summary>A container node's snapshot: no services or maintenance, a health check and one TCP check.</summary>
+    public static Snapshot NodeSnapshot(bool healthOk = true, int status = 200, long ms = 12, double? cpu = null, double? memPct = null, double? diskPct = null)
+    {
+        var json = Repo.Example("snapshot-container").AsObject();
+        json["health"] = new JsonObject { ["url"] = "http://127.0.0.1:8080/healthz", ["ok"] = healthOk, ["status"] = status, ["ms"] = ms, ["checkedAt"] = 1_757_800_000_000L };
+        var host = json["host"]!.AsObject();
+        if (cpu is { } c)
+        {
+            host["cpu"]!["total"] = c;
+        }
+
+        if (memPct is { } m)
+        {
+            var total = host["mem"]!["total"]!.GetValue<long>();
+            host["mem"]!["used"] = (long)(total * m / 100);
+        }
+
+        if (diskPct is { } d)
+        {
+            foreach (var mount in host["mounts"]!.AsArray())
+            {
+                var total = mount!["total"]!.GetValue<long>();
+                mount["used"] = (long)(total * d / 100);
+            }
+        }
+
+        return JsonSerializer.Deserialize<Snapshot>(json.ToJsonString(), ProtocolJson.Options)!;
+    }
 
     /// <summary>The protocol example snapshot, with the fields a test wants changed. Disk is 92 % on / by default (disk_full fires at once).</summary>
     public static Snapshot Snapshot(double? cpu = null, double? memPct = null, double? diskPct = null, bool? reboot = null, IEnumerable<string>? failedUnits = null, IEnumerable<JsonObject>? containers = null)
@@ -328,9 +380,9 @@ public sealed class AlertEngineHarness
         return JsonSerializer.Deserialize<Snapshot>(json.ToJsonString(), ProtocolJson.Options)!;
     }
 
-    public static JsonObject Container(string name, string state, int restarts) => new()
+    public static JsonObject Container(string name, string state, int restarts, string? id = null) => new()
     {
-        ["id"] = "id-" + name,
+        ["id"] = id ?? "id-" + name,
         ["name"] = name,
         ["image"] = "nginx:1.27",
         ["state"] = state,

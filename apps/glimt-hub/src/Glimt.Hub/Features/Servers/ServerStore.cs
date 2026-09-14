@@ -13,6 +13,9 @@ public interface IServerStore
     /// <summary>Inserts or updates the server; createdAt and ownerId are only set on insert.</summary>
     Task UpsertAsync(ServerDocument doc, CancellationToken cancellationToken);
 
+    /// <summary>Inserts a new document as is (container nodes from POST /api/servers, step 12.5).</summary>
+    Task InsertAsync(ServerDocument doc, CancellationToken cancellationToken);
+
     Task TouchAsync(string serverId, DateTime? lastSeenAt, string status, CancellationToken cancellationToken);
 
     Task<ServerDocument?> FindAsync(string serverId, CancellationToken cancellationToken);
@@ -85,6 +88,10 @@ internal sealed class MongoServerStore(MongoContext mongo, ILogger<MongoServerSt
                 .Set(s => s.Cores, doc.Cores)
                 .Set(s => s.RamBytes, doc.RamBytes)
                 .Set(s => s.DockerMode, doc.DockerMode)
+                .Set(s => s.Kind, doc.Kind)
+                .Set(s => s.ContainerId, doc.ContainerId)
+                .Set(s => s.Capabilities, doc.Capabilities)
+                .Set(s => s.Image, doc.Image)
                 .SetOnInsert(s => s.OwnerId, doc.OwnerId)
                 .SetOnInsert(s => s.Tags, doc.Tags)
                 .SetOnInsert(s => s.CreatedAt, doc.CreatedAt == default ? DateTime.UtcNow : doc.CreatedAt);
@@ -94,6 +101,16 @@ internal sealed class MongoServerStore(MongoContext mongo, ILogger<MongoServerSt
         {
             logger.LogWarning("could not save server {ServerId}: {Error}", doc.Id, ex.Message);
         }
+    }
+
+    public async Task InsertAsync(ServerDocument doc, CancellationToken cancellationToken)
+    {
+        if (!mongo.IsAvailable)
+        {
+            return;
+        }
+
+        await Servers.InsertOneAsync(doc, cancellationToken: cancellationToken);
     }
 
     public async Task TouchAsync(string serverId, DateTime? lastSeenAt, string status, CancellationToken cancellationToken)

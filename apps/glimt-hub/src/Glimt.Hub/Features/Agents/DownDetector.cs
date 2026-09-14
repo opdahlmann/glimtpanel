@@ -54,7 +54,7 @@ public sealed class DownDetector(
                 continue;
             }
 
-            if (session.Status == ServerStatuses.Down || session.LastSeenAt > cutoff)
+            if (session.Status is ServerStatuses.Down or ServerStatuses.Sleeping || session.LastSeenAt > cutoff)
             {
                 continue;
             }

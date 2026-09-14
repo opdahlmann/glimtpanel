@@ -39,10 +39,10 @@ Alle kommandoer kjøres fra repo-roten (byggkonteksten er roten). Modulen er
 | Kommando | Gjør |
 |---|---|
 | `glimt-agent run` (standard) | Kobler til huben og rapporterer til den stoppes (SIGTERM/SIGINT gir ren avslutning) |
-| `glimt-agent check` | Skriver ut hva maskinen tilbyr: OS, `/proc`, systemd, journald med tellere (sshd-feil, ufw, fail2ban), webserverlogger, Docker-socket/-proxy med forhandlet API-versjon og antall containere, needrestart, ufw, fail2ban, state-dir og token |
+| `glimt-agent check` | Skriver ut hva maskinen tilbyr: valgt profil (`kind`) med begrunnelse, OS, `/proc`, systemd, journald med tellere (sshd-feil, ufw, fail2ban), webserverlogger, Docker-socket/-proxy med forhandlet API-versjon og antall containere, needrestart, ufw, fail2ban, state-dir og token. I en container: container-id, cgroup-katalog, grenser, prosess-synlighet, nettverk, helse-URL, sjekker, loggstier, image og token |
 | `glimt-agent snapshot [--wait 1s]` | Skriver én komplett `snapshot`-melding som pen JSON og avslutter. Trenger ingen hub. Måler to ganger med `--wait` mellom, slik at ratene (CPU, disk, nett, container-CPU) er ekte |
 | `glimt-agent stream [--wait 1s] [--top 40]` | Skriver én `stream`-melding (vert, container-statistikk, toppprosesser) |
-| `glimt-agent logs --source journal\|auth\|kernel\|packages\|web\|firewall\|container [--unit X] [--container Y] [--priority err\|warn\|info] [--tail 20] [--since 1h] [--follow]` | Skriver linjer fra en loggkilde gjennom samme strømbehandler som huben bruker. Uten `--follow` stopper den når halen er skrevet. Avslutter med kode 1 og `stream ended: <reason>` når kilden er utilgjengelig |
+| `glimt-agent logs --source journal\|auth\|kernel\|packages\|web\|firewall\|container\|file [--unit X] [--container Y] [--path P] [--priority err\|warn\|info] [--tail 20] [--since 1h] [--follow]` | Skriver linjer fra en loggkilde gjennom samme strømbehandler som huben bruker. Uten `--follow` stopper den når halen er skrevet. Avslutter med kode 1 og `stream ended: <reason>` når kilden er utilgjengelig |
 | `glimt-agent version` | Versjon, OS/arkitektur og Go-versjon |
 | `sudo glimt-agent uninstall [--dry-run]` | Stopper og deaktiverer enheten, fjerner enhet, drop-ins, `/etc/glimt-agent`, `/var/lib/glimt-agent` og binæren, skriver hva som ble fjernet |
 
@@ -64,6 +64,18 @@ Flagg vinner over miljø. Under systemd leses miljøet fra `/etc/glimt-agent/env
 | `--state-dir` | `STATE_DIRECTORY` | `/var/lib/glimt-agent` | Her ligger `token` (0600, skrives atomisk) |
 | `--heartbeat` | `GLIMT_HEARTBEAT_SECONDS` | `30` | Snapshot-intervall til huben sier noe annet i `welcome.snapshotInterval` |
 | `--log-level` | `GLIMT_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Logg går til stderr som `level=… msg=…` (journald-vennlig) |
+| `--kind` | `GLIMT_KIND` | `auto` | `auto`, `server` eller `container`. `auto` velger `container` når `/.dockerenv` eller `/run/.containerenv` finnes, `/proc/1/cgroup` nevner docker/kubepods/containerd/libpod/ecs, eller en plattformvariabel er satt (`KUBERNETES_SERVICE_HOST`, `K_SERVICE`, `ECS_CONTAINER_METADATA_URI*`, `RAILWAY_ENVIRONMENT`, `RENDER`, `GLIMT_TOKEN`) |
+
+Containerprofilen (`--kind container`) leser i tillegg (ingen `--key`, ingen innrullering):
+
+| Miljø | Betydning |
+|---|---|
+| `GLIMT_TOKEN` | Langtlevende nodetoken fra «Add container» i dashbordet (`POST /api/servers`). Leses ved hver oppstart; `--state-dir` brukes bare hvis katalogen finnes (valgfritt volum) |
+| `GLIMT_NODE_NAME` | Navnet i `hello` (standard containerens hostname). Alias for `GLIMT_AGENT_NAME` |
+| `GLIMT_HEALTH_URL` | `GET` hvert 30. s med 3 s timeout, uten å følge omdirigeringer; 2xx = ok. Resultatet i `snapshot.health` |
+| `GLIMT_CHECKS` | `db=postgres:5432,cache=redis:6379`: TCP-connect til hvert mål hvert 30. s med 2 s timeout → `snapshot.checks[]` |
+| `GLIMT_LOG_PATHS` | Kommaseparerte filer eller kataloger som `logStart` med `source: file` får hale (`tail -F`-semantikk med rotasjonsdeteksjon). Andre stier avvises med `unavailable` |
+| `GLIMT_IMAGE` | Vises som imaget i `hello.image` (huben finner det også fra vertsagenten når containeren er lenket) |
 
 Oppførsel som er verdt å vite:
 
@@ -79,6 +91,82 @@ Oppførsel som er verdt å vite:
 - **Rammer.** Maks 1 MB inn. Ingen trafikk fra huben på 2 minutter (huben pinger hvert 30. sekund) gir ny tilkobling.
 - **systemd.** `Type=notify`: agenten sender `READY=1` straks (den er «oppe» også mens den venter på huben) og
   `STOPPING=1` ved stopp, uten cgo.
+
+## Containernoder (fase 12)
+
+Agenten kan kjøre **inne i** en container, som en sidecar ved siden av appen eller som binær i appens eget image, og
+rapporterer da containeren som en egen node (`hello.kind: container`). Profilen slår av alt som forutsetter en server
+(systemd, journald, apt, Docker, innlogginger, brannmur) og rapporterer det innsiden ser: CPU og minne fra cgroupen
+når den er den riktige, ellers en sum over synlige prosesser merket `approx`; rot (overlay, vist som `/`) og volumer fra
+`mountinfo`; grensesnitt; prosesser i det delte pid-namespacet; lyttende porter; helsesjekk og TCP-sjekker; filer i
+`GLIMT_LOG_PATHS`. Ved SIGTERM/SIGINT sendes `bye {reason: shutdown}` (maks 1 s) før socketen lukkes, så huben viser
+noden som *sleeping* i stedet for nede.
+
+### Sidecar i Compose
+
+```yaml
+services:
+  app:
+    image: your-app:latest
+  glimt-agent:
+    image: ghcr.io/opdahlmann/glimt-agent:latest
+    pid: "service:app"            # appens prosesser og porter
+    network_mode: "service:app"   # appens nettverk; GLIMT_HEALTH_URL peker på 127.0.0.1
+    read_only: true
+    restart: unless-stopped
+    environment:
+      GLIMT_HUB: wss://hub.example.com/agent/ws
+      GLIMT_TOKEN: agt_…            # fra «Add container» i dashbordet
+      GLIMT_NODE_NAME: api-1
+      # GLIMT_HEALTH_URL: http://127.0.0.1:8080/healthz
+      # GLIMT_CHECKS: db=postgres:5432,cache=redis:6379
+      # GLIMT_LOG_PATHS: /var/log/app   # monter appens loggvolum inn i sidecaren også
+```
+
+Med Dockers standard (privat cgroup-namespace) ser sidecaren *sin egen* cgroup, ikke appens; CPU og minne summeres da
+over prosessene og merkes `approx`. Legg `cgroup: host` på sidecar-tjenesten (og monter `/sys/fs/cgroup` read-only)
+for ekte cgroup-tall. Stdout-loggen kommer fra vertsagenten når samme eier har en (huben lenker på container-id).
+
+### Binær i eget image (Cloud Run, Fargate, Railway, Render …)
+
+```Dockerfile
+COPY --from=ghcr.io/opdahlmann/glimt-agent:latest /glimt-agent /usr/local/bin/glimt-agent
+ENV GLIMT_HUB=wss://hub.example.com/agent/ws GLIMT_NODE_NAME=api-1
+# GLIMT_TOKEN settes som hemmelighet på plattformen, ikke i imaget
+ENTRYPOINT ["/bin/sh", "-c", "glimt-agent run & exec \"$0\" \"$@\""]
+CMD ["your-app"]
+```
+
+Her deler agenten cgroup med appen og får riktige tall. På gVisor (Cloud Run) mangler cgroup-filene og `/proc` er
+begrenset: agenten starter likevel, melder `capabilities` ærlig og summerer prosessene (`approx`). Stdout-logger finnes
+ikke uten en vertsagent; bruk `GLIMT_LOG_PATHS`.
+
+### Hva agenten ser inne i en container
+
+Målt i steg 12.1 med dagens binær som sidecar ved siden av `nginx:1.27` (`--memory 256m --cpus 1.5`) på Docker
+Desktop, med `--pid=container:app --network=container:app`, som uid 65532:
+
+| Kilde | Privat cgroupns (Docker-standard) | `--cgroupns=host` | Uten delt pid-namespace | Profilen |
+|---|---|---|---|---|
+| `/proc/stat`, `/proc/meminfo` | Leses, men viser **verten** | Verten | Verten | Brukes ikke til CPU/minne; `meminfo` gir total når grense mangler |
+| `/sys/fs/cgroup/{cpu.stat,memory.current,memory.max,cpu.max}` | Sidecarens egen cgroup, ikke appens | Appens cgroup lesbar under `/sys/fs/cgroup/docker/<id>` (sti fra `/proc/1/cgroup`) | Egen cgroup | Brukes bare når den lesbare cgroupen er containeren som måles (binær i imaget, eller cgroupns host); ellers fallback |
+| `/proc/1/cgroup` | `0::/../<64-hex id>` → container-id, sti ikke nåbar | `0::/docker/<id>` | Egen `0::/` | `containerId` = første 12 tegn; ellers fra `/proc/self/cgroup`, ellers hostname |
+| `/proc/self/mountinfo` | Leses (overlay-rot + volumer) | Samme | Samme | `mounts`: rot vises som `/` uten enhet, pseudo-filsystemer og `/proc`, `/sys`, `/dev` filtreres |
+| `/proc/net/dev`, `/proc/net/tcp*` | Appens nettverk | Samme | Eget nettverk (tomt) | `ifaces` og `listeningPorts` |
+| `/proc/<pid>` for appens prosesser | Lesbart (`stat`, `status`, `cmdline`); `fd` avvises som uid 65532 | Samme | Kun egne prosesser | Prosesser og prosess-summer; porter uten eierprosess |
+| `journalctl`, Docker-socket, `systemctl`, `apt` | Finnes ikke | – | – | Utelatt: ingen `services`, `maintenance`, `loggedIn`, `sshFailed`, `firewall` |
+
+Fallback-summen for minne er anonymt minne (`RssAnon` + `RssShmem`) summert over synlige prosesser pluss fildelte
+sider talt én gang (største `RssFile`); `VmRSS` summert ville telt hvert delt bibliotek én gang per worker (nginx med
+12 workere: 44 MiB mot cgroupens 10 MiB; anslaget gir 27 MiB). Agentens egen prosess holdes utenfor. Sidecaren selv
+bruker ≈ 7 MB RSS i hvile.
+
+```sh
+npm run dev -- --sidecar                              # nginx + sidecar som noden sidecar-dev (GLIMT_DEV_CONTAINER_TOKEN)
+node scripts/agent-container.mjs --sidecar --cgroupns-host   # appens cgroup i stedet for approx
+node scripts/agent-container.mjs --sidecar-check | --sidecar-snapshot | --sidecar-logs | --sidecar-stop
+docker build -f apps/glimt-agent/Dockerfile.sidecar -t glimt-agent-sidecar .   # FROM scratch, ~7 MB, USER 65532
+```
 
 ## Tidsplan (`internal/sched`)
 
@@ -266,8 +354,10 @@ cmd/glimt-agent/      main.go (run, flagg/miljø), deps.go (kobling av samlere),
                       logscmd.go (logs), uninstall.go
 internal/protocol/    meldingsstructer, Decode/Encode
 internal/state/       token i state-dir, 0600, atomisk
-internal/sysinfo/     hostname, /etc/os-release, uname, arch, kjerner, RAM, boot-tid
-internal/collect/     /proc, /sys, systemctl, apt, needrestart → host, prosesser, tjenester, vedlikehold, sikkerhet
+internal/sysinfo/     hostname, /etc/os-release, uname, arch, kjerner, RAM, boot-tid, kind-deteksjon og container-id
+internal/collect/     /proc, /sys, systemctl, apt, needrestart → host, prosesser, tjenester, vedlikehold, sikkerhet;
+                      container.go/cgroup.go: containerprofilen (cgroup v2 eller prosess-summer)
+internal/health/      GET GLIMT_HEALTH_URL og TCP-sjekker fra GLIMT_CHECKS
 internal/docker/      Engine API-klient (socket/proxy), liste/inspect, cgroup v2-statistikk, hendelser, logg-demux
 internal/journal/     journalctl-strømmer, tail av webserverlogger, sikkerhetstellere
 internal/logs/        strømbehandler: ruting, batching, grenser, logEnd
@@ -278,6 +368,7 @@ install/              install.sh, glimt-agent.service
 dev/                  filer til Dockerfile.dev
 Dockerfile.build      kryss-kompilering + SHA256SUMS
 Dockerfile.dev        Ubuntu 24.04 + systemd + sshd + agent
+Dockerfile.sidecar    FROM scratch + CA-sertifikater + binæren, USER 65532, ENTRYPOINT run (ghcr.io/opdahlmann/glimt-agent)
 ```
 
 ## Kjente begrensninger

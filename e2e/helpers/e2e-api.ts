@@ -52,3 +52,22 @@ export async function forceLang(page: Page, lang: 'en' | 'no'): Promise<void> {
     }
   }, lang);
 }
+
+/** En falsk containeragent bruker nodetokenet fra `POST /api/servers` (fase 12): noden går til `up` og dialogen hopper til trinn 2. */
+export async function connectFakeContainer(page: Page, token: string): Promise<string> {
+  const res = await page.request.post('/api/e2e/connect-fake-container', { data: { token } });
+  expect(res.ok(), `connect-fake-container: ${res.status()} ${await res.text()}`).toBeTruthy();
+  return ((await res.json()) as { serverId: string }).serverId;
+}
+
+/** Lar en containernode si `bye` (planlagt stopp): status `sleeping`. */
+export async function sleepNode(page: Page, serverId: string): Promise<void> {
+  const res = await page.request.post('/api/e2e/sleep-node', { data: { serverId } });
+  expect(res.ok(), `sleep-node ${serverId}: ${res.status()}`).toBeTruthy();
+}
+
+/** Lar en containernodes helsesjekk svare 503 (`ok: false`) eller 200 igjen. */
+export async function failHealth(page: Page, serverId: string, ok = false): Promise<void> {
+  const res = await page.request.post('/api/e2e/fail-health', { data: { serverId, ok } });
+  expect(res.ok(), `fail-health ${serverId}: ${res.status()}`).toBeTruthy();
+}

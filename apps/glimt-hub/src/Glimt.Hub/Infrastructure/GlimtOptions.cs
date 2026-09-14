@@ -28,6 +28,12 @@ public sealed class GlimtOptions
     public string? BufferPath { get; init; }
     public bool DemoMode { get; init; }
     public string? AgentVersion { get; init; }
+
+    /// <summary>The sidecar image in the snippets from POST /api/servers (GLIMT_AGENT_IMAGE), fase 12.</summary>
+    public string? AgentImage { get; init; }
+
+    /// <summary>Outside production: a container node `sidecar-dev` on the dev account with this token (GLIMT_DEV_CONTAINER_TOKEN), so `npm run dev -- --sidecar` always has a node.</summary>
+    public string? DevContainerToken { get; init; }
     public string? AppmailUrl { get; init; }
     public string? AppmailApiKey { get; init; }
     public string? MailFrom { get; init; }
@@ -138,6 +144,8 @@ public sealed class GlimtOptions
             BufferPath = Optional("BUFFER_PATH"),
             DemoMode = Flag("DEMO_MODE"),
             AgentVersion = Optional("AGENT_VERSION"),
+            AgentImage = Optional("AGENT_IMAGE"),
+            DevContainerToken = Optional("DEV_CONTAINER_TOKEN"),
             AppmailUrl = Optional("APPMAIL_URL"),
             AppmailApiKey = Optional("APPMAIL_API_KEY"),
             MailFrom = Optional("MAIL_FROM"),

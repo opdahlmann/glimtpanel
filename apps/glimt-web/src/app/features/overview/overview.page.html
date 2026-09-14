@@ -1,11 +1,19 @@
 <div class="page">
   <header class="head">
     <div class="heading">
-      <h1 class="title">{{ 'servers' | t }}</h1>
+      <h1 class="title">{{ titleKey() | t }}</h1>
       <div class="summary num" data-testid="summary">{{ summary() }}</div>
     </div>
     @if (canAdd()) {
-      <gp-button variant="primary" size="lg" icon="M12 5v14M5 12h14" (click)="openAdd()">{{ 'addServer' | t }}</gp-button>
+      <div class="add" data-add-menu>
+        <gp-button variant="primary" size="lg" icon="M12 5v14M5 12h14" (click)="toggleAddMenu()" [attr.aria-expanded]="addMenuOpen()" aria-haspopup="menu">{{ 'addNode' | t }}</gp-button>
+        @if (addMenuOpen()) {
+          <div class="menu" role="menu" data-testid="add-menu">
+            <button type="button" role="menuitem" class="item" (click)="openAdd()">{{ 'server' | t }}</button>
+            <button type="button" role="menuitem" class="item" (click)="openAddContainer()">{{ 'containerType' | t }}</button>
+          </div>
+        }
+      </div>
     }
   </header>
 
@@ -19,6 +27,9 @@
       </div>
       <div class="glass">
         <gp-enrol-panel />
+      </div>
+      <div class="or">
+        <gp-button variant="ghost" size="lg" (click)="openAddContainer()">{{ 'addAContainer' | t }}</gp-button>
       </div>
     </section>
   } @else {
@@ -37,6 +48,11 @@
       <button type="button" class="chip" [class.on]="filters().status === 'up'" [attr.aria-pressed]="filters().status === 'up'" (click)="toggleStatus('up')"><span class="dot dot--up" aria-hidden="true"></span>{{ 'up' | t }}</button>
       <button type="button" class="chip" [class.on]="filters().status === 'down'" [attr.aria-pressed]="filters().status === 'down'" (click)="toggleStatus('down')"><span class="dot dot--down" aria-hidden="true"></span>{{ 'down' | t }}</button>
       <button type="button" class="chip" [class.on]="filters().status === 'paused'" [attr.aria-pressed]="filters().status === 'paused'" (click)="toggleStatus('paused')"><span class="dot dot--paused" aria-hidden="true"></span>{{ 'paused' | t }}</button>
+      @if (hasNodes()) {
+        <button type="button" class="chip" [class.on]="filters().status === 'sleeping'" [attr.aria-pressed]="filters().status === 'sleeping'" (click)="toggleStatus('sleeping')"><span class="dot dot--paused" aria-hidden="true"></span>{{ 'sleeping' | t }}</button>
+        <button type="button" class="chip" [class.on]="filters().kind === 'server'" [attr.aria-pressed]="filters().kind === 'server'" (click)="toggleKind('server')">{{ 'servers' | t }}</button>
+        <button type="button" class="chip" [class.on]="filters().kind === 'container'" [attr.aria-pressed]="filters().kind === 'container'" (click)="toggleKind('container')">{{ 'containers' | t }}</button>
+      }
       <button type="button" class="chip" [class.on]="filters().alert" [attr.aria-pressed]="filters().alert" (click)="toggleAlert()"><span class="dot dot--warn" aria-hidden="true"></span>{{ 'hasAlert' | t }}</button>
     </div>
     @if (cards().length === 0) {
@@ -44,13 +60,18 @@
     } @else if (visibleCards().length === 0) {
       <p class="empty">{{ 'noMatch' | t }}</p>
     } @else {
-      <div #grid class="grid" role="list" [attr.aria-label]="'servers' | t" (keydown)="onGridKeydown($event)">
+      <div #grid class="grid" role="list" [attr.aria-label]="titleKey() | t" (keydown)="onGridKeydown($event)">
         @for (c of visibleCards(); track c.id) {
-          <gp-server-card role="listitem" [id]="c.id" />
+          @if (c.kind === 'container') {
+            <gp-container-card role="listitem" [id]="c.id" />
+          } @else {
+            <gp-server-card role="listitem" [id]="c.id" />
+          }
         }
       </div>
     }
   }
 
   <gp-add-server-dialog [(open)]="addOpen" [(step)]="addStep" [server]="addedCard()" [existingTags]="tags()" />
+  <gp-add-container-dialog [(open)]="addContainerOpen" [(step)]="addContainerStep" [existingTags]="tags()" />
 </div>

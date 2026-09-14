@@ -1,0 +1,92 @@
+{
+  "type": "snapshot",
+  "ts": 1757400000000,
+  "host": {
+    "cpu": {
+      "total": 23.4,
+      "user": 18.0,
+      "system": 5.4,
+      "iowait": 0,
+      "steal": 0
+    },
+    "mem": {
+      "total": 1073741824,
+      "used": 412000000,
+      "free": 661741824,
+      "buffers": 0,
+      "cached": 58000000,
+      "swapTotal": 0,
+      "swapUsed": 0
+    },
+    "uptimeSec": 274000,
+    "limits": {
+      "cpuCores": 2,
+      "memBytes": 1073741824
+    },
+    "mounts": [
+      {
+        "path": "/",
+        "fs": "overlay",
+        "total": 85899345920,
+        "used": 12000000000,
+        "inodesTotal": 5242880,
+        "inodesUsed": 210000,
+        "readBps": 0,
+        "writeBps": 0
+      },
+      {
+        "path": "/data",
+        "fs": "ext4",
+        "device": "/dev/vda1",
+        "total": 107374182400,
+        "used": 61000000000,
+        "inodesTotal": 6553600,
+        "inodesUsed": 120000,
+        "readBps": 120000,
+        "writeBps": 840000
+      }
+    ],
+    "ifaces": [
+      {
+        "name": "eth0",
+        "ips": [
+          "172.18.0.5"
+        ],
+        "rxBps": 210000,
+        "txBps": 90000
+      }
+    ]
+  },
+  "security": {
+    "listeningPorts": [
+      {
+        "port": 3000,
+        "proto": "tcp",
+        "process": "node",
+        "pid": 1
+      }
+    ]
+  },
+  "health": {
+    "url": "http://localhost:3000/healthz",
+    "ok": true,
+    "status": 200,
+    "ms": 12,
+    "checkedAt": 1757399999500
+  },
+  "checks": [
+    {
+      "name": "db",
+      "target": "postgres:5432",
+      "ok": true,
+      "ms": 3
+    },
+    {
+      "name": "cache",
+      "target": "redis:6379",
+      "ok": false,
+      "ms": 2000,
+      "error": "dial tcp: i/o timeout"
+    }
+  ]
+}

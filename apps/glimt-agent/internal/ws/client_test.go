@@ -486,3 +486,61 @@ func TestLogDroppedWhenQueueFull(t *testing.T) {
 		t.Errorf("dropped = %d", s.dropped.Load())
 	}
 }
+
+// A container node says bye before it closes at shutdown, so the hub can
+// show it as sleeping instead of down (fase 12).
+func TestByeOnShutdown(t *testing.T) {
+	gotBye := make(chan string, 1)
+	url := fakeHub(t, func(ctx context.Context, c *websocket.Conn) {
+		if _, ok := readMsg(t, ctx, c).(*protocol.Hello); !ok {
+			return
+		}
+		writeMsg(t, ctx, c, &protocol.Welcome{ServerID: "srv1", SnapshotInterval: 30000, MaintenanceInterval: 600000})
+		if b, ok := readUntil(t, ctx, c, protocol.TypeBye).(*protocol.Bye); ok {
+			gotBye <- b.Reason
+		}
+		<-ctx.Done()
+	})
+	store := state.New(t.TempDir())
+	if err := store.Save("agt_container_token"); err != nil {
+		t.Fatal(err)
+	}
+	stop := runClient(t, newTestClient(t, url, store, func(c *Config) { c.Bye = true; c.EnrolKey = "" }))
+	time.Sleep(100 * time.Millisecond) // let welcome arrive
+	stop()
+	select {
+	case reason := <-gotBye:
+		if reason != protocol.ByeReasonShutdown {
+			t.Errorf("reason = %q", reason)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("hub did not get bye before close")
+	}
+}
+
+// Without Bye (the server profile) nothing is sent at shutdown.
+func TestNoByeForServers(t *testing.T) {
+	msgs := make(chan string, 8)
+	url := fakeHub(t, func(ctx context.Context, c *websocket.Conn) {
+		if _, ok := readMsg(t, ctx, c).(*protocol.Hello); !ok {
+			return
+		}
+		writeMsg(t, ctx, c, &protocol.Welcome{ServerID: "srv1", SnapshotInterval: 30000, MaintenanceInterval: 600000})
+		for {
+			m := readMsg(t, ctx, c)
+			if m == nil {
+				close(msgs)
+				return
+			}
+			msgs <- m.MessageType()
+		}
+	})
+	stop := runClient(t, newTestClient(t, url, state.New(t.TempDir()), nil))
+	time.Sleep(100 * time.Millisecond)
+	stop()
+	for typ := range msgs {
+		if typ == protocol.TypeBye {
+			t.Error("server profile must not send bye")
+		}
+	}
+}

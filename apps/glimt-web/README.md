@@ -399,6 +399,44 @@ WebKit), installasjonskortet på desktop, første besøk på mobil → `/welcome
 bakdatert «sist sett» gir «Server down» i listen og badgen uten omlasting, `reconnect-server` løser det. Varsel-badgen og
 kortets stripe maskeres i alle skjermbildene (varsler utløses etter hvert som demoserverne lever).
 
+## Containernoder (fase 12)
+
+En node er enten en server (agenten på en Ubuntu-maskin) eller en container (agenten inne i containeren, som sidecar
+eller binær i imaget). `CardDto`/`ServerDto` har `kind`, og `status` kan være `sleeping` (noden sa `bye`).
+
+- **Oversikten (steg 12.8, skjerm 20).** Tittelen og `TitleService` sier «Nodes»/«Noder» når kontoen har minst én
+  containernode, ellers «Servers» som før; sammendraget blir «19 nodes · 16 servers · 3 containers · 14 up · 1 down ·
+  1 sleeping · 1 paused». `gp-container-card` (`features/overview/container-card/`) bruker serverkortets ramme og CSS:
+  infolinje «container · nginx:1.27 · up 3d 4h · on web-02» (verten kun når lenket), to ringer (CPU mot tildelte
+  kjerner, minne mot grensen, «no limit» uten), fire chips (Net, Restarts oransje over 3 siste 24 t, Health ok/fail/—,
+  Listening ports) og to sparklines; `sleeping` gir nøytral prikk, «sleeping since 14:02», ringer på 0 og opasitet .6;
+  `approx` gir «≈» foran tallene med forklaring i `title`. Avledningene er rene funksjoner i `container-card-view.ts`.
+  Filterchipsene får «sleeping», «Servers» og «Containers» (`OverviewFilters.kind`, husket av PrefsService), sortering
+  på status er nede → sover → pauset → oppe. Serverpanelets containerrad får en «node»-badge som lenker til noden når
+  verten ser en container som er en egen node (`ServerDto.linkedNodes`). Tom-tilstanden har «Add a container».
+- **Containernodens side (steg 12.9, skjerm 21).** `ServerPage` velger panelliste etter `kind` (`panelsFor`): CPU,
+  Memory, Volumes (diskpanelet med roten som `/`), Network, Processes, Listening ports (`gp-ports-panel`), Health &
+  checks (`gp-health-panel`, grønt/rødt tonet: helse-URL med status, svartid og «checked 08:14:02», én rad per
+  `check`), Host (`gp-host-panel`, kun når lenket: image, image-alder, omstarter, tilstand, lenke til verten) og Logs.
+  Toppen har «‹ Nodes», image-badge, «on web-02» som knapp, «sleeping since …»; ingen EOL og ingen «Text mode».
+  `capabilities.procAll`/`netns` usann gir «not readable on this platform» i stedet for tomme tall. Loggpanelet
+  (`gp-logs-panel`) viser chips per fil fra `logPaths` (`source: file` + `path`) og «stdout (via host)» når lenket;
+  uten begge et hint om `GLIMT_LOG_PATHS`. Loggsiden får kilden «Files» (chips per sti, spørreparameter `path`) for
+  containernoder, og «Containers» er der stdout via verten (huben ruter).
+- **«Add container» (steg 12.10, skjerm 22).** «+ Add server» er blitt «+ Add» med menyen Server / Container.
+  `gp-add-container-dialog` (`features/overview/add-container/`): (0) navn og «Create» → `POST /api/servers`;
+  (1) tokenet i `<code>` med Copy og «shown only once», segmentet Sidecar (Compose) / In your image, valgfrie felt som
+  fyller `GLIMT_HEALTH_URL`, `GLIMT_CHECKS` og `GLIMT_LOG_PATHS` inn i snutten (`snippets.ts`), «Waiting for the
+  container…»; (2) tagger og «Done» når kortets status blir `up`. Innstillinger › Servere-fanen (Type-kolonne, rotasjon
+  med token én gang) bygges i steg 8.3.
+- **Ordboken.** `nodes`, `node`, `sleeping`, `sleepingSince`, `addContainer`, `approx`, `healthChecks`, `host`,
+  `files`, `stdoutViaHost`, `notReadable`, `r_health_failed`/`d_health_failed` (åttende regel) m.fl.; `r_server_down`
+  heter nå «Node down».
+
+Vitest: `container-card-view.spec.ts`, `overview.nodes.spec.ts`, `node-view.spec.ts`, `snippets.spec.ts`. Playwright:
+skjerm 20 (`overview.spec.ts`), 21 (`server.spec.ts`: `acme-backend` lenket til `web-02`, `edge-worker` uten cgroup) og
+22 (`add-container.spec.ts`: opprett → token → `connect-fake-container` → trinn 2) i tre prosjekter.
+
 ## Dockerfile
 
 Bygg-kontekst er repo-roten, slik Dokploy og `npm run build:images` gjør det:

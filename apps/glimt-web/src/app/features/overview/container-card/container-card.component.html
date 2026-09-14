@@ -1,0 +1,34 @@
+@if (view(); as v) {
+  <article class="card">
+    <div class="stripe" [style.background]="v.stripe" aria-hidden="true"></div>
+    <div class="title">
+      <div class="tags">
+        @for (tag of v.tags; track tag) {
+          <gp-badge>{{ tag }}</gp-badge>
+        }
+      </div>
+      <button type="button" class="name" (click)="open()" [attr.aria-label]="('openServer' | t) + ' ' + v.name">{{ v.name }}</button>
+      <div class="status" [class.status--down]="v.status === 'down'">
+        <span>{{ v.statusText }}</span>
+        <gp-live-dot [state]="v.dot" [pulse]="pulse()" />
+      </div>
+    </div>
+    <div class="info num" [attr.title]="v.approx ? ('approxTitle' | t) : null">{{ v.info }}</div>
+    <div class="rings rings--2">
+      <gp-ring [value]="v.cpu" color="cpu" [label]="'cpu' | t" [sub]="v.cpuSub" (pressed)="openPanel('cpu')" />
+      <gp-ring [value]="v.mem" color="ram" [label]="'memory' | t" [sub]="v.memSub" (pressed)="openPanel('mem')" />
+    </div>
+    <div class="chips chips--4">
+      <gp-chip [label]="('net' | t) + ' MB/s'" [value]="v.net" />
+      <gp-chip [label]="'restarts' | t" [value]="v.restarts" [tone]="v.restartsTone" />
+      <gp-chip [label]="'health' | t" [value]="v.health" [tone]="v.healthTone" />
+      <gp-chip [label]="'ports' | t" [value]="v.ports" />
+    </div>
+    @if (sparklines()) {
+      <div class="sparks">
+        <gp-sparkline [values]="hour().cpu" color="cpu" [height]="24" />
+        <gp-sparkline [values]="hour().mem" color="ram" [height]="24" />
+      </div>
+    }
+  </article>
+}

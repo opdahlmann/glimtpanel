@@ -99,6 +99,9 @@ public sealed class AccountExport(MongoContext mongo, IServerStore servers, Acce
         ["cores"] = s.Cores,
         ["ramBytes"] = s.RamBytes,
         ["dockerMode"] = s.DockerMode,
+        ["kind"] = Glimt.Hub.Features.Agents.Protocol.NodeKinds.Normalize(s.Kind),
+        ["containerId"] = s.ContainerId,
+        ["image"] = s.Image,
         ["createdAt"] = Date(s.CreatedAt),
     };
 

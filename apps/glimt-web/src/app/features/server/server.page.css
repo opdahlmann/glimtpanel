@@ -23,3 +23,12 @@
   margin: 0; padding: 14px; overflow: auto; white-space: pre; border-radius: var(--radius-card); background: var(--color-ink);
   box-shadow: inset 0 0 0 .5px var(--s-8); font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--color-ram);
 }
+
+/* Containernoden (steg 12.9): image-badge i tittelraden, «on web-02» som lenke, «not readable» i tomme paneler. */
+.image { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.hostlink {
+  display: inline-flex; align-items: center; min-height: 44px; margin: -14px 0; padding: 0 4px; border: 0; background: none;
+  color: var(--color-cpu); font-size: inherit; font-weight: 600; cursor: pointer; border-radius: var(--radius-chip);
+}
+.hostlink:hover { text-decoration: underline; }
+.unreadable { font-size: 12px; color: var(--w-45); padding: 6px 2px; }

@@ -118,7 +118,9 @@ describe('OverviewPage', () => {
     expect(el.textContent).toContain('No servers yet');
     expect(el.querySelector('gp-enrol-panel')).not.toBeNull();
     expect(api.post).toHaveBeenCalledWith('/servers/enrol-key', { dockerMode: 'proxy' });
-    expect(el.querySelector('gp-button')?.textContent?.trim()).toBe('Add server');
+    // Fase 12: «+ Add» med menyen Server / Container, og «Add a container» under innrulleringskortet.
+    expect(el.querySelector('gp-button')?.textContent?.trim()).toBe('Add');
+    expect(el.querySelector('.or gp-button')?.textContent?.trim()).toBe('Add a container');
     expect(el.querySelector('[data-testid="summary"]')?.textContent).toContain('0 servers · 0 up · 0 down · 0 paused · live · ');
   });
 
@@ -171,7 +173,7 @@ describe('OverviewPage', () => {
     chip('Has alert').click();
     await fixture.whenStable();
     expect(el.querySelectorAll('gp-server-card').length).toBe(5);
-    expect(TestBed.inject(PrefsService).filters.value()).toEqual({ tag: '', status: '', alert: true });
+    expect(TestBed.inject(PrefsService).filters.value()).toEqual({ tag: '', status: '', alert: true, kind: '' });
     chip('Has alert').click();
 
     const select = el.querySelector('gp-select select') as HTMLSelectElement;
@@ -209,6 +211,10 @@ describe('OverviewPage', () => {
     seedDemo();
     const { el, fixture, page } = await render();
     (el.querySelector('gp-button button') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    // Fase 12: knappen åpner menyen; «Server» åpner dialogen.
+    expect(el.querySelector('[data-testid="add-menu"]')).not.toBeNull();
+    (el.querySelector('[role="menuitem"]') as HTMLButtonElement).click();
     await fixture.whenStable();
     expect(document.querySelector('[role="dialog"] gp-enrol-panel')).not.toBeNull();
     live.added!({ ...demoCardByName('web-01'), id: 'new-1', name: 'web-03', hostname: 'web-03', tags: [] });

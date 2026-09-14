@@ -7,6 +7,12 @@ public static class ServerStatuses
 {
     public const string Up = "up";
     public const string Down = "down";
+
+    /// <summary>A container node said bye (planned stop): shown as sleeping, never alerted as down (fase 12).</summary>
+    public const string Sleeping = "sleeping";
+
+    /// <summary>Demo servers only.</summary>
+    public const string Paused = "paused";
 }
 
 /// <summary>
@@ -17,7 +23,11 @@ public sealed class AgentSession(string serverId, bool isDemo = false)
 {
     public static readonly TimeSpan PreviousTokenGrace = TimeSpan.FromMinutes(10);
 
+    /// <summary>How long hello times are kept for restarts24h/restarts10m.</summary>
+    public static readonly TimeSpan RestartWindow = TimeSpan.FromHours(24);
+
     private readonly Lock _lock = new();
+    private readonly List<DateTimeOffset> _hellos = [];
 
     public string ServerId { get; } = serverId;
 
@@ -43,6 +53,18 @@ public sealed class AgentSession(string serverId, bool isDemo = false)
     public long RamBytes { get; private set; }
     public long BootTime { get; private set; }
     public string? DockerMode { get; private set; }
+
+    /// <summary>`server` or `container` (fase 12). Set by POST /api/servers for container nodes and by every hello.</summary>
+    public string Kind { get; private set; } = NodeKinds.Server;
+
+    public bool IsContainer => Kind == NodeKinds.Container;
+
+    public string? ContainerId { get; private set; }
+    public Capabilities? Capabilities { get; private set; }
+    public string? Image { get; private set; }
+
+    /// <summary>Container nodes: the files `logStart source: file` may tail (GLIMT_LOG_PATHS).</summary>
+    public IReadOnlyList<string> LogPaths { get; private set; } = [];
     public string TokenHash { get; set; } = "";
 
     /// <summary>After a rotate the old token stays valid for <see cref="PreviousTokenGrace"/>.</summary>
@@ -85,6 +107,21 @@ public sealed class AgentSession(string serverId, bool isDemo = false)
             RamBytes = hello.RamBytes;
             BootTime = hello.BootTime;
             DockerMode = hello.DockerMode;
+            if (hello.Kind is not null)
+            {
+                Kind = NodeKinds.Normalize(hello.Kind);
+            }
+
+            if (IsContainer)
+            {
+                ContainerId = hello.ContainerId ?? ContainerId;
+                Capabilities = hello.Capabilities ?? Capabilities;
+                Image = string.IsNullOrEmpty(hello.Image) ? Image : hello.Image;
+                LogPaths = hello.LogPaths?.ToArray() ?? [];
+                _hellos.Add(now);
+                _hellos.RemoveAll(t => now - t > RestartWindow);
+            }
+
             Connected = true;
             LastSeenAt = now;
             Status = ServerStatuses.Up;
@@ -115,6 +152,25 @@ public sealed class AgentSession(string serverId, bool isDemo = false)
     }
 
     public void Touch(DateTimeOffset now) => LastSeenAt = now;
+
+    /// <summary>Hellos within the window (a container node's restarts: every start is a hello).</summary>
+    public int Restarts(TimeSpan window, DateTimeOffset now)
+    {
+        lock (_lock)
+        {
+            return _hellos.Count(t => now - t <= window);
+        }
+    }
+
+    /// <summary>The agent said bye: a planned stop. Stays sleeping until the next hello; never goes down.</summary>
+    public void MarkSleeping(DateTimeOffset now)
+    {
+        lock (_lock)
+        {
+            LastSeenAt = now;
+            Status = ServerStatuses.Sleeping;
+        }
+    }
 
     public void StoreSnapshot(Snapshot snapshot, DateTimeOffset now)
     {
@@ -165,15 +221,15 @@ public sealed class AgentSession(string serverId, bool isDemo = false)
         }
     }
 
-    /// <summary>Installs a new token hash; the previous one stays accepted for the grace period.</summary>
-    public void RotateToken(string newTokenHash, DateTimeOffset now)
+    /// <summary>Installs a new token hash; the previous one stays accepted for the grace period (10 min for servers, 24 h for container nodes).</summary>
+    public void RotateToken(string newTokenHash, DateTimeOffset now, TimeSpan? grace = null)
     {
         lock (_lock)
         {
             if (TokenHash.Length > 0 && TokenHash != newTokenHash)
             {
                 PreviousTokenHash = TokenHash;
-                PreviousTokenValidUntil = now + PreviousTokenGrace;
+                PreviousTokenValidUntil = now + (grace ?? PreviousTokenGrace);
             }
 
             TokenHash = newTokenHash;
@@ -214,6 +270,10 @@ public sealed class AgentSession(string serverId, bool isDemo = false)
             Cores = doc.Cores;
             RamBytes = doc.RamBytes;
             DockerMode = doc.DockerMode;
+            Kind = NodeKinds.Normalize(doc.Kind);
+            ContainerId = doc.ContainerId;
+            Capabilities = doc.Capabilities is { } c ? new Capabilities(c.Cgroup, c.ProcAll, c.Netns, c.Health) : null;
+            Image = doc.Image;
             CreatedAt = Utc(doc.CreatedAt);
         }
     }
@@ -241,6 +301,10 @@ public sealed class AgentSession(string serverId, bool isDemo = false)
                 Cores = Cores,
                 RamBytes = RamBytes,
                 DockerMode = DockerMode,
+                Kind = Kind,
+                ContainerId = ContainerId,
+                Capabilities = Capabilities is { } c ? new CapabilitiesDocument { Cgroup = c.Cgroup, ProcAll = c.ProcAll, Netns = c.Netns, Health = c.Health } : null,
+                Image = Image,
                 CreatedAt = CreatedAt.UtcDateTime,
             };
         }

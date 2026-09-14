@@ -16,6 +16,8 @@ public sealed record E2eRequest(
     string? ServerId,
     int? Seconds,
     string? Unit,
+    string? Token = null,
+    bool? Ok = null,
     string? Key = null,
     string? Hostname = null,
     string? Email = null,
@@ -122,6 +124,16 @@ public static class DemoFeature
                         return Results.Ok(new { ok = true });
                     case "reconnect-server":
                         return await demo.ReconnectAsync(request.ServerId, ct) ? Results.Ok(new { ok = true }) : Results.NotFound();
+                    case "connect-fake-container":
+                        // A container node from POST /api/servers: the fake agent uses its token (step 12.5) and the «Add container» dialog jumps to step 2.
+                        var node = await demo.ConnectContainerAsync(request.Token, ct);
+                        return node.Error is null
+                            ? Results.Ok(new { ok = true, serverId = node.ServerId, name = node.Name, ownerId = node.OwnerId })
+                            : Results.Json(new { error = node.Error }, statusCode: node.Status);
+                    case "sleep-node":
+                        return await demo.SleepNodeAsync(request.ServerId, ct) ? Results.Ok(new { ok = true }) : Results.NotFound();
+                    case "fail-health":
+                        return await demo.FailHealthAsync(request.ServerId, request.Ok ?? false, ct) ? Results.Ok(new { ok = true }) : Results.NotFound();
                     case "fail-service":
                         return await demo.FailServiceAsync(request.ServerId, request.Unit, ct) ? Results.Ok(new { ok = true }) : Results.NotFound();
                     case "advance":
@@ -130,7 +142,7 @@ public static class DemoFeature
                         await alerts.SweepAsync(ct);
                         return Results.Ok(new { ok = true, now = clock.GetUtcNow().ToString("o"), offsetSec = (long)clock.Offset.TotalSeconds });
                     default:
-                        return Results.NotFound(new { error = "unknown e2e action; use disconnect-server, reconnect-server, fail-service, advance, enrol-fake-agent or ensure-user" });
+                        return Results.NotFound(new { error = "unknown e2e action; use disconnect-server, reconnect-server, fail-service, advance, enrol-fake-agent, ensure-user, connect-fake-container, sleep-node or fail-health" });
                 }
             });
         }

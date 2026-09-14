@@ -48,6 +48,16 @@ type options struct {
 	stateDir  string
 	heartbeat int
 	logLevel  string
+
+	// Fase 12: container nodes. kind is resolved from auto to server or
+	// container by applyEnv; kindReasons say why (for check).
+	kind        string
+	kindReasons []string
+	token       string // GLIMT_TOKEN: the long-lived node token
+	healthURL   string // GLIMT_HEALTH_URL
+	checks      string // GLIMT_CHECKS
+	logPaths    string // GLIMT_LOG_PATHS
+	image       string // GLIMT_IMAGE
 }
 
 func bindFlags(fs *flag.FlagSet, o *options) {
@@ -59,7 +69,11 @@ func bindFlags(fs *flag.FlagSet, o *options) {
 	fs.StringVar(&o.stateDir, "state-dir", defaultStateDir, "where the token is stored (env STATE_DIRECTORY)")
 	fs.IntVar(&o.heartbeat, "heartbeat", 30, "snapshot interval in seconds until the hub says otherwise (env GLIMT_HEARTBEAT_SECONDS)")
 	fs.StringVar(&o.logLevel, "log-level", "info", "debug | info | warn | error (env GLIMT_LOG_LEVEL)")
+	fs.StringVar(&o.kind, "kind", sysinfo.KindAuto, "auto | server | container: auto picks container inside one (env GLIMT_KIND)")
 }
+
+// detectRoot and detectProc are what the kind detection looks at; tests override them.
+var detectRoot, detectProc = "/", "/proc"
 
 // applyEnv fills in options that were not given as flags. lookup resolves an
 // environment variable; nil means os.Getenv.
@@ -84,7 +98,26 @@ func applyEnv(fs *flag.FlagSet, o *options, lookup func(string) string) error {
 		o.key = env("GLIMT_AGENT_KEY", "GLIMT_DEV_ENROL_KEY")
 	}
 	if !set["name"] {
-		o.name = env("GLIMT_AGENT_NAME")
+		o.name = env("GLIMT_AGENT_NAME", "GLIMT_NODE_NAME")
+	}
+	if !set["kind"] {
+		if v := env("GLIMT_KIND"); v != "" {
+			o.kind = v
+		}
+	}
+	switch o.kind {
+	case sysinfo.KindAuto, protocol.KindServer, protocol.KindContainer:
+	default:
+		return fmt.Errorf("--kind must be auto, server or container, got %q", o.kind)
+	}
+	o.kind, o.kindReasons = sysinfo.DetectKind(o.kind, detectRoot, detectProc, lookup)
+	o.token = env("GLIMT_TOKEN")
+	o.healthURL = env("GLIMT_HEALTH_URL")
+	o.checks = env("GLIMT_CHECKS")
+	o.logPaths = env("GLIMT_LOG_PATHS")
+	o.image = env("GLIMT_IMAGE")
+	if o.healthURL != "" && !strings.HasPrefix(o.healthURL, "http://") && !strings.HasPrefix(o.healthURL, "https://") {
+		return fmt.Errorf("GLIMT_HEALTH_URL must start with http:// or https://, got %q", o.healthURL)
 	}
 	if !set["docker"] {
 		if v := env("GLIMT_AGENT_DOCKER"); v != "" {
@@ -160,7 +193,7 @@ func usage(w io.Writer) {
 
 Usage:
   glimt-agent [run] [flags]      connect to the hub and keep reporting (default)
-  glimt-agent check [flags]      show what this machine offers the agent
+  glimt-agent check [flags]      show what this machine (or container) offers the agent
   glimt-agent snapshot [flags]   print one snapshot message as JSON (no hub needed)
   glimt-agent stream [flags]     print one stream message as JSON (no hub needed)
   glimt-agent logs [flags]       print a log source: --source journal|auth|kernel|packages|web|firewall|container
@@ -171,6 +204,10 @@ Usage:
 
 Run "glimt-agent <command> -h" for flags. snapshot, stream and logs read
 /etc/glimt-agent/env for --docker when installed.
+
+Inside a container (auto-detected, or --kind container) the agent reads
+GLIMT_HUB, GLIMT_TOKEN, GLIMT_NODE_NAME, GLIMT_HEALTH_URL, GLIMT_CHECKS,
+GLIMT_LOG_PATHS and GLIMT_IMAGE from the environment; no enrolment key.
 `, version)
 }
 
@@ -243,14 +280,24 @@ func runAgent(args []string, stderr io.Writer) int {
 		return 2
 	}
 
-	store := state.New(o.stateDir)
+	var store ws.TokenStore = state.New(o.stateDir)
+	if o.kind == protocol.KindContainer {
+		// The node token lives in the environment; the state directory is
+		// only used when it exists (an optional volume).
+		store = &envStore{token: o.token, fallback: state.New(o.stateDir)}
+		o.key = ""
+	}
 	token, err := store.Load()
 	if err != nil {
 		log.Error("cannot read state", "err", err, "dir", o.stateDir)
 		return 1
 	}
 	if token == "" && o.key == "" {
-		log.Error("no token stored and no enrolment key: use --key or GLIMT_AGENT_KEY", "stateDir", o.stateDir)
+		if o.kind == protocol.KindContainer {
+			log.Error("no node token: set GLIMT_TOKEN (from «Add container» in the dashboard)", "kind", o.kind)
+		} else {
+			log.Error("no token stored and no enrolment key: use --key or GLIMT_AGENT_KEY", "stateDir", o.stateDir)
+		}
 		return 2
 	}
 
@@ -258,7 +305,7 @@ func runAgent(args []string, stderr io.Writer) int {
 	if o.name != "" {
 		info.Hostname = o.name
 	}
-	log.Info("glimt-agent starting", "version", version, "hostname", info.Hostname, "os", info.OS.PrettyName,
+	log.Info("glimt-agent starting", "version", version, "kind", o.kind, "why", strings.Join(o.kindReasons, "; "), "hostname", info.Hostname, "os", info.OS.PrettyName,
 		"kernel", info.Kernel, "arch", info.Arch, "cores", info.Cores, "docker", o.docker, "stateDir", o.stateDir,
 		"auth", map[bool]string{true: "token", false: "enrolKey"}[token != ""])
 
@@ -276,11 +323,9 @@ func runAgent(args []string, stderr io.Writer) int {
 		Store:     store,
 		Logger:    log,
 		UserAgent: "glimt-agent/" + version,
+		Bye:       o.kind == protocol.KindContainer,
 		Hello: func() protocol.Hello {
-			return protocol.Hello{
-				Hostname: info.Hostname, AgentVersion: version, OS: info.OS, Kernel: info.Kernel, Arch: info.Arch,
-				Cores: info.Cores, RAMBytes: info.RAMBytes, BootTime: info.BootTime, DockerMode: d.dockerMode(),
-			}
+			return buildHello(o, info, d)
 		},
 		NewSession: func(ctx context.Context, w *protocol.Welcome, out ws.Sender) ws.Session {
 			snap := heartbeat
@@ -336,6 +381,56 @@ func runAgent(args []string, stderr io.Writer) int {
 	}
 	log.Info("glimt-agent stopped")
 	return 0
+}
+
+// buildHello is the static part of hello for either profile.
+func buildHello(o *options, info sysinfo.Info, d *deps) protocol.Hello {
+	h := protocol.Hello{
+		Hostname: info.Hostname, AgentVersion: version, OS: info.OS, Kernel: info.Kernel, Arch: info.Arch,
+		Cores: info.Cores, RAMBytes: info.RAMBytes, BootTime: info.BootTime, DockerMode: d.dockerMode(),
+	}
+	if d.container != nil {
+		h.Kind = protocol.KindContainer
+		h.ContainerID = sysinfo.ContainerID(detectProc, info.Hostname)
+		h.Capabilities = d.capabilities()
+		h.Image = o.image
+		h.LogPaths = d.logPaths
+		h.Cores = d.container.Cores()
+		if ram := d.container.RAMBytes(); ram > 0 {
+			h.RAMBytes = ram
+		}
+	}
+	return h
+}
+
+// envStore is the container profile's token store: the token comes from
+// GLIMT_TOKEN at every start; the state directory is written only when it
+// already exists (a volume the operator chose to mount).
+type envStore struct {
+	token    string
+	fallback *state.Store
+}
+
+func (s *envStore) Load() (string, error) {
+	if s.token != "" {
+		return s.token, nil
+	}
+	return s.fallback.Load()
+}
+
+func (s *envStore) Save(token string) error {
+	if fi, err := os.Stat(s.fallback.Dir()); err != nil || !fi.IsDir() {
+		return nil
+	}
+	return s.fallback.Save(token)
+}
+
+func (s *envStore) Clear() error {
+	s.token = ""
+	if fi, err := os.Stat(s.fallback.Dir()); err != nil || !fi.IsDir() {
+		return nil
+	}
+	return s.fallback.Clear()
 }
 
 // session is one connection's scheduler and log streams (ws.Session).

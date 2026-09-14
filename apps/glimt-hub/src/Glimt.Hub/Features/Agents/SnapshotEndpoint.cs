@@ -11,7 +11,7 @@ public static class SnapshotEndpoint
 
     public static IEndpointRouteBuilder MapSnapshot(this IEndpointRouteBuilder app)
     {
-        app.MapGet(Path, async (string id, HttpContext http, AgentRegistry registry, IAccessService access, CancellationToken cancellationToken) =>
+        app.MapGet(Path, async (string id, HttpContext http, AgentRegistry registry, NodeLinker linker, TimeProvider clock, IAccessService access, CancellationToken cancellationToken) =>
             {
                 var userId = http.User.GetUserId();
                 if (userId is null)
@@ -34,7 +34,7 @@ public static class SnapshotEndpoint
                     return Results.NoContent();
                 }
 
-                return Results.Ok(Projections.Server(session));
+                return Results.Ok(Projections.Server(session, linker, clock.GetUtcNow()));
             })
             .RequireAuthorization()
             .RequireRateLimiting(RateLimiting.ApiPolicy);

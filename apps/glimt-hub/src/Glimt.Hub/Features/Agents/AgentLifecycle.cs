@@ -18,13 +18,18 @@ public sealed class AgentLifecycle(
     ILivePublisher live,
     AlertEngine alerts,
     IAlertStore alertStore,
+    NodeLinker linker,
     TimeProvider clock,
     ILogger<AgentLifecycle> logger) : IServerLifecycle
 {
+    /// <summary>A container node's old token stays valid this long after a rotate: the owner must update the environment and restart the container (step 12.5).</summary>
+    public static readonly TimeSpan ContainerTokenOverlap = TimeSpan.FromHours(24);
+
     public async Task ServerRemovedAsync(string serverId, CancellationToken cancellationToken)
     {
         await alerts.ForgetAsync(serverId, cancellationToken);
         await alertStore.DeleteByServerAsync(serverId, cancellationToken);
+        linker.Forget(serverId);
         if (!registry.TryGet(serverId, out var session))
         {
             buffer.Remove(serverId);
@@ -60,6 +65,13 @@ public sealed class AgentLifecycle(
         {
             // Never connected since the hub started: the new hash is in the servers collection already
             // and the next hello with the new token resumes from there.
+            return;
+        }
+
+        if (session.IsContainer)
+        {
+            // The agent reads GLIMT_TOKEN at start and cannot take a rotate; the endpoint returned the token to the owner.
+            session.RotateToken(newTokenHash, clock.GetUtcNow(), ContainerTokenOverlap);
             return;
         }
 

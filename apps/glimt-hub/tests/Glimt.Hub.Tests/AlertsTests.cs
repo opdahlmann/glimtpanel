@@ -150,7 +150,7 @@ public sealed class AlertsTests : IAsyncLifetime
 
         var settings = await client.GetFromJsonAsync<JsonElement>("/api/alert-settings", ct);
         var rules = settings.GetProperty("rules").EnumerateArray().ToList();
-        Assert.Equal(7, rules.Count);
+        Assert.Equal(8, rules.Count);
         var disk = rules.Single(r => r.GetProperty("id").GetString() == "disk_full");
         Assert.Equal(90, disk.GetProperty("threshold").GetDouble());
         Assert.Equal(90, disk.GetProperty("defaultThreshold").GetDouble());

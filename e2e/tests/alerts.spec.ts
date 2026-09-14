@@ -6,7 +6,8 @@ import { loginViaApi } from '../helpers/auth';
 import { enrolFakeAgent, ensureEmptyOwner, forceLang, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
 import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
-const RULE_NAMES = ['Server down', 'Disk almost full', 'Memory pressure', 'CPU saturated', 'Container stopped or restart loop', 'Service failed', 'Reboot required'];
+// Fase 12: «Node down» og den åttende regelen «Health check failing».
+const RULE_NAMES = ['Node down', 'Disk almost full', 'Memory pressure', 'CPU saturated', 'Container stopped or restart loop', 'Service failed', 'Reboot required', 'Health check failing'];
 
 function row(page: Page, server: string, rule: string) {
   return page.locator(`.row[data-server="${server}"][data-rule="${rule}"]`);
@@ -93,7 +94,7 @@ test.describe('varselsiden', () => {
     await page.goto('/alerts');
     await expect(page.getByTestId('no-active')).toContainText('No active alerts');
     await expect(page.getByTestId('alerts-summary')).toHaveText('0 active · 0 resolved');
-    await expect(page.locator('.rrow')).toHaveCount(7);
+    await expect(page.locator('.rrow')).toHaveCount(8);
     await expect(page.locator(isMobileProject(testInfo) ? 'gp-bottom-nav .badge' : 'gp-sidebar .badge')).toHaveCount(0);
     await expectMobileRules(page, testInfo);
     await page.evaluate(() => document.fonts.ready);

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ConnectionService } from '@core/connection.service';
 import { FeatureFlags } from '@core/feature-flags';
@@ -15,9 +15,11 @@ import { InputComponent } from '@shared/input/input.component';
 import { SegmentComponent, SegmentOption } from '@shared/segment/segment.component';
 import { SelectComponent, SelectOption } from '@shared/select/select.component';
 import { TitleService } from '../../shell/title.service';
+import { AddContainerDialogComponent, AddContainerStep } from './add-container/add-container-dialog.component';
 import { AddServerDialogComponent, AddStep } from './add-server/add-server-dialog.component';
+import { ContainerCardComponent } from './container-card/container-card.component';
 import { EnrolPanelComponent } from './enrol/enrol-panel.component';
-import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, sortCards, toggleAlert, toggleStatus, toggleTag } from './overview.model';
+import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, sortCards, toggleAlert, toggleKind, toggleStatus, toggleTag } from './overview.model';
 import { ServerCardComponent } from './server-card/server-card.component';
 
 /** Søket venter så lenge før listen filtreres (steg 4.1). */
@@ -26,18 +28,18 @@ export const SEARCH_DEBOUNCE_MS = 150;
 const SORT_LABEL_KEYS = { name: 'name', cpu: 'cpu', mem: 'memory', disk: 'disk', status: 'status', tag: 'tag' } as const;
 
 /**
- * Oversikten (steg 4.1–4.4, skjerm 3, 4, 16 og 18): tittel og sammendragslinje bygget av deler, «Add server» kun for
- * eiere, verktøylinje (søk med 150 ms debounce, sortering som `<select>`, visningssegment kun når flere visninger er
+ * Oversikten (steg 4.1–4.4, skjerm 3, 4, 16 og 18; steg 12.8, skjerm 20): tittel («Nodes» når kontoen har
+ * containernoder) og sammendragslinje bygget av deler, «+ Add» med menyen Server/Container kun for eiere, verktøylinje (søk med 150 ms debounce, sortering som `<select>`, visningssegment kun når flere visninger er
  * slått på), filterchips (All, tagger, up/down/paused, Has alert), kortgrid, tom-tilstand med innrulleringskortet for
  * eiere uten servere og «no access yet» for lesere. PrefsService husker sortering, filter og visning.
  * Piltaster mellom kort, Enter åpner, `/` fokuserer søket.
  */
 @Component({
   selector: 'gp-overview-page',
-  imports: [FormsModule, InputComponent, SelectComponent, SegmentComponent, ButtonComponent, ServerCardComponent, EnrolPanelComponent, AddServerDialogComponent, TPipe],
+  imports: [FormsModule, InputComponent, SelectComponent, SegmentComponent, ButtonComponent, ServerCardComponent, ContainerCardComponent, EnrolPanelComponent, AddServerDialogComponent, AddContainerDialogComponent, TPipe],
   templateUrl: './overview.page.html',
   styleUrl: './overview.page.css',
-  host: { '(document:keydown)': 'onDocumentKeydown($event)' },
+  host: { '(document:keydown)': 'onDocumentKeydown($event)', '(document:click)': 'onDocumentClick($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OverviewPage {
@@ -64,6 +66,9 @@ export class OverviewPage {
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly counts = computed(() => countByStatus(this.cards()));
+  /** Minst én containernode: tittelen sier «Nodes» og sammendraget teller begge typer (steg 12.8). */
+  readonly hasNodes = computed(() => this.counts().containers > 0);
+  readonly titleKey = computed<'nodes' | 'servers'>(() => (this.hasNodes() ? 'nodes' : 'servers'));
   readonly tags = computed(() => collectTags(this.cards()));
   readonly visibleCards = computed(() => sortCards(filterCards(this.cards(), this.debouncedSearch(), this.filters()), this.sort()));
   readonly allActive = computed(() => isAllActive(this.filters()));
@@ -88,12 +93,17 @@ export class OverviewPage {
       : this.state() === 'connected'
         ? `${t('liveLabel')} · ${this.i18n.formatClock(this.now())}`
         : t(this.state() === 'reconnecting' ? 'reconnect' : 'loading').toLowerCase();
-    return `${c.total} ${t('servers').toLowerCase()} · ${c.up} ${t('up')} · ${c.down} ${t('down')} · ${c.paused} ${t('paused')} · ${tail}`;
+    if (!this.hasNodes()) return `${c.total} ${t('servers').toLowerCase()} · ${c.up} ${t('up')} · ${c.down} ${t('down')} · ${c.paused} ${t('paused')} · ${tail}`;
+    return `${c.total} ${t('nodes').toLowerCase()} · ${c.servers} ${t('servers').toLowerCase()} · ${c.containers} ${t('containers').toLowerCase()} · ${c.up} ${t('up')} · ${c.down} ${t('down')} · ${c.sleeping} ${t('sleeping')} · ${c.paused} ${t('paused')} · ${tail}`;
   });
 
   readonly addOpen = signal(false);
   readonly addStep = signal<AddStep>(0);
   readonly addedCard = signal<CardDto | null>(null);
+  /** «+ Add»-menyen (Server / Container) og containerdialogen (steg 12.10). */
+  readonly addMenuOpen = signal(false);
+  readonly addContainerOpen = signal(false);
+  readonly addContainerStep = signal<AddContainerStep>(0);
 
   /** Leser uten egne servere: ingen «Add server», og en annen tom-tilstand. */
   readonly isReader = computed(() => !this.session.ownsAnyServer() && (this.session.user()?.readerOf ?? 0) > 0);
@@ -109,7 +119,8 @@ export class OverviewPage {
   readonly waitingForAgent = computed(() => (this.listEmpty() && !this.isReader()) || (this.addOpen() && this.addStep() === 0));
 
   constructor() {
-    inject(TitleService).setKey('servers');
+    const title = inject(TitleService);
+    effect(() => title.setKey(this.titleKey()));
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(this.live.subscribeOverview());
     void this.serverList.load().catch((err: unknown) => console.warn('[overview] could not load the server list', err));
@@ -167,19 +178,46 @@ export class OverviewPage {
     this.prefs.filters.update(toggleAlert);
   }
 
-  // ---- legg til server ----------------------------------------------------------------------------
+  toggleKind(kind: 'server' | 'container'): void {
+    this.prefs.filters.update((f) => toggleKind(f, kind));
+  }
+
+  // ---- legg til server / container -----------------------------------------------------------------
+
+  toggleAddMenu(): void {
+    this.addMenuOpen.update((v) => !v);
+  }
 
   openAdd(): void {
+    this.addMenuOpen.set(false);
     this.addedCard.set(null);
     this.addStep.set(0);
     this.addOpen.set(true);
+  }
+
+  openAddContainer(): void {
+    this.addMenuOpen.set(false);
+    this.addContainerStep.set(0);
+    this.addContainerOpen.set(true);
+  }
+
+  /** Klikk utenfor «+ Add»-menyen lukker den. */
+  onDocumentClick(e: MouseEvent): void {
+    if (!this.addMenuOpen()) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[data-add-menu]')) return;
+    this.addMenuOpen.set(false);
   }
 
   // ---- tastatur (FB 13.6) -------------------------------------------------------------------------
 
   /** `/` fokuserer søket når ingen skjemafelt har fokus. */
   onDocumentKeydown(e: KeyboardEvent): void {
-    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || this.addOpen()) return;
+    if (e.key === 'Escape' && this.addMenuOpen()) {
+      this.addMenuOpen.set(false);
+      return;
+    }
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || this.addOpen() || this.addContainerOpen()) return;
     const target = e.target as HTMLElement | null;
     if (target && (target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)) return;
     const input = this.searchField()?.nativeElement.querySelector<HTMLInputElement>('input');
@@ -195,9 +233,9 @@ export class OverviewPage {
     if (!keys.includes(e.key)) return;
     const grid = this.grid()?.nativeElement;
     if (!grid) return;
-    const cards = Array.from(grid.querySelectorAll<HTMLElement>('gp-server-card'));
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('gp-server-card, gp-container-card'));
     if (cards.length === 0) return;
-    const active = (e.target as HTMLElement | null)?.closest<HTMLElement>('gp-server-card');
+    const active = (e.target as HTMLElement | null)?.closest<HTMLElement>('gp-server-card, gp-container-card');
     const i = active ? cards.indexOf(active) : -1;
     let next: number;
     if (e.key === 'Home') next = 0;

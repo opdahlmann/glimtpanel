@@ -385,5 +385,13 @@ export function cardFromStatus(s: ServerStatusDto): CardDto {
     alertSeverity: null,
     cpuLastHour: [],
     memLastHour: [],
+    kind: 'server',
+    health: null,
+    approx: null,
+    onHost: null,
+    image: null,
+    restarts24h: null,
+    memLimit: null,
+    ports: null,
   };
 }

@@ -59,6 +59,13 @@ type procCollector struct {
 	prevAt  time.Time
 	last    []protocol.Process
 	lastTot protocol.ProcessTotals
+	sumCPU  float64 // sum of cpu% over all samples (100 = one core)
+	sumRSS  int64   // memory estimate over all samples, see Sums
+
+	// sums makes Collect estimate the container's memory from every
+	// process's status (the container profile's fallback without a cgroup).
+	sums    bool
+	selfPID int
 }
 
 func newProcCollector(procRoot, etcRoot string, log *slog.Logger) *procCollector {
@@ -142,6 +149,10 @@ func (c *procCollector) Collect(ctx context.Context, topN int) ([]protocol.Proce
 	}
 	c.prev, c.cur = c.cur, c.prev
 	c.prevAt = now
+	c.sumCPU, c.sumRSS = 0, 0
+	if c.sums {
+		c.sumCPU, c.sumRSS = c.estimateSums()
+	}
 	tot := protocol.ProcessTotals{Total: len(c.samples), Running: st.ProcsRunning, Blocked: st.ProcsBlocked}
 
 	picked := pickTop(c.samples, topN)
@@ -171,6 +182,73 @@ func (c *procCollector) Collect(ctx context.Context, topN int) ([]protocol.Proce
 	}
 	c.last, c.lastTot = out, tot
 	return out, tot, nil
+}
+
+// Sums returns the cpu% (100 = one core) and the memory estimate over
+// every visible process except the agent itself, from the last Collect: the
+// container profile's fallback when there is no cgroup to read. Memory is
+// anonymous pages (RssAnon + RssShmem) summed, plus file-backed pages
+// counted once (the largest RssFile), which is close to what the cgroup
+// would report for a forking server; VmRSS summed would count every
+// shared library once per worker. Kernels without RssAnon fall back to
+// the rss field of stat.
+func (c *procCollector) Sums() (cpuPct float64, rssBytes int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.sumCPU, c.sumRSS
+}
+
+func (c *procCollector) estimateSums() (cpuPct float64, memBytes int64) {
+	var anon, maxFile int64
+	for i := range c.samples {
+		s := &c.samples[i]
+		if s.pid == c.selfPID {
+			continue
+		}
+		cpuPct += s.cpu
+		data, err := c.read(filepath.Join(c.procRoot, strconv.Itoa(s.pid), "status"))
+		if err == nil {
+			if a, f, ok := parseStatusRSS(data); ok {
+				anon += a
+				maxFile = max(maxFile, f)
+				continue
+			}
+		}
+		anon += s.rssPages * c.pageSize
+	}
+	return cpuPct, anon + maxFile
+}
+
+// parseStatusRSS reads RssAnon + RssShmem and RssFile (bytes) from /proc/<pid>/status.
+func parseStatusRSS(b []byte) (anon, file int64, ok bool) {
+	var seen int
+	for len(b) > 0 {
+		line := b
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			line, b = b[:i], b[i+1:]
+		} else {
+			b = nil
+		}
+		var dst *int64
+		switch {
+		case bytes.HasPrefix(line, []byte("RssAnon:")):
+			dst, line = &anon, line[8:]
+		case bytes.HasPrefix(line, []byte("RssShmem:")):
+			dst, line = &anon, line[9:]
+		case bytes.HasPrefix(line, []byte("RssFile:")):
+			dst, line = &file, line[8:]
+		default:
+			continue
+		}
+		s, e := nextField(line, 0)
+		v, good := parseUintBytes(line[s:e])
+		if !good {
+			return 0, 0, false
+		}
+		*dst += int64(v) * 1024
+		seen++
+	}
+	return anon, file, seen == 3
 }
 
 // startedAtMs converts a starttime in ticks since boot to Unix milliseconds.

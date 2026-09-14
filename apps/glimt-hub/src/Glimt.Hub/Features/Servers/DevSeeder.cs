@@ -1,3 +1,5 @@
+using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Agents.Protocol;
 using Glimt.Hub.Infrastructure;
 using MongoDB.Driver;
 
@@ -43,6 +45,10 @@ internal sealed class DevSeeder(GlimtOptions options, MongoContext mongo, MongoI
         }
     }
 
+    /// <summary>The container node `npm run dev -- --sidecar` connects as (GLIMT_DEV_CONTAINER_TOKEN), step 12.4.</summary>
+    public const string DevNodeId = "dev-sidecar";
+    public const string DevNodeName = "sidecar-dev";
+
     private async Task SeedAsync(string email, string password, CancellationToken cancellationToken)
     {
         var users = mongo.Db.GetCollection<UserDocument>(UserDocument.Collection);
@@ -50,6 +56,7 @@ internal sealed class DevSeeder(GlimtOptions options, MongoContext mongo, MongoI
         if (existing is not null)
         {
             logger.LogInformation("dev user {Email} already exists in {Database}", email, mongo.DatabaseName);
+            await SeedNodeAsync(existing.Id, cancellationToken);
             return;
         }
 
@@ -76,5 +83,31 @@ internal sealed class DevSeeder(GlimtOptions options, MongoContext mongo, MongoI
         {
             logger.LogInformation("dev user {Email} already exists in {Database}", email, mongo.DatabaseName);
         }
+
+        await SeedNodeAsync(user.Id, cancellationToken);
+    }
+
+    /// <summary>A container node on the dev account whose token is GLIMT_DEV_CONTAINER_TOKEN; the hash is refreshed when the token changes.</summary>
+    private async Task SeedNodeAsync(string ownerId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(options.DevContainerToken))
+        {
+            return;
+        }
+
+        var servers = mongo.Db.GetCollection<ServerDocument>(ServerDocument.Collection);
+        var hash = AgentTokens.Hash(options.DevContainerToken.Trim());
+        var now = clock.GetUtcNow().UtcDateTime;
+        var update = Builders<ServerDocument>.Update
+            .Set(s => s.TokenHash, hash)
+            .Set(s => s.Kind, NodeKinds.Container)
+            .SetOnInsert(s => s.OwnerId, ownerId)
+            .SetOnInsert(s => s.Name, DevNodeName)
+            .SetOnInsert(s => s.Hostname, DevNodeName)
+            .SetOnInsert(s => s.Tags, new List<string> { "dev" })
+            .SetOnInsert(s => s.Status, ServerStatuses.Down)
+            .SetOnInsert(s => s.CreatedAt, now);
+        await servers.UpdateOneAsync(s => s.Id == DevNodeId, update, new UpdateOptions { IsUpsert = true }, cancellationToken);
+        logger.LogInformation("dev container node {Name} ({Id}) ready for GLIMT_DEV_CONTAINER_TOKEN", DevNodeName, DevNodeId);
     }
 }

@@ -49,3 +49,6 @@
   position: sticky; bottom: var(--bar-bottom); z-index: 4; display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0;
   background: #0f1013e6; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
+
+/* Filstier (steg 12.9) i monospace. */
+.chip.mono { font-family: var(--font-mono); font-weight: 400; }

@@ -16,6 +16,7 @@ public sealed class AgentIngest(
     ILivePublisher live,
     IServerStore store,
     AlertEngine alerts,
+    NodeLinker linker,
     TimeProvider clock,
     ILogger<AgentIngest> logger)
 {
@@ -30,6 +31,11 @@ public sealed class AgentIngest(
         await store.UpsertAsync(session.ToDocument(), cancellationToken);
         await subscriptions.AgentConnectedAsync(session.ServerId, cancellationToken);
         await SafeAsync(() => alerts.ServerUpAsync(session, cancellationToken), session, "alerts");
+        if (session.IsContainer && linker.OnNodeConnected(session))
+        {
+            // A host agent already listed this container: the link is there from the first card.
+            await SafeAsync(() => live.StatusAsync(session, cancellationToken), session, "link");
+        }
     }
 
     public async Task DisconnectedAsync(AgentSession session)
@@ -44,6 +50,16 @@ public sealed class AgentIngest(
         var now = clock.GetUtcNow();
         session.StoreSnapshot(snapshot, now);
         buffer.Record(session.ServerId, ToPoint(snapshot, session.RamBytes, now));
+        if (!session.IsContainer)
+        {
+            // A host agent's containers may be container nodes of the same owner (step 12.6): link them, and
+            // refresh the cards of the nodes whose link appeared or disappeared.
+            foreach (var node in linker.OnHostSnapshot(session, snapshot))
+            {
+                await SafeAsync(() => live.StatusAsync(node, cancellationToken), node, "link");
+            }
+        }
+
         await SafeAsync(() => live.SnapshotAsync(session, cancellationToken), session, "snapshot");
         await SafeAsync(() => alerts.SnapshotAsync(session, snapshot, cancellationToken), session, "alerts");
     }
@@ -52,6 +68,16 @@ public sealed class AgentIngest(
     {
         session.StoreStream(stream, clock.GetUtcNow());
         await SafeAsync(() => live.StreamAsync(session, cancellationToken), session, "stream");
+    }
+
+    /// <summary>The agent stops on purpose (SIGTERM in a container): the node sleeps instead of going down (step 12.5).</summary>
+    public async Task ByeAsync(AgentSession session, Bye bye, CancellationToken cancellationToken)
+    {
+        session.MarkSleeping(clock.GetUtcNow());
+        logger.LogInformation("node {ServerId} ({Name}) says bye ({Reason}); sleeping", session.ServerId, session.Name, bye.Reason);
+        await logs.AgentGoneAsync(session.ServerId, "agent stopped");
+        await SafeAsync(() => live.StatusAsync(session, cancellationToken), session, "status");
+        await store.TouchAsync(session.ServerId, session.LastSeenAt?.UtcDateTime, session.Status, cancellationToken);
     }
 
     public Task LogAsync(AgentSession session, Log log, CancellationToken cancellationToken) =>

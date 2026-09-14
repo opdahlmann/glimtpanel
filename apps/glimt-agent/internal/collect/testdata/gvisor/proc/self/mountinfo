@@ -1,0 +1,5 @@
+21 1 0:20 / / rw,relatime - overlay overlay rw,lowerdir=/x,upperdir=/y,workdir=/z
+22 21 0:21 / /proc rw,nosuid,nodev,noexec,relatime - proc none rw
+23 21 0:22 / /dev rw,nosuid - tmpfs none rw,mode=755
+24 21 0:23 / /sys ro,nosuid,nodev,noexec,relatime - sysfs none ro
+25 21 0:24 / /data rw,relatime - ext4 /dev/sdb1 rw

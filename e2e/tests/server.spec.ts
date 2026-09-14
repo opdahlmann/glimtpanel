@@ -258,3 +258,62 @@ test.describe('serversiden', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 5000 }).toBeGreaterThan(0);
   });
 });
+
+test.describe('containernodens side (fase 12)', () => {
+  test('skjerm 21: acme-backend med image, vert, ni paneler, helse og sjekker, filer', async ({ page }, testInfo) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await gotoServer(page, 'demo-acme-backend');
+    await expect(page.locator('gp-server-page')).toHaveAttribute('data-kind', 'container');
+    await expect(page.getByTestId('image')).toHaveText('ghcr.io/acme/backend:2.4.1');
+    await expect(page.getByTestId('info')).toHaveText('container · 2 cores allotted · 1 GB of limit');
+    await expect(page.getByTestId('on-host')).toHaveText('on web-02');
+    await expect(page.getByRole('button', { name: 'Nodes' })).toBeVisible();
+    await expect(page.locator('gp-badge', { hasText: 'EOL' })).toHaveCount(0);
+
+    // Panelnav og paneler i containerrekkefølgen; Volumes viser roten som «/» og et volum.
+    await expect(page.locator('gp-panel-nav button')).toHaveText(['CPU', 'Memory', 'Volumes', 'Network', 'Processes', 'Listening ports', 'Health & checks', 'Host', 'Logs']);
+    const panels = page.locator('gp-panel');
+    await expect(panels).toHaveCount(9);
+    await expect(page.locator('#panel-disk gp-disk-panel gp-row .name')).toHaveText(['/data', '/']);
+    await expect(page.locator('#panel-mem .head').first()).toContainText('of 1 GB');
+    await expect(page.locator('#panel-ports .port')).toHaveCount(1);
+    await expect(page.locator('#panel-ports .port').first()).toContainText('3000');
+
+    // Helse og sjekker: helse-URL ok, db ok, cache feiler → rødt panel.
+    const health = page.locator('#panel-health');
+    await expect(health.getByTestId('health-row')).toContainText('GET /healthz · 200');
+    await expect(health.getByTestId('health-row')).toContainText('checked');
+    await expect(health.locator('[data-check="db"]')).toContainText('ok');
+    await expect(health.locator('[data-check="cache"]')).toContainText('ok');
+
+    // Verten: image-alder, omstarter, tilstand og lenke til web-02.
+    const host = page.locator('#panel-host');
+    await expect(host.locator('.link')).toHaveText('Open host · web-02');
+    await expect(host.locator('gp-chip')).toHaveCount(4);
+
+    // Logger: chips for filene fra GLIMT_LOG_PATHS og «stdout (via host)»; første fil strømmes.
+    const sources = page.getByTestId('log-sources');
+    await expect(sources.locator('.chip')).toHaveText(['/var/log/app/app.log', '/var/log/app/access.log', 'stdout (via host)']);
+    await expect(sources.locator('.chip').first()).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#panel-logs gp-log-view .line').first()).toBeVisible({ timeout: 15_000 });
+
+    await freezeLogHeight(page);
+    await expectMobileRules(page, testInfo);
+    expect(errors, 'sidefeil').toEqual([]);
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('node.png', { fullPage: true, mask: [...liveMasks(page), page.locator('gp-health-panel gp-row'), page.locator('gp-ports-panel .port')] });
+  });
+
+  test('edge-worker uten cgroup: approx i toppen, ingen vert, sjekker uten helse-URL', async ({ page }) => {
+    await gotoServer(page, 'demo-edge-worker');
+    await expect(page.getByTestId('info')).toHaveText(/^container · 1 cores allotted · 0\.5 GB of limit · approx\.$/);
+    await expect(page.getByTestId('on-host')).toHaveCount(0);
+    await expect(page.locator('gp-panel-nav button')).toHaveText(['CPU', 'Memory', 'Volumes', 'Network', 'Processes', 'Listening ports', 'Health & checks', 'Logs']);
+    await expect(page.locator('#panel-health [data-check="queue"]')).toBeVisible();
+    await expect(page.locator('#panel-health').getByTestId('health-row')).toHaveCount(0);
+    // Ingen filer og ingen vert: hint i loggpanelet.
+    await expect(page.locator('#panel-logs')).toContainText('No log files configured');
+  });
+});

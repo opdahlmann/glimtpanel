@@ -69,6 +69,8 @@ Alle har prefiks `GLIMT_` og er beskrevet i `example.env`. Huben bruker:
 | `GLIMT_DEV_USER_EMAIL`, `GLIMT_DEV_USER_PASSWORD` | | – | Utviklerkonto som seedes i `users` (kun `development`/`e2e`). Kan logge inn med passordet, og eier servere uten `ownerId` (dev-nøkkelen) |
 | `GLIMT_WEB_PUBLIC_URL` | | – | Lenker i e-post (`/confirm`, `/reset`, `/access/accept`) og CORS-opprinnelse for SignalR utenom produksjon |
 | `GLIMT_HUB_PUBLIC_URL`, `GLIMT_INSTALL_URL`, `GLIMT_DOCS_URL`, `GLIMT_AGENT_VERSION` | | – | Installasjonsskript og lenker; `GLIMT_INSTALL_URL` (standard `GLIMT_HUB_PUBLIC_URL/install`) brukes i kommandoen fra `POST /api/servers/enrol-key` |
+| `GLIMT_AGENT_IMAGE` | | `ghcr.io/opdahlmann/glimt-agent:latest` | Sidecar-imaget i snuttene fra `POST /api/servers` |
+| `GLIMT_DEV_CONTAINER_TOKEN` | | – | Utenom produksjon: containernoden `sidecar-dev` på dev-kontoen får hashen av dette tokenet (`npm run dev -- --sidecar`) |
 | `GLIMT_BUFFER_PATH` | | – | Mappe for `buffer.bin` (24-timersbufferen). Tom = ingen lagring, bufferen lever bare i minnet |
 | `GLIMT_DEMO_MODE` | | `false` | Demomodus: 16 falske servere på demokontoen og `POST /api/demo/session`. Alltid på når `GLIMT_ENV=e2e` |
 | `GLIMT_APPMAIL_URL`, `GLIMT_APPMAIL_API_KEY`, `GLIMT_MAIL_FROM` | | – | E-post via appmail. Tom URL = `ConsoleEmailSender` (e-posten med lenken logges) |
@@ -89,6 +91,7 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 | `POST /api/demo/session` | Kun i demomodus: `{ accessToken (1 t), expiresAt, user }` for `demo@glimtpanel.com` (leser). 404 ellers |
 | `POST /api/dev/token` | Kun `development`/`e2e`: `{ email }` → samme form, for en eksisterende bruker (brukes av `scripts/live-tail.mjs --dev-token`) |
 | `POST /api/e2e/{disconnect-server\|reconnect-server\|fail-service\|advance}` | Kun `GLIMT_ENV=e2e`: `{ serverId?, unit?, seconds? }` styrer de falske serverne; `advance` flytter hubens klokke og kjører nede-deteksjonen og varselsveipet; `disconnect-server` med `seconds` bakdaterer «sist sett» og kjører de samme sveipene, så «Server down» utløses uten å flytte klokken for alle andre |
+| `POST /api/e2e/connect-fake-container`, `sleep-node`, `fail-health` | Kun `GLIMT_ENV=e2e` (steg 12.5): `{ token }` kobler en falsk agent til containernoden fra `POST /api/servers` med `kind: container` (404 ukjent token); `{ serverId }` lar noden si `bye` (→ `sleeping`); `{ serverId, ok? }` lar helsesjekken svare 503 (eller 200 igjen) fra neste `snapshot` |
 | `POST /api/e2e/enrol-fake-agent` | Kun `GLIMT_ENV=e2e`: `{ key, hostname? }` – en falsk agent bruker en ekte engangsnøkkel fra `POST /api/servers/enrol-key` (én gang; 404 ukjent/utløpt/brukt, 409 navnet finnes) og starter som ny server (`demo-<hostname>`, standard `web-03`, 2 kjerner, 4 GB, uten historikk) eid av nøkkelens eier. Eieren får `ServerAdded` (skjerm 3) |
 | `GET /api/e2e/agent-streams` | Kun `GLIMT_ENV=e2e`: `{ total, byServer: { serverId: antall } }` åpne loggstrømmer i `LogRelay` (fase 6: «ingen strøm står igjen etter at siden forlates») |
 | `POST /api/e2e/ensure-user` | Kun `GLIMT_ENV=e2e`: `{ email, password?, readerOf? }` – bekreftet testkonto (standardpassord `GlimtE2E-2026!`, idempotent). `readerOf: "all"` gir akseptert lesetilgang til demoserverne (skjerm 18); uten gir en eier uten servere (skjerm 3) |
@@ -125,12 +128,13 @@ Rate limiting: `auth`-policyen (10/min per IP i produksjon) på register/confirm
 | `GET/PUT /api/servers/{id}/alert-settings` | eier | `{ serverId, serverName, useAccountDefaults, muted, silencedUntil, rules[] }` (`defaultThreshold` er kontoens verdi, `overridden` markerer serverens); `PUT { useAccountDefaults?, muted?, clearSilence?, rules? }` – `rules` er hele overstyringen (`servers.alertOverrides`), `useAccountDefaults: true` tømmer den |
 | `POST /api/push-subscriptions` | Bearer | `{ endpoint (https), keys: { p256dh, auth }, device }` → 201 `{ id, device, createdAt }`; samme `endpoint` erstatter (unik indeks) |
 | `DELETE /api/push-subscriptions` | Bearer | `{ endpoint }` → 204 |
+| `POST /api/servers` | Bearer, bekreftet e-post | `{ kind: "container", name }` oppretter en containernode med én gang (steg 12.5) og svarer `{ id, name, kind, token, hubUrl, agentImage, compose, dockerfile }`. Tokenet `agt_…` vises **én gang**; bare hashen lagres. Noden er `down` uten `lastSeenAt` til første `hello`. `kind: "server"` gir 400 (servere innrulleres med nøkkel). `hubUrl` er `GLIMT_HUB_PUBLIC_URL` som `ws(s)://…/agent/ws`, `agentImage` er `GLIMT_AGENT_IMAGE` (standard `ghcr.io/opdahlmann/glimt-agent:latest`) |
 | `POST /api/servers/enrol-key` | Bearer, bekreftet e-post | `{ dockerMode: "proxy" \| "simple" \| "none" }` → `{ key: "gp_…" (22 base62-tegn), command, expiresAt (+1 t), dockerMode }`. Kun hashen lagres i `enrolKeys`; agentens `hello` bruker den én gang |
-| `GET /api/servers` | Bearer | Servere brukeren eier eller har lesetilgang til: `{ id, name, hostname, tags, status, lastSeenAt, role: "owner" \| "reader", ownerEmail?, os, kernel, arch, cores, ramBytes, dockerMode, createdAt, supportUntil, eol }`. `supportUntil`/`eol` fra Ubuntu-tabellen (20.04 → 2025-05-31, 22.04 → 2027-04-30, 24.04 → 2029-04-30, 26.04 → 2031-04-30), ellers `null`/`false`. Status og «sist sett» kommer fra registeret når serveren er kjent der |
+| `GET /api/servers` | Bearer | Noder brukeren eier eller har lesetilgang til: `{ id, name, hostname, tags, status, lastSeenAt, role: "owner" \| "reader", ownerEmail?, os, kernel, arch, cores, ramBytes, dockerMode, createdAt, supportUntil, eol, kind: "server" \| "container", image?, containerId? }`. `status` er `up`, `down` eller `sleeping` (containernode som sa `bye`). `supportUntil`/`eol` fra Ubuntu-tabellen (20.04 → 2025-05-31, 22.04 → 2027-04-30, 24.04 → 2029-04-30, 26.04 → 2031-04-30), ellers `null`/`false`. Status og «sist sett» kommer fra registeret når serveren er kjent der |
 | `GET /api/servers/{id}` | Bearer | Samme form; 403 uten tilgang |
 | `PATCH /api/servers/{id}` | eier | `{ name? (1–64), tags? (≤ 10 av `^[a-z0-9-]{1,24}$`, små bokstaver, uten duplikater) }` |
-| `DELETE /api/servers/{id}` | eier | Fjerner dokumentet, kaller `IServerLifecycle.ServerRemovedAsync`, svarer `{ uninstallCommand }` |
-| `POST /api/servers/{id}/rotate-key` | eier | Nytt token `agt_…`; `previousTokenHash` gjelder i 10 min. Tokenet går til agenten over socketen (`IServerLifecycle.TokenRotatedAsync`), aldri til nettleseren. 204 |
+| `DELETE /api/servers/{id}` | eier | Fjerner dokumentet, kaller `IServerLifecycle.ServerRemovedAsync`, svarer `{ uninstallCommand, kind, hint }`: servere får avinstalleringskommandoen, containernoder `uninstallCommand: null` og `hint: "remove the sidecar from your compose file"` |
+| `POST /api/servers/{id}/rotate-key` | eier | Nytt token `agt_…`. Servere: `previousTokenHash` gjelder i 10 min, tokenet går til agenten over socketen (`IServerLifecycle.TokenRotatedAsync`), aldri til nettleseren, 204. Containernoder: agenten leser miljøet ved oppstart, så svaret er `200 { token, oldTokenValidUntil }` og det gamle tokenet gjelder i 24 t |
 | `POST /api/access` | Bearer | `{ email, scope: "all" \| ["tag", …] }`. Finnes kontoen: `accepted` straks + e-post «du har fått lesetilgang»; ellers `pending` + invitasjon med `GLIMT_WEB_PUBLIC_URL/access/accept?token=…`. 409 når e-posten allerede har tilgang |
 | `GET /api/access` | Bearer | Tilganger gitt av meg: `[ { id, email, scope, status, createdAt, initials } ]` |
 | `DELETE /api/access/{id}` | eier av tilgangen | 204 |
@@ -228,6 +232,35 @@ uten WebSocket, fyller bufferen med 24 timers syntetisk historikk ved start, og 
 Demoserverne bruker binære enheter (GiB/MiB), så «8 GB» i designet vises som 8 GB i web. Merk: JWT-ene
 valideres mot den ekte klokken, så et token utstedt etter en stor `advance` er «ikke gyldig ennå» til sanntid tar igjen
 (30 s slingringsmonn) – logg inn før du flytter klokken.
+
+### Containernoder (fase 12)
+
+En node har `kind` (`server` for alt fra før, `container` for agenter som kjører inne i en container). Containernoder
+opprettes i dashbordet (`POST /api/servers`) med et langtlevende token; `hello` med `token` og `kind: container`
+oppdaterer `hostname`, `containerId`, `capabilities` og `image` på noden, og `enrolKey` avvises med
+`authFailed containerNeedsToken`. `bye { reason: shutdown }` (agenten ved SIGTERM) gir `status: sleeping` med
+`ServerStatus` til abonnentene: `DownDetector` og `server_down` lar en sovende node være, neste `hello` gir `up` igjen.
+Brå frakobling uten `bye` gir `down` som før. `AgentSession` husker `hello`-tidspunktene siste 24 t; `Card` og `Server`
+for containernoder får `restarts24h`/`restarts10m` fra dem. `Card` får `kind`, `health` (`ok`/`fail`/`none`), `approx`,
+`onHost`, `image`, `restarts24h`, `memLimit` og `ports`; `Server` får `kind`, `containerId`, `capabilities`, `image`,
+`health`, `checks`, `approx`, `restarts24h`, `restarts10m`, `hostServer`, `hostContainer` og (for verter) `linkedNodes`.
+`slotsUsed` og eksporten teller begge typer (eksporten har `kind`). Utenom produksjon seeder `DevSeeder` noden
+`sidecar-dev` (`dev-sidecar`) på dev-kontoen med hashen av `GLIMT_DEV_CONTAINER_TOKEN`, så `npm run dev -- --sidecar`
+alltid har en node.
+
+**Lenking (`NodeLinker`, steg 12.6).** Når en vertsagents `snapshot` inneholder en container hvis id begynner med en
+containernodes `containerId` **hos samme eier**, lenkes de i minnet: noden får `hostServer { serverId, name }` og
+`hostContainer` (image, imageCreated, state, restartCount, memLimit …) fra verten, verten får `linkedNodes`
+(container-id → node-id) så containerraden kan lenke til noden. Lenken forsvinner når verten ikke lenger lister
+containeren. `StartLog` med `source: container` på en lenket node åpnes på **verten** med containerens id (svarene
+rutes tilbake til nettleseren som vanlig); uten lenke svarer huben `LogEnded(unavailable, "stdout logs need the host
+agent")`. `source: file` med `path` går til noden selv.
+
+**Varsler (steg 12.7).** `svc_failed` og `reboot` evalueres aldri for containernoder. `cont_restart` betyr for en node
+`restarts10m > 3` (terskel/vindu fra regelen) eller at verten ser containeren som `exited`/`restarting`.
+`disk_full` gjelder volumene, `mem_pressure` regnes mot `memory.max` når agenten rapporterer den som total. Ny regel
+`health_failed` (advarsel, nr. 8): `snapshot.health.ok` usann i 2 min (fire øyeblikksbilder) → «GET /healthz · 503 ·
+1 240 ms», løses ved første ok. `server_down` utløses ikke mens status er `sleeping`.
 
 ### Varsler (fase 7)
 

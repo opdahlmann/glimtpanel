@@ -170,6 +170,9 @@ public sealed class AgentConnection(
                 session.Touch(now);
                 await ingest.LogEndAsync(session, end, cancellationToken);
                 break;
+            case Bye bye:
+                await ingest.ByeAsync(session, bye, cancellationToken);
+                break;
             case Hello:
                 Warn("hello", session, "sent a second hello; ignored");
                 break;

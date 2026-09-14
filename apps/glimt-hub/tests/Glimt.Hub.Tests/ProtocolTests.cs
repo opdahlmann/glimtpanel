@@ -20,7 +20,8 @@ public sealed class ProtocolTests
     [MemberData(nameof(ExampleFiles))]
     public void Every_protocol_example_deserializes_into_its_record(string fileName)
     {
-        var expectedType = Path.GetFileNameWithoutExtension(fileName);
+        // hello-container.json is a hello; the suffix after '-' names the variant.
+        var expectedType = Path.GetFileNameWithoutExtension(fileName).Split('-')[0];
         var bytes = File.ReadAllBytes(Path.Combine(Repo.ExamplesDir, fileName));
 
         var envelope = ProtocolJson.Parse(bytes);
@@ -55,6 +56,30 @@ public sealed class ProtocolTests
         Assert.Equal(["cron-sync.service"], snapshot.Services!.Failed);
         Assert.True(snapshot.Maintenance!.RebootRequired);
         Assert.Equal(42, snapshot.Security!.Firewall!.Banned);
+    }
+
+    [Fact]
+    public void Container_examples_map_kind_capabilities_limits_health_and_bye()
+    {
+        var hello = Assert.IsType<Hello>(ProtocolJson.Parse(Repo.Example("hello-container").ToJsonString()).Message);
+        Assert.Equal(NodeKinds.Container, hello.Kind);
+        Assert.Equal("8e49456bd7f9", hello.ContainerId);
+        Assert.True(hello.Capabilities!.Cgroup);
+        Assert.Equal("ghcr.io/acme/backend:1.4.2", hello.Image);
+        Assert.Equal(NodeKinds.Server, NodeKinds.Normalize(null));
+
+        var snapshot = Assert.IsType<Snapshot>(ProtocolJson.Parse(Repo.Example("snapshot-container").ToJsonString()).Message);
+        Assert.Null(snapshot.Services);
+        Assert.Null(snapshot.Maintenance);
+        Assert.Equal(2, snapshot.Host.Limits!.CpuCores);
+        Assert.Equal(1073741824, snapshot.Host.Limits.MemBytes);
+        Assert.True(snapshot.Health!.Ok);
+        Assert.Equal(200, snapshot.Health.Status);
+        Assert.Equal(2, snapshot.Checks!.Count);
+        Assert.False(snapshot.Checks[1].Ok);
+
+        var bye = Assert.IsType<Bye>(ProtocolJson.Parse(Repo.Example("bye").ToJsonString()).Message);
+        Assert.Equal("shutdown", bye.Reason);
     }
 
     [Fact]

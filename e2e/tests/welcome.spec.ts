@@ -2,7 +2,7 @@
 // med mocket `Notification.requestPermission` og falsk push (ingen service worker under ng serve), den grønne pillen,
 // desktop-banneret med «Install» fra et syntetisk `beforeinstallprompt`, og at første besøk på mobil går til /welcome.
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { loginViaApi } from '../helpers/auth';
+import { loginViaApi, SERVERS_HEADING } from '../helpers/auth';
 import { forceLang } from '../helpers/e2e-api';
 import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
@@ -96,7 +96,7 @@ test.describe('første gang på telefonen', () => {
     await expect(page).toHaveURL(/\/welcome$/);
     await page.getByRole('button', { name: 'Later' }).click();
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { name: 'Servers' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: SERVERS_HEADING })).toBeVisible();
     await page.reload();
     await expect(page).toHaveURL(/\/$/);
   });

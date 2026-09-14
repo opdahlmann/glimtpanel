@@ -2,13 +2,16 @@
   <header class="head">
     <div class="heading">
       <button type="button" class="back" (click)="back()">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>{{ 'back' | t }}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>{{ (isContainer() ? 'nodes' : 'back') | t }}
       </button>
       @if (header(); as h) {
         <div class="titlerow">
           <h1 class="title">{{ h.name }}</h1>
           <span class="status num" [class.status--down]="h.down" data-testid="status"><gp-live-dot [state]="h.dot" />{{ h.statusText }}</span>
           <span class="tags">
+            @if (h.image) {
+              <gp-badge class="image" data-testid="image">{{ h.image }}</gp-badge>
+            }
             @for (tag of h.tags; track tag) {
               <gp-badge>{{ tag }}</gp-badge>
             }
@@ -18,6 +21,9 @@
         <div class="uptime num">
           @if (h.uptime) {
             <span data-testid="uptime">{{ h.uptime }}</span>
+          }
+          @if (h.onHost; as host) {
+            <button type="button" class="hostlink" data-testid="on-host" (click)="openHost()">{{ 'onHost' | t }} {{ host.name }}</button>
           }
           @if (h.eol) {
             <gp-badge tone="crit">{{ 'eol' | t }}</gp-badge>
@@ -32,7 +38,7 @@
       }
     </div>
     <div class="actions">
-      @if (flagText()) {
+      @if (flagText() && !isContainer()) {
         <gp-button variant="ghost" icon="M4 17l6-5-6-5M12 19h8" (click)="toggleText()">{{ (textMode() ? 'panels' : 'textMode') | t }}</gp-button>
       }
       @if (flagSnapshot()) {
@@ -48,8 +54,49 @@
   </header>
 
   @if (server(); as s) {
-    @if (textMode()) {
+    @if (textMode() && !isContainer()) {
       <pre class="text">{{ textLines() }}</pre>
+    } @else if (isContainer()) {
+      <gp-panel-nav [items]="navItems()" [label]="'panels' | t" (selected)="goTo($event)" />
+      <div class="panels" data-testid="node-panels">
+        <gp-panel [panelId]="panelId('cpu')" [title]="'cpu' | t" [meta]="cpu()?.head ?? ''" tone="cpu" [open]="isOpen('cpu')" (openChange)="setOpen('cpu', $event)">
+          <gp-cpu-panel [view]="cpu()!" [serverId]="s.id" [live]="hourChart()" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('mem')" [title]="'memory' | t" [meta]="mem()?.head ?? ''" tone="ram" [open]="isOpen('mem')" (openChange)="setOpen('mem', $event)">
+          <gp-mem-panel [view]="mem()!" [serverId]="s.id" [live]="hourChart()" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('disk')" [title]="'volumes' | t" [meta]="disk()?.head ?? ''" tone="disk" [open]="isOpen('disk')" (openChange)="setOpen('disk', $event)">
+          <gp-disk-panel [view]="disk()!" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('net')" [title]="'network' | t" [meta]="netReadable() ? (net()?.head ?? '') : ''" tone="net" [open]="isOpen('net')" (openChange)="setOpen('net', $event)">
+          @if (netReadable()) {
+            <gp-net-panel [view]="net()!" [serverId]="s.id" [dim]="down()" />
+          } @else {
+            <div class="unreadable">{{ 'notReadable' | t }}</div>
+          }
+        </gp-panel>
+        <gp-panel [panelId]="panelId('proc')" [title]="'processes' | t" [meta]="down() || !procReadable() ? '' : (proc()?.head ?? '')" tone="neutral" [open]="isOpen('proc')" (openChange)="setOpen('proc', $event)">
+          @if (procReadable()) {
+            <gp-proc-panel [view]="proc()!" [down]="down()" />
+          } @else {
+            <div class="unreadable">{{ 'notReadable' | t }}</div>
+          }
+        </gp-panel>
+        <gp-panel [panelId]="panelId('ports')" [title]="'ports' | t" [meta]="portsMeta()" tone="neutral" [open]="isOpen('ports')" (openChange)="setOpen('ports', $event)">
+          <gp-ports-panel [rows]="security()?.ports ?? []" [dim]="down()" />
+        </gp-panel>
+        <gp-panel [panelId]="panelId('health')" [title]="'healthChecks' | t" [meta]="health()?.head ?? ''" [tone]="healthTone()" [open]="isOpen('health')" (openChange)="setOpen('health', $event)">
+          <gp-health-panel [view]="health()!" [dim]="down()" />
+        </gp-panel>
+        @if (hostLink(); as hostView) {
+          <gp-panel [panelId]="panelId('host')" [title]="'host' | t" [meta]="hostView.name" tone="swap" [open]="isOpen('host')" (openChange)="setOpen('host', $event)">
+            <gp-host-panel [view]="hostView" [dim]="down()" />
+          </gp-panel>
+        }
+        <gp-panel [panelId]="panelId('logs')" [title]="'logs' | t" [meta]="logsMeta()" tone="neutral" [open]="isOpen('logs')" (openChange)="setOpen('logs', $event)">
+          <gp-logs-panel [serverId]="s.id" [down]="down()" kind="container" [logPaths]="logPaths()" [linked]="hostLink() !== null" />
+        </gp-panel>
+      </div>
     } @else {
       <gp-panel-nav [items]="navItems()" [label]="'panels' | t" (selected)="goTo($event)" />
       <div class="panels">

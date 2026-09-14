@@ -7,7 +7,12 @@
 /** Tilstanden til SignalR-forbindelsen mot /hub/live. */
 export type LiveState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
-export type ServerStatus = 'up' | 'down' | 'paused';
+/** `sleeping`: en containernode som sa `bye` (planlagt stopp), aldri varslet som nede (fase 12). */
+export type ServerStatus = 'up' | 'down' | 'paused' | 'sleeping';
+
+/** Nodetype (fase 12): en server med agent, eller en container agenten kjører inne i. */
+export type NodeKind = 'server' | 'container';
+export type HealthState = 'ok' | 'fail' | 'none';
 
 /** Hub → klient `ServerStatus(dto)`: tilkobling, frakobling, nede. */
 export interface ServerStatusDto {
@@ -64,6 +69,19 @@ export interface CardDto {
   /** 120 punkter à 30 s, hele prosent, null der bufferen mangler. */
   cpuLastHour: (number | null)[];
   memLastHour: (number | null)[];
+  kind: NodeKind;
+  /** Containernoder: siste helsesjekk; null for servere. */
+  health: HealthState | null;
+  /** Containernoder uten lesbar cgroup: CPU og minne er summert over prosessene. */
+  approx: boolean | null;
+  /** Vertsagenten som ser containeren (lenket), ellers null. */
+  onHost: string | null;
+  image: string | null;
+  restarts24h: number | null;
+  /** memory.max i bytes; null uten grense. */
+  memLimit: number | null;
+  /** Antall lyttende porter i containeren. */
+  ports: number | null;
 }
 
 export interface OsInfo {
@@ -110,6 +128,11 @@ export interface IfaceMetrics {
   txBps?: number | null;
 }
 
+export interface LimitsInfo {
+  cpuCores?: number | null;
+  memBytes?: number | null;
+}
+
 export interface HostMetrics {
   cpu: CpuMetrics;
   load?: number[] | null;
@@ -117,6 +140,42 @@ export interface HostMetrics {
   uptimeSec?: number | null;
   mounts?: MountMetrics[] | null;
   ifaces?: IfaceMetrics[] | null;
+  /** Containernoder: tallene er summert over prosessene (ingen cgroup). */
+  approx?: boolean | null;
+  /** Containernoder: cpu.max og memory.max. */
+  limits?: LimitsInfo | null;
+}
+
+/** `GET GLIMT_HEALTH_URL` (fase 12). */
+export interface HealthInfo {
+  url: string;
+  ok: boolean;
+  status?: number | null;
+  ms?: number | null;
+  checkedAt: number;
+  error?: string | null;
+}
+
+/** Én TCP-sjekk fra GLIMT_CHECKS. */
+export interface CheckInfo {
+  name: string;
+  target: string;
+  ok: boolean;
+  ms?: number | null;
+  error?: string | null;
+}
+
+export interface Capabilities {
+  cgroup: boolean;
+  procAll: boolean;
+  netns: boolean;
+  health: boolean;
+}
+
+/** Vertsagenten en containernode er lenket til. */
+export interface HostLinkDto {
+  serverId: string;
+  name: string;
 }
 
 export interface ContainerInfo {
@@ -242,6 +301,21 @@ export interface ServerDto {
   security: SecurityInfo | null;
   snapshotAt: string | null;
   streamAt: string | null;
+  kind: NodeKind;
+  containerId?: string | null;
+  capabilities?: Capabilities | null;
+  image?: string | null;
+  health?: HealthInfo | null;
+  checks?: CheckInfo[] | null;
+  approx?: boolean | null;
+  restarts24h?: number | null;
+  restarts10m?: number | null;
+  hostServer?: HostLinkDto | null;
+  hostContainer?: ContainerInfo | null;
+  /** Verter: container-id → node-id for containere som er egne noder. */
+  linkedNodes?: Record<string, string> | null;
+  /** Containernoder: filene `source: file` får hale (GLIMT_LOG_PATHS). */
+  logPaths?: string[] | null;
 }
 
 /** Én logglinje fra `Log(streamId, lines, dropped)`. */
@@ -262,6 +336,8 @@ export interface LogRequest {
   priority?: string | null;
   sinceMs?: number | null;
   tail?: number | null;
+  /** `source: file`: én av nodens `logPaths`. */
+  path?: string | null;
 }
 
 export type LogEndReason = string;
@@ -292,8 +368,8 @@ export type ServerRole = 'owner' | 'reader';
 
 // ---- varsler (fase 7) --------------------------------------------------------------------------
 
-export type AlertRuleId = 'server_down' | 'disk_full' | 'mem_pressure' | 'cpu_sat' | 'cont_restart' | 'svc_failed' | 'reboot';
-export const ALERT_RULE_IDS: readonly AlertRuleId[] = ['server_down', 'disk_full', 'mem_pressure', 'cpu_sat', 'cont_restart', 'svc_failed', 'reboot'];
+export type AlertRuleId = 'server_down' | 'disk_full' | 'mem_pressure' | 'cpu_sat' | 'cont_restart' | 'svc_failed' | 'reboot' | 'health_failed';
+export const ALERT_RULE_IDS: readonly AlertRuleId[] = ['server_down', 'disk_full', 'mem_pressure', 'cpu_sat', 'cont_restart', 'svc_failed', 'reboot', 'health_failed'];
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 export type AlertState = 'firing' | 'resolved';
 export type AlertEventKind = 'fired' | 'resolved' | 'reminder';
@@ -407,4 +483,32 @@ export interface ServerListItem {
   createdAt?: string;
   supportUntil?: string | null;
   eol?: boolean;
+  kind?: NodeKind;
+  image?: string | null;
+  containerId?: string | null;
+}
+
+/** `POST /api/servers { kind: "container", name }` (steg 12.5): tokenet vises én gang. */
+export interface CreateNodeResponse {
+  id: string;
+  name: string;
+  kind: NodeKind;
+  token: string;
+  hubUrl: string;
+  agentImage: string;
+  compose: string;
+  dockerfile: string;
+}
+
+/** `POST /api/servers/{id}/rotate-key` for en containernode. */
+export interface RotateKeyResponse {
+  token: string;
+  oldTokenValidUntil: string;
+}
+
+/** `DELETE /api/servers/{id}`. */
+export interface DeleteServerResponse {
+  uninstallCommand: string | null;
+  kind: NodeKind;
+  hint: string | null;
 }

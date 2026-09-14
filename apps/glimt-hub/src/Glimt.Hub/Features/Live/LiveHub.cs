@@ -22,6 +22,7 @@ public sealed class LiveHub(
     LogRelay logs,
     BufferStore buffers,
     ActiveAlertCounts alerts,
+    NodeLinker linker,
     IAccessService access,
     TimeProvider clock) : Hub<ILiveClient>
 {
@@ -67,7 +68,7 @@ public sealed class LiveHub(
             if (registry.TryGet(id, out var session))
             {
                 await Clients.Caller.ServerStatus(ServerStatusDto.From(session));
-                await Clients.Caller.Card(Projections.Card(session, buffers.Get(id), now, alerts.Get(id)));
+                await Clients.Caller.Card(Projections.Card(session, buffers.Get(id), now, alerts.Get(id), linker));
             }
         }
     }
@@ -89,7 +90,7 @@ public sealed class LiveHub(
         await subscriptions.SubscribeServerAsync(Context.ConnectionId, id, ct);
         if (registry.TryGet(id, out var session))
         {
-            await Clients.Caller.Server(Projections.Server(session));
+            await Clients.Caller.Server(Projections.Server(session, linker, clock.GetUtcNow()));
         }
     }
 

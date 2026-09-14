@@ -59,6 +59,10 @@ export interface HeaderView {
   down: boolean;
   dot: Dot;
   statusText: string;
+  /** Containernoder (steg 12.9): image-badge og verten når lenket. */
+  isContainer: boolean;
+  image: string;
+  onHost: { serverId: string; name: string } | null;
   /** «Ubuntu 24.04 · 6.8.0-45-generic · 4 cores · 8 GB» */
   info: string;
   /** «up 41d 2h · last boot Jul 30 01:05», tom når nede. */
@@ -71,19 +75,28 @@ export interface HeaderView {
 export function headerView(server: ServerDto, item: ServerListItem | null, texts: ServerTexts): HeaderView {
   const up = server.status === 'up';
   const paused = server.status === 'paused';
-  const statusText = paused
-    ? texts.t('paused')
-    : up
-      ? texts.t('liveLabel')
-      : server.lastSeenAt
-        ? `${texts.t('lastSeen')} ${texts.formatWhen(Date.parse(server.lastSeenAt))}`
-        : texts.t('down');
-  const info = [
-    osLabel(server.os),
-    server.kernel ?? '',
-    server.cores ? `${server.cores} ${texts.t('cores')}` : '',
-    server.ramBytes ? `${gbLabel(server.ramBytes)} GB` : '',
-  ]
+  const sleeping = server.status === 'sleeping';
+  const isContainer = (server.kind ?? item?.kind ?? 'server') === 'container';
+  const statusText = sleeping
+    ? `${texts.t('sleepingSince')} ${server.lastSeenAt ? texts.formatWhen(Date.parse(server.lastSeenAt)) : ''}`.trim()
+    : paused
+      ? texts.t('paused')
+      : up
+        ? texts.t('liveLabel')
+        : server.lastSeenAt
+          ? `${texts.t('lastSeen')} ${texts.formatWhen(Date.parse(server.lastSeenAt))}`
+          : texts.t('down');
+  const limits = server.host?.limits;
+  const info = (
+    isContainer
+      ? [
+          texts.t('containerLabel'),
+          server.cores ? `${server.cores} ${texts.t('cpuLimit')}` : '',
+          limits?.memBytes ? `${gbLabel(limits.memBytes)} GB ${texts.t('memLimitOf')}` : texts.t('noLimit'),
+          server.approx ? texts.t('approx') : '',
+        ]
+      : [osLabel(server.os), server.kernel ?? '', server.cores ? `${server.cores} ${texts.t('cores')}` : '', server.ramBytes ? `${gbLabel(server.ramBytes)} GB` : '']
+  )
     .filter(Boolean)
     .join(' · ');
   const uptimeParts: string[] = [];
@@ -95,12 +108,94 @@ export function headerView(server: ServerDto, item: ServerListItem | null, texts
     tags: server.tags ?? [],
     status: server.status,
     down: server.status === 'down',
-    dot: paused ? 'paused' : up ? 'up' : 'down',
+    dot: paused || sleeping ? 'paused' : up ? 'up' : 'down',
     statusText,
+    isContainer,
+    image: isContainer ? (server.image ?? '') : '',
+    onHost: isContainer && server.hostServer ? { serverId: server.hostServer.serverId, name: server.hostServer.name } : null,
     info,
     uptime: uptimeParts.join(' · '),
-    eol: !!item?.eol,
-    support: Number.isFinite(supportUntil) ? `${texts.t('supported')} ${texts.formatMonthYear(supportUntil)}` : '',
+    eol: !isContainer && !!item?.eol,
+    support: !isContainer && Number.isFinite(supportUntil) ? `${texts.t('supported')} ${texts.formatMonthYear(supportUntil)}` : '',
+  };
+}
+
+// ---- Helse og sjekker (containernoder, steg 12.9) ----------------------------------------------
+
+export interface CheckRow {
+  name: string;
+  target: string;
+  ok: boolean;
+  /** «3 ms» eller feilteksten. */
+  text: string;
+}
+
+export interface HealthView {
+  configured: boolean;
+  ok: boolean | null;
+  /** «GET /healthz · 200 · 12 ms» */
+  line: string;
+  /** «checked 08:14:02» */
+  checked: string;
+  checks: CheckRow[];
+  /** Panelets tone: grønn når alt er ok, rød ved feil, nøytral uten sjekker. */
+  tone: 'ok' | 'crit' | 'neutral';
+  head: string;
+}
+
+export function healthView(server: ServerDto, texts: ServerTexts): HealthView {
+  const h = server.health ?? null;
+  const checks = (server.checks ?? []).map<CheckRow>((c) => ({ name: c.name, target: c.target, ok: c.ok, text: c.ok ? `${c.ms ?? 0} ms` : (c.error ?? texts.t('healthFail')) }));
+  const failed = (h ? !h.ok : false) || checks.some((c) => !c.ok);
+  const configured = h !== null || checks.length > 0;
+  let line = '';
+  if (h) {
+    let path = h.url;
+    try {
+      path = new URL(h.url).pathname || '/';
+    } catch {
+      // ikke en absolutt URL: vis den som den er
+    }
+    line = `GET ${path} · ${h.status ?? (h.error ?? texts.t('down'))}${h.ms !== null && h.ms !== undefined ? ` · ${h.ms} ms` : ''}`;
+  }
+  const okCount = checks.filter((c) => c.ok).length;
+  const headParts = [h ? (h.ok ? texts.t('ok') : texts.t('healthFail')) : '', checks.length ? `${okCount}/${checks.length} ${texts.t('checks').toLowerCase()}` : ''].filter(Boolean);
+  return {
+    configured,
+    ok: configured ? !failed : null,
+    line,
+    checked: h ? `${texts.t('checkedAt')} ${texts.formatTimeShort(h.checkedAt)}` : '',
+    checks,
+    tone: !configured ? 'neutral' : failed ? 'crit' : 'ok',
+    head: headParts.join(' · ') || DASH,
+  };
+}
+
+// ---- Verten (lenket containernode) ---------------------------------------------------------------
+
+export interface HostView {
+  serverId: string;
+  name: string;
+  image: string;
+  age: string;
+  restarts: string;
+  state: string;
+  memLimit: string;
+}
+
+export function hostView(server: ServerDto, texts: ServerTexts, nowMs: number): HostView | null {
+  const link = server.hostServer;
+  if (!link) return null;
+  const c = server.hostContainer ?? null;
+  const ageDays = c?.imageCreated ? Math.max(0, Math.floor((nowMs - c.imageCreated) / DAY_MS)) : null;
+  return {
+    serverId: link.serverId,
+    name: link.name,
+    image: c?.image ?? server.image ?? DASH,
+    age: ageDays === null ? DASH : `${ageDays} ${texts.t('days')}`,
+    restarts: c?.restartCount === null || c?.restartCount === undefined ? DASH : String(c.restartCount),
+    state: c ? texts.t(containerState(c)) : DASH,
+    memLimit: c?.memLimit ? `${Math.round(c.memLimit / MB)} MB` : texts.t('noLimit'),
   };
 }
 
@@ -175,9 +270,11 @@ export function memView(server: ServerDto, texts: ServerTexts): MemView {
   const free = m ? Math.max(0, total - used - buffers) : 0;
   const pct = up && total > 0 ? (used / total) * 100 : 0;
   const swap = m?.swapUsed ?? 0;
+  const container = server.kind === 'container';
+  const tail = container ? (server.host?.limits?.memBytes ? '' : ` · ${texts.t('noLimit')}`) : ` · ${texts.t('swap')} ${f1(swap / GB)} GB`;
   return {
     pct,
-    head: `${Math.round(pct)}%${total > 0 ? ` · ${f1((pct / 100) * (total / GB))} ${texts.t('of')} ${gbLabel(total)} GB` : ''} · ${texts.t('swap')} ${f1(swap / GB)} GB`,
+    head: `${Math.round(pct)}%${total > 0 ? ` · ${f1((pct / 100) * (total / GB))} ${texts.t('of')} ${gbLabel(total)} GB` : ''}${tail}`,
     usedPct: up && total > 0 ? (used / total) * 100 : 0,
     bufPct: up && total > 0 ? (buffers / total) * 100 : 0,
     legend: [
@@ -328,6 +425,8 @@ export interface ContainerView {
   compose: string;
   ports: string[];
   mounts: string[];
+  /** Containeren er en egen containernode (steg 12.6): id-en til noden. */
+  nodeId: string | null;
 }
 
 export interface ContainersView {
@@ -349,7 +448,7 @@ export function containerState(c: Pick<ContainerInfo, 'state'>): ContainerState 
 /** Uten grense skaleres stolpen mot 2 GB som i prototypen, i nøytral farge. */
 const NO_LIMIT_SCALE = 2 * 1024 * MB;
 
-export function containerView(c: ContainerInfo, texts: ServerTexts, nowMs: number): ContainerView {
+export function containerView(c: ContainerInfo, texts: ServerTexts, nowMs: number, nodeId: string | null = null): ContainerView {
   const state = containerState(c);
   const stopped = state === 'stopped';
   const limit = c.memLimit && c.memLimit > 0 ? c.memLimit : null;
@@ -379,6 +478,7 @@ export function containerView(c: ContainerInfo, texts: ServerTexts, nowMs: numbe
     compose: c.compose ?? DASH,
     ports: c.ports ?? [],
     mounts: c.mounts ?? [],
+    nodeId,
   };
 }
 
@@ -386,7 +486,8 @@ export function containerView(c: ContainerInfo, texts: ServerTexts, nowMs: numbe
 export function containersView(server: ServerDto, texts: ServerTexts, nowMs: number): ContainersView {
   const available = server.dockerMode !== null && server.dockerMode !== 'none' && server.containers !== null;
   const list = server.containers ?? [];
-  const rows = list.map((c) => containerView(c, texts, nowMs));
+  const linked = server.linkedNodes ?? {};
+  const rows = list.map((c) => containerView(c, texts, nowMs, linked[c.id] ?? null));
   const rank = (s: ContainerState) => (s === 'running' ? 1 : 0);
   const cpuOf = new Map(list.map((c) => [c.id, c.cpuPct ?? 0]));
   rows.sort((a, b) => rank(a.state) - rank(b.state) || (cpuOf.get(b.id) ?? 0) - (cpuOf.get(a.id) ?? 0) || a.name.localeCompare(b.name));

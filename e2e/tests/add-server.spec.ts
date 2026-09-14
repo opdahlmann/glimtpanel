@@ -39,7 +39,8 @@ test.describe('legg til server', () => {
     await expect(page.getByText('A small read-only proxy in front of the socket.')).toBeVisible();
     await expect(page.getByText('It can never change anything on the server.')).toBeVisible();
     await expect(page.getByText('Waiting for the agent…')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add server' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add a container' })).toBeVisible();
     await expect(page.getByTestId('summary')).toHaveText(/^0 servers · 0 up · 0 down · 0 paused · live · \d\d:\d\d:\d\d$/);
 
     // Docker-segmentet henter en ny nøkkel med det valget og bytter forklaringen.
@@ -126,7 +127,9 @@ test.describe('legg til server', () => {
     await forceLang(page, 'en');
     await loginViaApi(page, owner);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Add server' }).click();
+    // Fase 12: «+ Add» åpner menyen Server / Container.
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Server' }).click();
     const dialog = page.getByRole('dialog', { name: 'Add server' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId('enrol-command')).toHaveText(KEY_RE);

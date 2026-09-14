@@ -60,6 +60,10 @@ type Config struct {
 	Backoff           *Backoff      // default 1 s → 60 s + 0–10 s
 	Logger            *slog.Logger
 	UserAgent         string
+	// Bye makes the client send `bye {reason: shutdown}` before closing at a
+	// planned stop, so the hub marks the node sleeping instead of down
+	// (container nodes, fase 12).
+	Bye bool
 
 	MaxFrameBytes int64         // default 1 MiB
 	QueueSize     int           // default 64
@@ -241,10 +245,24 @@ func (c *Client) connectOnce(ctx context.Context) outcome {
 	sessCtx, cancelSess := context.WithCancel(ctx)
 	defer cancelSess()
 	defer conn.CloseNow()
+	var welcomed atomic.Bool
 
 	go func() {
 		select {
 		case <-ctx.Done():
+			// A planned stop: say bye first (at most one second), so the hub
+			// can tell sleeping from down.
+			if c.cfg.Bye && welcomed.Load() {
+				if data, err := protocol.Encode(&protocol.Bye{Reason: protocol.ByeReasonShutdown}); err == nil {
+					wctx, cancel := context.WithTimeout(context.Background(), time.Second)
+					if err := conn.Write(wctx, websocket.MessageText, data); err != nil {
+						c.log.Debug("bye not sent", "err", err)
+					} else {
+						c.log.Info("bye sent")
+					}
+					cancel()
+				}
+			}
 			// Try a clean close so the hub sees a normal closure. The handshake
 			// completes when the hub echoes the close frame (our read loop
 			// receives it); if that does not happen within CloseGrace, cancel
@@ -281,7 +299,7 @@ func (c *Client) connectOnce(ctx context.Context) outcome {
 		return outcome{}
 	}
 
-	res, err := c.readLoop(internalCtx, sessCtx, s)
+	res, err := c.readLoop(internalCtx, sessCtx, s, &welcomed)
 	switch {
 	case ctx.Err() != nil:
 		c.log.Info("disconnected (agent stopping)")
@@ -293,7 +311,7 @@ func (c *Client) connectOnce(ctx context.Context) outcome {
 }
 
 // readLoop handles inbound messages until the connection ends.
-func (c *Client) readLoop(internalCtx, sessCtx context.Context, s *session) (outcome, error) {
+func (c *Client) readLoop(internalCtx, sessCtx context.Context, s *session, welcomed *atomic.Bool) (outcome, error) {
 	var res outcome
 	var sess Session
 	var sessMu sync.Mutex
@@ -323,6 +341,7 @@ func (c *Client) readLoop(internalCtx, sessCtx context.Context, s *session) (out
 				continue
 			}
 			res.welcomed = true
+			welcomed.Store(true)
 			if m.Token != "" {
 				if err := c.cfg.Store.Save(m.Token); err != nil {
 					c.log.Error("cannot store token", "err", err)

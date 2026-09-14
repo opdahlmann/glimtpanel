@@ -52,7 +52,7 @@ describe('LiveStore', () => {
   });
 
   it('applyServer og applyStatus holder serversiden i takt', () => {
-    store.applyServer({ ...card({ id: 'a', name: 'a' }), os: null, kernel: null, dockerMode: null, bootTime: null, uptimeSec: null, host: null, processes: null, processTotals: null, containers: null, services: null, maintenance: null, security: null, snapshotAt: null, streamAt: null, agentVersion: '0.1' });
+    store.applyServer({ ...card({ id: 'a', name: 'a' }), os: null, kernel: null, dockerMode: null, bootTime: null, uptimeSec: null, host: null, processes: null, processTotals: null, containers: null, services: null, maintenance: null, security: null, snapshotAt: null, streamAt: null, agentVersion: '0.1', kind: 'server', health: null });
     store.applyStatus(status({ id: 'a', status: 'down', connected: false }));
     expect(store.server('a')()?.status).toBe('down');
   });
@@ -146,7 +146,7 @@ describe('LiveStore: serversiden (fase 5)', () => {
   const server = (over: Partial<ServerDto> = {}): ServerDto => ({
     ...card({ id: 's', name: 's' }),
     os: null, kernel: null, dockerMode: null, bootTime: null, uptimeSec: null, processes: null, processTotals: null, containers: null,
-    services: null, maintenance: null, security: null, snapshotAt: null, streamAt: null, agentVersion: '0.1',
+    services: null, maintenance: null, security: null, snapshotAt: null, streamAt: null, agentVersion: '0.1', kind: 'server', health: null,
     host: { cpu: { total: 30 }, mem: { total: 1000, used: 400, free: 600 } },
     ...over,
   });

@@ -30,6 +30,17 @@ public sealed class ServerDocument
     public long RamBytes { get; set; }
     public string? DockerMode { get; set; }
 
+    /// <summary>`server` (also when missing, for documents from before fase 12) or `container`.</summary>
+    public string? Kind { get; set; }
+
+    /// <summary>Container nodes: the first 12 characters of the container id from hello, used to link the node to the host agent's container.</summary>
+    public string? ContainerId { get; set; }
+
+    public CapabilitiesDocument? Capabilities { get; set; }
+
+    /// <summary>Container nodes: GLIMT_IMAGE from hello.</summary>
+    public string? Image { get; set; }
+
     /// <summary>Per-server rule overrides (step 7.4): rule id → enabled/threshold/durationSec. Empty or null = account defaults.</summary>
     public Dictionary<string, RuleSettingDocument>? AlertOverrides { get; set; }
 
@@ -40,6 +51,15 @@ public sealed class ServerDocument
     public bool AlertsMuted { get; set; }
 
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>What the container profile could read (hello.capabilities, fase 12).</summary>
+public sealed class CapabilitiesDocument
+{
+    public bool Cgroup { get; set; }
+    public bool ProcAll { get; set; }
+    public bool Netns { get; set; }
+    public bool Health { get; set; }
 }
 
 public sealed class OsDocument

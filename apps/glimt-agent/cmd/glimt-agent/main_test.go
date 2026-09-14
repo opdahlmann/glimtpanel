@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -11,7 +12,19 @@ import (
 	"testing"
 
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/protocol"
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/state"
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/sysinfo"
 )
+
+// The tests run inside a Go container, where auto-detection would pick the
+// container profile; the server tests pin the kind and the container tests
+// set their own.
+func TestMain(m *testing.M) {
+	if os.Getenv("GLIMT_KIND") == "" {
+		os.Setenv("GLIMT_KIND", "server")
+	}
+	os.Exit(m.Run())
+}
 
 func TestVersionAndHelp(t *testing.T) {
 	var out, errb bytes.Buffer
@@ -261,5 +274,160 @@ func TestPrintSinkFormatsLines(t *testing.T) {
 	case <-s.done:
 	default:
 		t.Error("done not closed after logEnd")
+	}
+}
+
+func TestKindDetectionAndContainerOptions(t *testing.T) {
+	t.Setenv("GLIMT_KIND", "")
+	t.Setenv("GLIMT_TOKEN", "")
+	t.Setenv("GLIMT_HUB", "ws://hub/agent/ws")
+	root, proc := t.TempDir(), t.TempDir()
+	oldRoot, oldProc := detectRoot, detectProc
+	detectRoot, detectProc = root, proc
+	t.Cleanup(func() { detectRoot, detectProc = oldRoot, oldProc })
+
+	var errb bytes.Buffer
+	o, code, ok := parseOptions("run", nil, &errb, nil)
+	if !ok || code != 0 || o.kind != protocol.KindServer {
+		t.Fatalf("plain machine: kind=%q code=%d err=%q", o.kind, code, errb.String())
+	}
+	if err := os.WriteFile(filepath.Join(root, ".dockerenv"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GLIMT_NODE_NAME", "api-1")
+	t.Setenv("GLIMT_HEALTH_URL", "http://127.0.0.1:8080/healthz")
+	t.Setenv("GLIMT_CHECKS", "db=postgres:5432")
+	t.Setenv("GLIMT_LOG_PATHS", "/var/log/app")
+	t.Setenv("GLIMT_IMAGE", "ghcr.io/acme/api:1.2.3")
+	t.Setenv("GLIMT_TOKEN", "agt_node_token")
+	o, _, ok = parseOptions("run", nil, &errb, nil)
+	if !ok || o.kind != protocol.KindContainer || len(o.kindReasons) == 0 {
+		t.Fatalf("with /.dockerenv: %+v", o)
+	}
+	if o.name != "api-1" || o.healthURL != "http://127.0.0.1:8080/healthz" || o.checks != "db=postgres:5432" || o.logPaths != "/var/log/app" || o.image != "ghcr.io/acme/api:1.2.3" || o.token != "agt_node_token" {
+		t.Errorf("container env not read: %+v", o)
+	}
+	// Explicit kind wins over the marker.
+	o, _, ok = parseOptions("run", []string{"--kind", "server"}, &errb, nil)
+	if !ok || o.kind != protocol.KindServer {
+		t.Errorf("--kind server: %+v", o)
+	}
+	t.Setenv("GLIMT_KIND", "container")
+	o, _, ok = parseOptions("run", nil, &errb, nil)
+	if !ok || o.kind != protocol.KindContainer || o.kindReasons[0] != "set explicitly" {
+		t.Errorf("GLIMT_KIND: %+v", o)
+	}
+	errb.Reset()
+	if _, code, ok := parseOptions("run", []string{"--kind", "pod"}, &errb, nil); ok || code != 2 || !strings.Contains(errb.String(), "--kind") {
+		t.Errorf("bad kind: code=%d err=%q", code, errb.String())
+	}
+	errb.Reset()
+	t.Setenv("GLIMT_HEALTH_URL", "127.0.0.1:8080/healthz")
+	if _, code, ok := parseOptions("run", nil, &errb, nil); ok || code != 2 || !strings.Contains(errb.String(), "GLIMT_HEALTH_URL") {
+		t.Errorf("bad health url: code=%d err=%q", code, errb.String())
+	}
+}
+
+func TestContainerRunNeedsToken(t *testing.T) {
+	t.Setenv("GLIMT_KIND", "container")
+	t.Setenv("GLIMT_TOKEN", "")
+	t.Setenv("GLIMT_DEV_ENROL_KEY", "gp_dev_local") // an enrolment key does not help a container node
+	var out, errb bytes.Buffer
+	if code := run([]string{"run", "--hub", "ws://localhost:1/agent/ws", "--state-dir", t.TempDir()}, &out, &errb); code != 2 || !strings.Contains(errb.String(), "no node token") {
+		t.Errorf("code=%d err=%q", code, errb.String())
+	}
+}
+
+func TestContainerCheckAndSnapshot(t *testing.T) {
+	t.Setenv("GLIMT_KIND", "container")
+	t.Setenv("GLIMT_TOKEN", "agt_x")
+	t.Setenv("GLIMT_CHECKS", "db=127.0.0.1:1")
+	var out, errb bytes.Buffer
+	if code := run([]string{"check"}, &out, &errb); code != 0 {
+		t.Fatalf("check: code=%d err=%q", code, errb.String())
+	}
+	for _, want := range []string{"kind:            container (set explicitly)", "cgroup:", "processes:", "checks:          db=127.0.0.1:1", "token:           GLIMT_TOKEN set"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("check output lacks %q:\n%s", want, out.String())
+		}
+	}
+	for _, unwanted := range []string{"systemd", "journal", "state dir"} {
+		if strings.Contains(out.String(), unwanted) {
+			t.Errorf("container check should not mention %q:\n%s", unwanted, out.String())
+		}
+	}
+	if _, err := os.Stat("/proc/self/stat"); err != nil {
+		t.Skip("snapshot needs /proc")
+	}
+	out.Reset()
+	if code := run([]string{"snapshot", "--wait", "20ms"}, &out, &errb); code != 0 {
+		t.Fatalf("snapshot: code=%d err=%q", code, errb.String())
+	}
+	var snap map[string]any
+	if err := json.Unmarshal(out.Bytes(), &snap); err != nil {
+		t.Fatalf("snapshot is not JSON: %v\n%s", err, out.String())
+	}
+	if snap["host"] == nil || snap["services"] != nil || snap["maintenance"] != nil {
+		t.Errorf("container snapshot keys: services=%v maintenance=%v", snap["services"], snap["maintenance"])
+	}
+	checks, _ := snap["checks"].([]any)
+	if len(checks) != 1 {
+		t.Errorf("checks in snapshot: %v", snap["checks"])
+	}
+}
+
+func TestEnvStore(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "absent")
+	s := &envStore{token: "agt_env", fallback: state.New(missing)}
+	if tok, err := s.Load(); err != nil || tok != "agt_env" {
+		t.Errorf("load: %q %v", tok, err)
+	}
+	// No state directory: saving and clearing are no-ops, not errors.
+	if err := s.Save("agt_new"); err != nil {
+		t.Errorf("save without dir: %v", err)
+	}
+	if _, err := os.Stat(missing); err == nil {
+		t.Error("save must not create the directory")
+	}
+	if err := s.Clear(); err != nil {
+		t.Errorf("clear without dir: %v", err)
+	}
+	if tok, _ := s.Load(); tok != "" {
+		t.Errorf("after clear the env token is gone: %q", tok)
+	}
+	// With a mounted volume the token is persisted.
+	dir := t.TempDir()
+	s = &envStore{token: "agt_env", fallback: state.New(dir)}
+	if err := s.Save("agt_rotated"); err != nil {
+		t.Fatal(err)
+	}
+	if tok, _ := state.New(dir).Load(); tok != "agt_rotated" {
+		t.Errorf("persisted token: %q", tok)
+	}
+}
+
+func TestBuildHelloForContainer(t *testing.T) {
+	t.Setenv("GLIMT_KIND", "container")
+	t.Setenv("GLIMT_TOKEN", "agt_x")
+	t.Setenv("GLIMT_HEALTH_URL", "http://127.0.0.1:1/healthz")
+	t.Setenv("GLIMT_IMAGE", "nginx:1.27")
+	var errb bytes.Buffer
+	o, _, ok := parseOptions("run", []string{"--hub", "ws://h/agent/ws", "--name", "web-1"}, &errb, nil)
+	if !ok {
+		t.Fatal(errb.String())
+	}
+	d := buildDeps(context.Background(), o, quietLog())
+	h := buildHello(o, sysinfo.Info{Hostname: "web-1", Cores: 99, RAMBytes: 1}, d)
+	if h.Kind != protocol.KindContainer || h.Image != "nginx:1.27" || h.Capabilities == nil || !h.Capabilities.Health || h.DockerMode != protocol.DockerNone {
+		t.Errorf("hello: %+v caps=%+v", h, h.Capabilities)
+	}
+	if h.Cores == 99 || h.ContainerID == "" {
+		t.Errorf("hello must use the container's cores and id: cores=%d id=%q", h.Cores, h.ContainerID)
+	}
+	if got := d.logsConfig(nil); got.Journal != nil || got.Container != nil || got.File == nil {
+		t.Errorf("container logs config: %+v", got)
+	}
+	if sc := d.schedConfig(nil, 0, 0); sc.Health == nil || sc.Maintenance != nil || sc.Containers != nil {
+		t.Errorf("container sched config: %+v", sc)
 	}
 }

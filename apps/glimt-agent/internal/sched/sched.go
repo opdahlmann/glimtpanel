@@ -27,6 +27,12 @@ type System interface {
 	Security(ctx context.Context) (*protocol.Security, error)
 }
 
+// HealthChecker runs a container node's health URL and TCP checks once per
+// snapshot (internal/health.Checker); nil when not configured.
+type HealthChecker interface {
+	Run(ctx context.Context) (*protocol.Health, []protocol.Check)
+}
+
 // Containers is the Docker engine (internal/docker.Engine); nil when off.
 type Containers interface {
 	List(ctx context.Context) ([]protocol.Container, error)
@@ -41,6 +47,7 @@ type Config struct {
 	Containers          Containers        // nil = no containers
 	Maintenance         *MaintenanceCache // nil = no maintenance section
 	Periodics           []Periodic        // refreshed on the maintenance tick (journal counter, ...)
+	Health              HealthChecker     // nil = no health/checks sections (servers)
 	OnMaintenance       func(ctx context.Context)
 	Sink                Sink
 	Logger              *slog.Logger
@@ -372,6 +379,11 @@ func (s *Scheduler) Snapshot(ctx context.Context) *protocol.Snapshot {
 		} else {
 			msg.Security = security
 		}
+		cancel()
+	}
+	if s.cfg.Health != nil {
+		cctx, cancel := s.withTimeout(ctx)
+		msg.Health, msg.Checks = s.cfg.Health.Run(cctx)
 		cancel()
 	}
 	return msg

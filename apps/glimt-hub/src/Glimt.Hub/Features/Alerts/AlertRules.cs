@@ -1,6 +1,6 @@
 namespace Glimt.Hub.Features.Alerts;
 
-/// <summary>The seven rules (FUNKSJONSBESKRIVELSE 10.1). Ids are the dictionary keys in the web app (`r_server_down` …).</summary>
+/// <summary>The eight rules (FUNKSJONSBESKRIVELSE 10.1; `health_failed` from step 12.7). Ids are the dictionary keys in the web app (`r_server_down` …).</summary>
 public static class AlertRuleIds
 {
     public const string ServerDown = "server_down";
@@ -10,6 +10,9 @@ public static class AlertRuleIds
     public const string ContRestart = "cont_restart";
     public const string SvcFailed = "svc_failed";
     public const string Reboot = "reboot";
+
+    /// <summary>Container nodes with GLIMT_HEALTH_URL: the health check has failed for 2 min (step 12.7).</summary>
+    public const string HealthFailed = "health_failed";
 }
 
 public static class AlertSeverities
@@ -71,9 +74,13 @@ public static class AlertRules
     public static readonly AlertRuleDefinition ContRestart = new(AlertRuleIds.ContRestart, AlertSeverities.Warning, 3, 600, ThresholdUnits.Count, true, DurationIsWindow: true);
     public static readonly AlertRuleDefinition SvcFailed = new(AlertRuleIds.SvcFailed, AlertSeverities.Warning, null, null, ThresholdUnits.None, true);
     public static readonly AlertRuleDefinition Reboot = new(AlertRuleIds.Reboot, AlertSeverities.Info, null, null, ThresholdUnits.None, false);
+    public static readonly AlertRuleDefinition HealthFailed = new(AlertRuleIds.HealthFailed, AlertSeverities.Warning, null, 120, ThresholdUnits.Seconds, false);
 
     /// <summary>In the order the web app lists them.</summary>
-    public static readonly IReadOnlyList<AlertRuleDefinition> All = [ServerDown, DiskFull, MemPressure, CpuSat, ContRestart, SvcFailed, Reboot];
+    public static readonly IReadOnlyList<AlertRuleDefinition> All = [ServerDown, DiskFull, MemPressure, CpuSat, ContRestart, SvcFailed, Reboot, HealthFailed];
+
+    /// <summary>Rules that only make sense on a server with systemd and apt; never evaluated for container nodes (step 12.7).</summary>
+    public static bool ServerOnly(string rule) => rule is AlertRuleIds.SvcFailed or AlertRuleIds.Reboot;
 
     public static readonly IReadOnlyDictionary<string, AlertRuleDefinition> ById = All.ToDictionary(r => r.Id, StringComparer.Ordinal);
 

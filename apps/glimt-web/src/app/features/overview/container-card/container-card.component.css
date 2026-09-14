@@ -1,0 +1,6 @@
+/* Containerkortet (skjerm 20): to ringer og fire chips i serverkortets ramme. Kun tokens. */
+.rings--2 { grid-template-columns: repeat(2, 1fr); padding: 0 40px; }
+.chips--4 { grid-template-columns: 1.3fr 1fr 1fr 1fr; }
+@media (max-width: 759.98px) {
+  .rings--2 { padding: 0 24px; }
+}

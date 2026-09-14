@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Agents.Protocol;
 using Glimt.Hub.Features.Auth;
 using Glimt.Hub.Infrastructure;
 using Glimt.Hub.Infrastructure.Access;
@@ -12,6 +13,7 @@ namespace Glimt.Hub.Features.Servers;
 public static class ServersEndpoints
 {
     public const string UninstallCommand = "sudo /usr/local/bin/glimt-agent uninstall";
+    public const string RemoveSidecarHint = "remove the sidecar from your compose file";
     public static readonly TimeSpan PreviousTokenOverlap = TimeSpan.FromMinutes(10);
 
     public static IEndpointRouteBuilder MapServersEndpoints(this IEndpointRouteBuilder app)
@@ -21,6 +23,7 @@ public static class ServersEndpoints
             .RequireRateLimiting(RateLimiting.ApiPolicy)
             .AddEndpointFilter<RequireDatabase>();
         group.MapPost("/enrol-key", CreateEnrolKeyAsync);
+        group.MapPost("", CreateNodeAsync);
         group.MapGet("", ListAsync);
         group.MapGet("/{id}", GetAsync);
         group.MapPatch("/{id}", PatchAsync);
@@ -62,6 +65,76 @@ public static class ServersEndpoints
 
         var (key, expiresAt) = await keys.CreateAsync(user.Id, dockerMode!, cancellationToken);
         return Results.Ok(new EnrolKeyResponse(key, EnrolCommand(options, key, dockerMode!), new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)), dockerMode!));
+    }
+
+    /// <summary>
+    /// Creates a container node at once (step 12.5): the long-lived token is returned exactly once with the compose
+    /// and Dockerfile snippets. The node is down with no last-seen until its first hello.
+    /// </summary>
+    private static async Task<IResult> CreateNodeAsync(
+        CreateNodeRequest request,
+        ClaimsPrincipal principal,
+        UserStore users,
+        IServerStore servers,
+        AgentRegistry registry,
+        ILivePublisher live,
+        GlimtOptions options,
+        TimeProvider clock,
+        CancellationToken cancellationToken)
+    {
+        if (NodeKinds.Normalize(request.Kind) != NodeKinds.Container || request.Kind is null)
+        {
+            return Validation.ValidationProblem("kind", "kind must be container; servers are added with an enrol key.");
+        }
+
+        var name = ServerTags.NormalizeName(request.Name);
+        if (name is null)
+        {
+            return Validation.ValidationProblem("name", $"Name must be 1–{ServerTags.NameMaxLength} characters.");
+        }
+
+        var user = await users.FindByIdAsync(principal.RequireUserId(), cancellationToken);
+        if (user is null)
+        {
+            return Validation.Unauthorized();
+        }
+
+        if (user.EmailConfirmedAt is null)
+        {
+            return Validation.Forbidden("Confirm your e-mail before adding nodes", AuthEndpoints.EmailNotConfirmed);
+        }
+
+        var token = AgentTokens.Generate();
+        var now = clock.GetUtcNow();
+        var doc = new ServerDocument
+        {
+            Id = ServerIds.New(),
+            OwnerId = user.Id,
+            Hostname = name,
+            Name = name,
+            Kind = NodeKinds.Container,
+            TokenHash = AgentTokens.Hash(token),
+            Status = ServerStatuses.Down,
+            CreatedAt = now.UtcDateTime,
+        };
+        await servers.InsertAsync(doc, cancellationToken);
+
+        // The registry knows the node from now on, so the token resumes without a store lookup and the overview shows the card (down).
+        var session = registry.GetOrAdd(doc.Id);
+        session.Restore(doc);
+        await live.ServerAddedAsync(session, cancellationToken);
+
+        var hubWs = ContainerSnippets.AgentWsUrl(options);
+        var image = ContainerSnippets.Image(options);
+        return Results.Ok(new CreateNodeResponse(
+            doc.Id,
+            name,
+            NodeKinds.Container,
+            token,
+            hubWs,
+            image,
+            ContainerSnippets.Compose(image, hubWs, token, name),
+            ContainerSnippets.Dockerfile(image, hubWs, token, name)));
     }
 
     private static async Task<IResult> ListAsync(
@@ -186,13 +259,17 @@ public static class ServersEndpoints
             return Validation.Forbidden("Only the owner can delete a server");
         }
 
-        if (!await servers.DeleteAsync(id, cancellationToken))
+        var doc = await servers.FindAsync(id, cancellationToken);
+        if (doc is null || !await servers.DeleteAsync(id, cancellationToken))
         {
             return Validation.NotFound("Server not found");
         }
 
         await lifecycle.ServerRemovedAsync(id, cancellationToken);
-        return Results.Ok(new DeleteServerResponse(UninstallCommand));
+        var kind = NodeKinds.Normalize(doc.Kind);
+        return kind == NodeKinds.Container
+            ? Results.Ok(new DeleteServerResponse(null, kind, RemoveSidecarHint))
+            : Results.Ok(new DeleteServerResponse(UninstallCommand, kind));
     }
 
     private static async Task<IResult> RotateKeyAsync(
@@ -209,16 +286,29 @@ public static class ServersEndpoints
             return Validation.Forbidden("Only the owner can rotate the key");
         }
 
-        var token = AgentTokens.Generate();
-        var hash = AgentTokens.Hash(token);
-        var validUntil = clock.GetUtcNow().Add(PreviousTokenOverlap).UtcDateTime;
-        if (!await servers.RotateTokenAsync(id, hash, validUntil, cancellationToken))
+        var doc = await servers.FindAsync(id, cancellationToken);
+        if (doc is null)
         {
             return Validation.NotFound("Server not found");
         }
 
-        // The agent gets the token over its socket (or at its next hello); it is never returned to the browser.
+        var isContainer = NodeKinds.Normalize(doc.Kind) == NodeKinds.Container;
+        var token = AgentTokens.Generate();
+        var hash = AgentTokens.Hash(token);
+        var validUntil = clock.GetUtcNow().Add(isContainer ? AgentLifecycle.ContainerTokenOverlap : PreviousTokenOverlap);
+        if (!await servers.RotateTokenAsync(id, hash, validUntil.UtcDateTime, cancellationToken))
+        {
+            return Validation.NotFound("Server not found");
+        }
+
         await lifecycle.TokenRotatedAsync(id, token, hash, cancellationToken);
+        if (isContainer)
+        {
+            // A container node reads GLIMT_TOKEN at start: the owner gets the token once and has 24 h to update the environment (step 12.5).
+            return Results.Ok(new RotateKeyResponse(token, validUntil));
+        }
+
+        // A server's agent gets the token over its socket (or at its next hello); it is never returned to the browser.
         return Results.NoContent();
     }
 

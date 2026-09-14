@@ -18,7 +18,10 @@ import { BreakpointService } from '@shared/util/breakpoint.service';
 import { formatTime } from '@shared/util/format';
 import { TitleService } from '../../shell/title.service';
 
-/** Kildene i segmentet (steg 6.1) → hubens `source` (packages/protocol). «Custom files» (`file`) er Neste og vises ikke. */
+/**
+ * Kildene i segmentet (steg 6.1) → hubens `source` (packages/protocol). «Files» (`file`, steg 12.9) finnes bare for
+ * containernoder, som til gjengjeld mangler serverkildene; «Containers» er der stdout via verten.
+ */
 export const SOURCES = [
   { ui: 'system', hub: 'journal', label: 'sysLog', hint: 'hint_system' },
   { ui: 'auth', hub: 'auth', label: 'authLog', hint: 'hint_auth' },
@@ -27,7 +30,10 @@ export const SOURCES = [
   { ui: 'web', hub: 'web', label: 'webLog', hint: 'hint_web' },
   { ui: 'fw', hub: 'firewall', label: 'fwLog', hint: 'hint_fw' },
   { ui: 'cont', hub: 'container', label: 'contLog', hint: 'hint_cont' },
+  { ui: 'files', hub: 'file', label: 'files', hint: 'hint_files' },
 ] as const;
+export const CONTAINER_NODE_SOURCES: readonly SourceUi[] = ['files', 'cont'];
+export const MAX_PATHS = 4;
 export type SourceUi = (typeof SOURCES)[number]['ui'];
 export type HubSource = (typeof SOURCES)[number]['hub'];
 
@@ -89,6 +95,8 @@ export class LogsPage {
   readonly priority = input<string | undefined>();
   readonly range = input<string | undefined>();
   readonly q = input<string | undefined>();
+  /** `source: file`: kommaseparerte stier fra nodens `logPaths` (steg 12.9). */
+  readonly path = input<string | undefined>();
 
   readonly stream = inject(LogStreamService);
   private readonly serverList = inject(ServerListService);
@@ -110,8 +118,23 @@ export class LogsPage {
     return list[0]?.id ?? null;
   });
   readonly serverOptions = computed<SelectOption[]>(() => this.servers().map((s) => ({ value: s.id, label: s.name })));
-  readonly src = computed<SourceUi>(() => uiSource(this.source()));
-  readonly hub = computed<HubSource>(() => hubSource(this.source()));
+  /** Containernode (steg 12.9): bare «Files» og «Containers» (stdout via verten), standard Files. */
+  readonly isContainerNode = computed(() => this.servers().find((s) => s.id === this.serverId())?.kind === 'container');
+  readonly src = computed<SourceUi>(() => {
+    const ui = uiSource(this.source());
+    if (this.isContainerNode()) return CONTAINER_NODE_SOURCES.includes(ui) ? ui : 'files';
+    return ui === 'files' ? 'system' : ui;
+  });
+  readonly hub = computed<HubSource>(() => hubSource(this.src()));
+  readonly selectedPaths = computed(() =>
+    (this.path() ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, MAX_PATHS),
+  );
+  readonly logPaths = signal<string[]>([]);
+  readonly linked = signal(false);
   readonly pri = computed<Priority>(() => {
     const p = this.priority();
     return p === 'err' || p === 'warn' || p === 'info' ? p : '';
@@ -135,6 +158,9 @@ export class LogsPage {
     const serverId = this.serverId();
     if (!serverId) return [];
     const base = { serverId, priority: this.pri() || null, sinceMs: this.anchor() - RANGE_MS[this.rng()], tail: LOG_TAIL };
+    if (this.hub() === 'file') return this.selectedPaths().map((p) => ({ ...base, source: 'file', path: p }));
+    // En containernodes stdout går gjennom verten: huben ruter `source: container` uten containernavn (steg 12.6).
+    if (this.hub() === 'container' && this.isContainerNode()) return [{ ...base, source: 'container' }];
     if (this.hub() === 'container') return this.selectedContainers().map((c) => ({ ...base, source: 'container', container: c }));
     return [{ ...base, source: this.hub(), unit: this.unit() || null }];
   });
@@ -165,7 +191,9 @@ export class LogsPage {
     this.i18n.lang();
     return this.i18n;
   });
-  readonly sourceOptions = computed<SegmentOption<SourceUi>[]>(() => SOURCES.map((s) => ({ value: s.ui, label: this.texts().t(s.label) })));
+  readonly sourceOptions = computed<SegmentOption<SourceUi>[]>(() =>
+    SOURCES.filter((s) => (this.isContainerNode() ? CONTAINER_NODE_SOURCES.includes(s.ui) : s.ui !== 'files')).map((s) => ({ value: s.ui, label: this.texts().t(s.label) })),
+  );
   readonly priorityOptions = computed<SegmentOption<Priority>[]>(() => [
     { value: '', label: this.texts().t('all') },
     { value: 'err', label: this.texts().t('errors') },
@@ -205,7 +233,9 @@ export class LogsPage {
   });
   readonly emptyText = computed(() => {
     const t = this.texts();
-    if (this.src() === 'cont' && this.selectedContainers().length === 0) return t.t('chooseContainers');
+    if (this.src() === 'cont' && !this.isContainerNode() && this.selectedContainers().length === 0) return t.t('chooseContainers');
+    if (this.src() === 'files' && this.selectedPaths().length === 0) return t.t(this.logPaths().length ? 'chooseContainers' : 'noLogPaths');
+    if (this.src() === 'cont' && this.isContainerNode() && !this.linked() && this.stream.allEnded()) return t.t('stdoutNeedsHost');
     if (this.debounced().trim() && this.stream.lines().length) return t.t('logEmptyFilter');
     return this.statusText();
   });
@@ -220,6 +250,7 @@ export class LogsPage {
       this.hub();
       this.unit();
       this.selectedContainers();
+      this.selectedPaths();
       this.pri();
       this.rng();
       untracked(() => this.anchor.set(Date.now()));
@@ -238,10 +269,10 @@ export class LogsPage {
         }
       });
     });
-    // Containerlisten for valgt server når kilden er Containers.
+    // Containerlisten for valgt server når kilden er Containers (og filstiene/verten for en containernode).
     effect(() => {
       const serverId = this.serverId();
-      const wanted = this.src() === 'cont';
+      const wanted = this.src() === 'cont' || this.src() === 'files';
       untracked(() => void this.loadContainers(wanted ? serverId : null));
     });
     destroyRef.onDestroy(() => {
@@ -257,7 +288,11 @@ export class LogsPage {
     this.containersLoaded.set(false);
     try {
       const dto = await this.api.get<ServerDto | undefined>(`/servers/${encodeURIComponent(serverId)}/snapshot`);
-      if (this.containersFor === serverId) this.containers.set(dto?.containers ?? []);
+      if (this.containersFor === serverId) {
+        this.containers.set(dto?.containers ?? []);
+        this.logPaths.set(dto?.logPaths ?? []);
+        this.linked.set(!!dto?.hostServer);
+      }
     } catch (err) {
       console.warn('[logs] could not load containers', err);
       if (this.containersFor === serverId) this.containers.set([]);
@@ -278,6 +313,7 @@ export class LogsPage {
       priority: this.priority() ?? null,
       range: this.range() ?? null,
       q: this.q() ?? null,
+      path: this.path() ?? null,
       ...patch,
     };
     const queryParams: Record<string, string> = {};
@@ -286,12 +322,22 @@ export class LogsPage {
   }
 
   onServer(id: string): void {
-    if (id && id !== this.serverId()) this.go({ server: id, container: null, unit: null });
+    if (id && id !== this.serverId()) this.go({ server: id, container: null, unit: null, path: null });
   }
 
   onSource(ui: SourceUi | null): void {
     if (!ui || ui === this.src()) return;
-    this.go({ source: hubSource(ui), unit: null, container: ui === 'cont' ? this.container() ?? null : null });
+    this.go({ source: hubSource(ui), unit: null, container: ui === 'cont' ? this.container() ?? null : null, path: ui === 'files' ? this.path() ?? null : null });
+  }
+
+  togglePath(p: string): void {
+    const sel = this.selectedPaths();
+    const next = sel.includes(p) ? sel.filter((x) => x !== p) : sel.length < MAX_PATHS ? [...sel, p] : sel;
+    if (next.join(',') !== sel.join(',')) this.go({ path: next.join(',') || null });
+  }
+
+  isPathSelected(p: string): boolean {
+    return this.selectedPaths().includes(p);
   }
 
   onPriority(p: Priority | null): void {
