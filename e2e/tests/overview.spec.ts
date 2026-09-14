@@ -31,7 +31,7 @@ test.describe('oversikten', () => {
     await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
     await expect(page.getByPlaceholder('Search servers…')).toBeVisible();
     await expect(page.locator('gp-select select')).toHaveValue('name');
-    await expect(page.locator('main gp-segment')).toHaveCount(0); // språkbyttet i sidepanelet er også et segment
+    await expect(page.locator('main gp-segment [role="radio"]')).toHaveText(['Cards', 'Groups']); // fase 13: visningssegmentet
     const chips = page.locator('.chip');
     await expect(chips).toHaveText(['All', 'client-a', 'client-b', 'edge', 'homelab', 'prod', 'staging', 'up', 'down', 'paused', 'sleeping', 'Servers', 'Containers', 'Has alert']);
 
@@ -235,5 +235,83 @@ test.describe('containernoder i oversikten (fase 12)', () => {
     expect(errors, 'sidefeil').toEqual([]);
     await page.evaluate(() => document.fonts.ready);
     await expect(backend).toHaveScreenshot('card-container.png', { mask: [backend.locator('gp-ring'), backend.locator('gp-chip'), backend.locator('gp-sparkline'), backend.locator('.info'), backend.locator('.stripe')] });
+  });
+});
+
+test.describe('grupper (fase 13)', () => {
+  test('skjerm 23: to demogrupper med summer og medlemmer; ny gruppe fra kortet, nytt navn, vis som kort, slett', async ({ page }, testInfo) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await forceLang(page, 'en');
+    await gotoOverviewLoggedIn(page);
+    await waitForCards(page);
+
+    // Gruppevisningen: «Acme» (web-02, acme-backend, acme-frontend, db-prod) og «Edge» (edge-worker, worker-01).
+    await page.getByRole('radio', { name: 'Groups' }).click();
+    const acme = page.locator('gp-group-card[data-group="Acme"]');
+    const edge = page.locator('gp-group-card[data-group="Edge"]');
+    await expect(acme).toBeVisible();
+    await expect(edge).toBeVisible();
+    await expect(acme.getByTestId('group-summary')).toHaveText(/^4 nodes · \d up/);
+    await expect(acme.locator('gp-chip .label')).toHaveText(['CPU', 'Memory', 'Alerts']);
+    await expect(acme.locator('gp-chip').first().locator('.value')).toHaveText(/\d+\.\d of 18 cores$/);
+    await expect(acme.locator('gp-chip').nth(1).locator('.value')).toHaveText(/\d+\.\d of 57 GB$/);
+    await expect(acme.locator('.member')).toHaveCount(4);
+    await expect(acme.locator('.member gp-badge')).toHaveText(['server', 'container', 'container', 'server']);
+    await expect(edge.locator('.member')).toHaveCount(2);
+    await expect(edge.getByTestId('group-summary')).toHaveText(/^2 nodes · \d up/);
+    await expect(page.locator('gp-server-card')).toHaveCount(0);
+
+    await expectMobileRules(page, testInfo);
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(500);
+    await expect(page).toHaveScreenshot('groups.png', { fullPage: true, mask: [page.locator('gp-chip'), page.locator('.mnum'), page.locator('gp-group-card .summary'), page.getByTestId('summary'), ...navMasks(page)] });
+
+    // Ny gruppe fra et nodekort: ⋯ → New group… → navn → Create. Kortet dukker opp i gruppevisningen med ett medlem.
+    const name = `Test ${testInfo.project.name.replace(/[^a-z0-9]+/g, '-')} ${Date.now().toString(36).slice(-4)}`;
+    await page.getByRole('radio', { name: 'Cards' }).click();
+    await page.locator('gp-server-card[aria-label^="cache-01:"] gp-node-menu button').click();
+    const menu = page.getByRole('dialog', { name: 'cache-01' });
+    await expect(menu.getByRole('menuitemcheckbox', { name: 'Acme' })).toHaveAttribute('aria-checked', 'false');
+    await menu.getByRole('button', { name: 'New group…' }).click();
+    await menu.locator('gp-input input').fill(name);
+    await menu.getByRole('button', { name: 'Create' }).click();
+    await expect(menu.getByRole('menuitemcheckbox', { name })).toHaveAttribute('aria-checked', 'true');
+    await menu.getByRole('button', { name: 'Close' }).click();
+    await expect(menu).toHaveCount(0);
+
+    await page.getByRole('radio', { name: 'Groups' }).click();
+    const mine = page.locator(`gp-group-card[data-group="${name}"]`);
+    await expect(mine).toBeVisible();
+    await expect(mine.locator('.member')).toHaveText([/cache-01/]);
+
+    // Nytt navn.
+    await mine.locator('.more').click();
+    const groupMenu = page.getByRole('dialog', { name });
+    await groupMenu.getByRole('menuitem', { name: 'Rename' }).click();
+    await groupMenu.locator('gp-input input').fill(`${name} renamed`);
+    await groupMenu.getByRole('button', { name: 'Save' }).click();
+    const renamed = page.locator(`gp-group-card[data-group="${name} renamed"]`);
+    await expect(renamed).toBeVisible();
+
+    // «Show as cards»: kortvisningen med chip «Group: … ×» og bare medlemmet.
+    await renamed.locator('.more').click();
+    await page.getByRole('dialog', { name: `${name} renamed` }).getByRole('menuitem', { name: 'Show as cards' }).click();
+    await expect(page).toHaveURL(/[?&]group=/);
+    await expect(page.getByTestId('group-chip')).toHaveText(`Group: ${name} renamed ×`);
+    await expect(page.locator('gp-server-card, gp-container-card')).toHaveCount(1);
+    await page.getByTestId('group-chip').click();
+    await expect(page).not.toHaveURL(/[?&]group=/);
+    await expect(page.locator('gp-server-card')).toHaveCount(16);
+
+    // Slett (to klikk: Delete group → Confirm).
+    await page.getByRole('radio', { name: 'Groups' }).click();
+    await renamed.locator('.more').click();
+    const del = page.getByRole('dialog', { name: `${name} renamed` }).getByRole('menuitem', { name: /Delete group|Confirm delete/ });
+    await del.click();
+    await del.click();
+    await expect(renamed).toHaveCount(0);
+    await expect(acme).toBeVisible();
+    expect(errors, 'sidefeil').toEqual([]);
   });
 });

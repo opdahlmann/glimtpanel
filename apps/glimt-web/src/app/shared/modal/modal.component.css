@@ -18,3 +18,7 @@
 .body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .foot:empty { display: none; }
 .foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+/* Bunnark (fase 13): dialogen ligger nederst med avrundet topp, full bredde. */
+.overlay.sheet { align-items: flex-end; padding: 24px 0 0; }
+.overlay.sheet .card { max-width: none !important; border-radius: var(--radius-window) var(--radius-window) 0 0; padding-bottom: max(14px, env(safe-area-inset-bottom)); }

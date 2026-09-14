@@ -72,6 +72,9 @@ services:
 
 Se `apps/glimt-agent/README.md` («Containernoder») for valgfrie variabler og hva agenten ser inne i en container.
 
+Noder kan samles i personlige **grupper** (⋯ på et kort → «Add to group…»); gruppevisningen i oversikten viser hver
+gruppe som ett kort med summene til medlemmene (`e2e/tests/overview.spec.ts-snapshots/groups-desktop-chromium-darwin.png`).
+
 ## Miljøfiler
 
 Kun `example.env` sjekkes inn. `.env` er standard for Docker-containere lokalt, `.env.dev` overstyrer når hub og web kjører

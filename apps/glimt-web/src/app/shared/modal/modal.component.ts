@@ -18,6 +18,8 @@ export class ModalComponent {
   readonly title = input('');
   readonly maxWidth = input<560 | 440>(560);
   readonly closeLabel = input('Close');
+  /** Bunnark (fase 13, menyer på mobil): festes nederst med 44 px rader, ellers som vanlig dialog. */
+  readonly sheet = input(false);
 
   private readonly card = viewChild<ElementRef<HTMLElement>>('card');
   private readonly doc = inject(DOCUMENT);

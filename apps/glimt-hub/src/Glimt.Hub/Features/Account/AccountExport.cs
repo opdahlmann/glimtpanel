@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Glimt.Hub.Features.Access;
 using Glimt.Hub.Features.Auth;
+using Glimt.Hub.Features.Groups;
 using Glimt.Hub.Features.Servers;
 using Glimt.Hub.Infrastructure;
 using MongoDB.Bson;
@@ -12,7 +13,7 @@ namespace Glimt.Hub.Features.Account;
 /// Builds GET /api/account/export and runs the DELETE /api/account cascade. Collections that later features own
 /// (alertSettings, alerts, pushSubscriptions) are read and deleted as raw documents so nothing breaks before they exist.
 /// </summary>
-public sealed class AccountExport(MongoContext mongo, IServerStore servers, AccessGrantStore grants, TimeProvider clock)
+public sealed class AccountExport(MongoContext mongo, IServerStore servers, AccessGrantStore grants, GroupStore groups, TimeProvider clock)
 {
     public const string AlertSettingsCollection = "alertSettings";
     public const string AlertsCollection = "alerts";
@@ -23,6 +24,7 @@ public sealed class AccountExport(MongoContext mongo, IServerStore servers, Acce
         var owned = await servers.ListByOwnersAsync([user.Id], cancellationToken);
         var given = await grants.ListByOwnerAsync(user.Id, cancellationToken);
         var received = await grants.ListReceivedAsync(user.Id, cancellationToken);
+        var ownedGroups = await groups.ListByOwnerAsync(user.Id, cancellationToken);
 
         var alertSettings = await RawAsync(AlertSettingsCollection, new BsonDocument("userId", user.Id), cancellationToken);
         var alerts = await RawAsync(AlertsCollection, new BsonDocument("ownerId", user.Id), cancellationToken);
@@ -50,6 +52,14 @@ public sealed class AccountExport(MongoContext mongo, IServerStore servers, Acce
                 ["given"] = new JsonArray(given.Select(Grant).ToArray()),
                 ["received"] = new JsonArray(received.Select(Grant).ToArray()),
             },
+            ["groups"] = new JsonArray(ownedGroups.Select(g => (JsonNode?)new JsonObject
+            {
+                ["id"] = g.Id,
+                ["name"] = g.Name,
+                ["memberIds"] = new JsonArray(g.MemberIds.Select(m => (JsonNode?)m).ToArray()),
+                ["order"] = g.Order,
+                ["createdAt"] = Date(g.CreatedAt),
+            }).ToArray()),
             ["alertSettings"] = alertSettings.Count == 0 ? null : alertSettings[0],
             ["alerts"] = new JsonArray(alerts.ToArray<JsonNode?>()),
             ["pushSubscriptions"] = new JsonArray(pushSubscriptions.ToArray<JsonNode?>()),
@@ -60,6 +70,7 @@ public sealed class AccountExport(MongoContext mongo, IServerStore servers, Acce
     public async Task DeleteOwnedDataAsync(string userId, CancellationToken cancellationToken)
     {
         await grants.DeleteAllForUserAsync(userId, cancellationToken);
+        await groups.DeleteAllForOwnerAsync(userId, cancellationToken);
         await mongo.Db.GetCollection<BsonDocument>(AlertSettingsCollection).DeleteManyAsync(new BsonDocument("userId", userId), cancellationToken);
         await mongo.Db.GetCollection<BsonDocument>(AlertsCollection).DeleteManyAsync(new BsonDocument("ownerId", userId), cancellationToken);
         await mongo.Db.GetCollection<BsonDocument>(PushSubscriptionsCollection).DeleteManyAsync(new BsonDocument("userId", userId), cancellationToken);

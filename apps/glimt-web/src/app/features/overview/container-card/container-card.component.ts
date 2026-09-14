@@ -10,6 +10,7 @@ import { ChipComponent } from '@shared/chip/chip.component';
 import { LiveDotComponent } from '@shared/live-dot/live-dot.component';
 import { RingComponent } from '@shared/ring/ring.component';
 import { SparklineComponent } from '@shared/sparkline/sparkline.component';
+import { NodeMenuComponent } from '../node-menu/node-menu.component';
 import { containerCardView } from './container-card-view';
 
 interface Frame {
@@ -25,7 +26,7 @@ interface Frame {
  */
 @Component({
   selector: 'gp-container-card',
-  imports: [RingComponent, ChipComponent, BadgeComponent, LiveDotComponent, SparklineComponent, TPipe],
+  imports: [RingComponent, ChipComponent, BadgeComponent, LiveDotComponent, SparklineComponent, NodeMenuComponent, TPipe],
   templateUrl: './container-card.component.html',
   styleUrls: ['../server-card/server-card.component.css', './container-card.component.css'],
   host: {
@@ -34,7 +35,7 @@ interface Frame {
     '[attr.aria-label]': 'view()?.ariaLabel',
     '[attr.data-status]': 'view()?.status',
     '[attr.data-kind]': '"container"',
-    '(keydown.enter)': 'open()',
+    '(keydown.enter)': 'onEnter($event)',
   },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -79,6 +80,11 @@ export class ContainerCardComponent {
 
   open(): void {
     void this.router.navigate(['/servers', this.id()]);
+  }
+
+  onEnter(e: Event): void {
+    if ((e.target as HTMLElement | null)?.closest('gp-node-menu')) return;
+    this.open();
   }
 
   openPanel(panel: 'cpu' | 'mem'): void {

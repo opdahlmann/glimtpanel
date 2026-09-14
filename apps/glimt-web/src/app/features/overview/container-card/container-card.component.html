@@ -11,6 +11,7 @@
       <div class="status" [class.status--down]="v.status === 'down'">
         <span>{{ v.statusText }}</span>
         <gp-live-dot [state]="v.dot" [pulse]="pulse()" />
+        <gp-node-menu [id]="v.id" [name]="v.name" />
       </div>
     </div>
     <div class="info num" [attr.title]="v.approx ? ('approxTitle' | t) : null">{{ v.info }}</div>

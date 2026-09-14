@@ -58,7 +58,7 @@ describe('OverviewPage', () => {
   let session: SessionStub;
   let serverList: ServerListStub;
   let store: LiveStore;
-  let api: { post: ReturnType<typeof vi.fn>; patch: ReturnType<typeof vi.fn> };
+  let api: { post: ReturnType<typeof vi.fn>; patch: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
 
   async function setup(extraProviders: unknown[] = []): Promise<void> {
     TestBed.resetTestingModule();
@@ -82,7 +82,7 @@ describe('OverviewPage', () => {
     live = new LiveServiceStub();
     session = new SessionStub();
     serverList = new ServerListStub();
-    api = { post: vi.fn(() => new Promise(() => undefined)), patch: vi.fn() };
+    api = { post: vi.fn(() => new Promise(() => undefined)), patch: vi.fn(), get: vi.fn(() => Promise.resolve([])), delete: vi.fn() };
     await setup();
   });
 
@@ -147,7 +147,8 @@ describe('OverviewPage', () => {
     expect(el.querySelector('[data-testid="summary"]')?.textContent).toMatch(/^16 servers · 14 up · 1 down · 1 paused · live · \d\d:\d\d:\d\d$/);
     expect(el.querySelector('gp-input input')?.getAttribute('placeholder')).toBe('Search servers…');
     expect([...el.querySelectorAll('gp-select option')].map((o) => o.textContent)).toEqual(['Sort: Name', 'Sort: CPU', 'Sort: Memory', 'Sort: Disk', 'Sort: Status', 'Sort: Tag']);
-    expect(el.querySelector('gp-segment')).toBeNull();
+    // Fase 13: visningssegmentet Cards/Groups finnes alltid.
+    expect([...el.querySelectorAll('gp-segment [role="radio"]')].map((r) => r.textContent)).toEqual(['Cards', 'Groups']);
     expect([...el.querySelectorAll('.chip')].map((c) => c.textContent?.trim())).toEqual(['All', 'client-a', 'client-b', 'homelab', 'prod', 'staging', 'up', 'down', 'paused', 'Has alert']);
     expect(el.querySelector('.chip')?.getAttribute('aria-pressed')).toBe('true');
     const cards = el.querySelectorAll('gp-server-card');
@@ -237,11 +238,11 @@ describe('OverviewPage', () => {
     expect(page.addStep()).toBe(1);
   });
 
-  it('visningssegmentet rendres bare når flere visninger er slått på', async () => {
+  it('visningssegmentet har Cards og Groups (fase 13), og Compact bak flagget', async () => {
     await setup([{ provide: ConfigService, useValue: { config: signal({ ...DEFAULT_CONFIG, featureFlags: ['compact'] }), loaded: signal(true), hasFlag: (f: string) => f === 'compact' } }]);
     seedDemo();
     const { el } = await render();
     expect(el.querySelector('gp-segment')).not.toBeNull();
-    expect([...el.querySelectorAll('gp-segment [role="radio"]')].map((r) => r.textContent)).toEqual(['Cards', 'Compact']);
+    expect([...el.querySelectorAll('gp-segment [role="radio"]')].map((r) => r.textContent)).toEqual(['Cards', 'Compact', 'Groups']);
   });
 });

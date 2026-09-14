@@ -1,6 +1,7 @@
 using Glimt.Hub.Features.Agents;
 using Glimt.Hub.Features.Agents.Protocol;
 using Glimt.Hub.Features.Buffer;
+using Glimt.Hub.Features.Groups;
 using Glimt.Hub.Features.Servers;
 using Glimt.Hub.Infrastructure;
 
@@ -18,6 +19,7 @@ public sealed class FakeAgentService(
     UserDirectory users,
     IServerStore store,
     IEnrolKeyStore enrolKeys,
+    GroupStore groups,
     MongoContext mongo,
     GlimtOptions options,
     TimeProvider clock,
@@ -119,6 +121,7 @@ public sealed class FakeAgentService(
                 await StartNodeAsync(node, ownerId, now, stoppingToken);
             }
 
+            await SeedGroupsAsync(ownerId, now, stoppingToken);
             logger.LogInformation("demo mode: {Count} fake servers and {Nodes} container nodes started (owner {OwnerId}, seed {Seed})", _servers.Count, _nodes.Count, ownerId, options.Env == GlimtOptions.E2e ? E2eSeed : "random");
             _ready.TrySetResult();
             await LoopAsync(stoppingToken);
@@ -197,6 +200,16 @@ public sealed class FakeAgentService(
 
         await ingest.ConnectedAsync(session, isNew: true, cancellationToken);
         await ingest.SnapshotAsync(session, fake.Snapshot(now.ToUnixTimeMilliseconds()), cancellationToken);
+    }
+
+    /// <summary>The two demo groups (step 13.3): «Acme» across two hosts and a container, «Edge» with a container and a server. Fixed ids, so restarts refresh rather than duplicate them.</summary>
+    private async Task SeedGroupsAsync(string ownerId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var at = now.UtcDateTime;
+        foreach (var (id, name, order, members) in DemoData.Groups)
+        {
+            await groups.UpsertSeedAsync(new GroupDocument { Id = id, OwnerId = ownerId, Name = name, Order = order, MemberIds = members.Select(m => DemoData.ServerIdPrefix + m).ToList(), CreatedAt = at, UpdatedAt = at }, cancellationToken);
+        }
     }
 
     /// <summary>A demo container node: session with the node's tags, 24 h of history, hello with kind container, first snapshot. Sleeping nodes start asleep.</summary>

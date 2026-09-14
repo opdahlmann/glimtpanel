@@ -223,7 +223,7 @@ innloggingsskjermen).
   lesere uten egne servere (`readerOf > 0` og `ownsServers` falsk fra `/api/auth/me`).
 - **Verktøylinjen**: `gp-input` med lupe (søk på navn og tagger, 150 ms debounce), `gp-select` med sortering
   (`name`, `cpu`, `mem`, `disk`, `status`, `tag`; status sorterer nede → pauset → oppe, tagg på sammenslått taggstreng,
-  tallene synkende med nede-servere sist), og visningssegmentet Cards/Compact/Groups bare når flaggene `compact`/`groups`
+  tallene synkende med nede-servere sist), og visningssegmentet Cards/Groups (Compact bare bak flagget `compact`; grupper er levert i fase 13)
   er på (i MVP rendres det ikke). Filterchips: All, én chip per tagg (alfabetisk), up/down/paused med prikk, «Has alert»
   uavhengig. `PrefsService` husker sortering, filter og visning; søket huskes ikke. Funksjonene ligger i
   `overview.model.ts` og testes mot de 16 demoserverne i `overview.fixtures.ts`.
@@ -436,6 +436,28 @@ eller binær i imaget). `CardDto`/`ServerDto` har `kind`, og `status` kan være 
 Vitest: `container-card-view.spec.ts`, `overview.nodes.spec.ts`, `node-view.spec.ts`, `snippets.spec.ts`. Playwright:
 skjerm 20 (`overview.spec.ts`), 21 (`server.spec.ts`: `acme-backend` lenket til `web-02`, `edge-worker` uten cgroup) og
 22 (`add-container.spec.ts`: opprett → token → `connect-fake-container` → trinn 2) i tre prosjekter.
+
+## Grupper (fase 13)
+
+Navngitte, personlige samlinger av noder på tvers av servere, containere og verter (skjerm 23; designramme F3 for
+summene, men medlemskapet er eksplisitt). `GroupsStore` (`core/groups.store.ts`) henter `GET /api/groups` når
+oversikten åpnes og oppdaterer lokalt etter hver endring; ingen SignalR-melding, gruppekortet regnes i nettleseren fra
+`Card`-ene (`group-view.ts`: kjerner i bruk av totalt, GB i bruk av totalt, aktive varsler, verste status nede > sover >
+pauset > oppe). Demokontoen (`demo@glimtpanel.com`) ser gruppene som lesbare (`readOnly`).
+
+- **Visningssegmentet** Cards/Groups finnes alltid (flagget `groups` er borte). Gruppevisningen viser
+  `gp-group-card` i `order`: navn, «4 nodes · 3 up · 1 sleeping», verste status som prikk og stripe, tre chips
+  (CPU «5.8 of 12 cores», Memory «14.2 of 32 GB», Alerts «2 active») og én medlemsrad per node (prikk, navn,
+  type-badge, CPU %, Mem %) som åpner noden. Tom gruppe: «No nodes yet · add from a card». Piltaster opp/ned på
+  kortet bytter `order` med naboen (`PATCH` på begge).
+- **⋯ på nodekortene** (`gp-node-menu`, 32 px med 44 px treffflate, i status-cellen): «Add to group…» med hake per
+  gruppe og «New group…» med navnefelt som lager gruppen med noden som første medlem. Menyen er en `gp-modal` (440 px)
+  på desktop og et bunnark (`sheet`) på mobil, så den aldri klippes av kortets `overflow: hidden`; Esc lukker.
+- **⋯ på gruppekortet**: «Show as cards» (kortvisningen med `?group=id` og chipen «Group: Acme ×»), «Rename»,
+  «Delete group» (andre klikk bekrefter).
+
+Vitest: `group-view.spec.ts`. Playwright: skjerm 23 i `overview.spec.ts` (demoens «Acme» og «Edge»; ny gruppe fra
+`cache-01`, nytt navn, vis som kort, slett) i tre prosjekter.
 
 ## Dockerfile
 

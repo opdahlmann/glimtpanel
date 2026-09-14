@@ -1,0 +1,54 @@
+@if (view(); as v) {
+  <article class="card">
+    <div class="stripe" [style.background]="v.stripe" aria-hidden="true"></div>
+    <div class="title">
+      <div class="name">{{ v.name }}</div>
+      <div class="status">
+        <gp-live-dot [state]="v.dot" />
+        <button type="button" class="more" (click)="toggleMenu($event)" [attr.aria-label]="('groupActions' | t) + ' ' + v.name" [attr.aria-expanded]="menuOpen()" aria-haspopup="dialog">
+          <span class="dots" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+    <div class="summary num" data-testid="group-summary">{{ v.summary }}</div>
+    <div class="chips">
+      <gp-chip [label]="'cpu' | t" [value]="v.cpu" />
+      <gp-chip [label]="'memory' | t" [value]="v.mem" />
+      <gp-chip [label]="'alerts' | t" [value]="v.alerts" [tone]="v.alertsTone" />
+    </div>
+    <div class="members" role="list">
+      @for (m of v.members; track m.id) {
+        <button type="button" class="member" role="listitem" (click)="openNode(m.id)" [attr.data-member]="m.name">
+          <gp-live-dot [state]="m.dot" />
+          <span class="mname">{{ m.name }}</span>
+          <gp-badge>{{ (m.kind === 'container' ? 'containerLabel' : 'serverLabel') | t }}</gp-badge>
+          <span class="mnum num">{{ 'cpu' | t }} {{ m.cpu }}</span>
+          <span class="mnum num">{{ 'memory' | t }} {{ m.mem }}</span>
+        </button>
+      }
+    </div>
+  </article>
+  <gp-modal [(open)]="menuOpen" [title]="v.name" [maxWidth]="440" [sheet]="isMobile()" [closeLabel]="'close' | t">
+    @if (menuOpen()) {
+      @if (renaming()) {
+        <gp-input [label]="'groupName' | t" [ngModel]="newName()" (ngModelChange)="newName.set($event)" name="groupName" autocomplete="off" (keydown.enter)="rename()" />
+        <div class="row">
+          <gp-button variant="ghost" (click)="renaming.set(false)">{{ 'cancel' | t }}</gp-button>
+          <gp-button variant="primary" [loading]="busy()" [disabled]="!newName().trim()" (click)="rename()">{{ 'save' | t }}</gp-button>
+        </div>
+      } @else {
+        <div class="items" role="menu">
+          <button type="button" class="item" role="menuitem" (click)="cards()">{{ 'showAsCards' | t }}</button>
+          <button type="button" class="item" role="menuitem" [disabled]="readOnly()" (click)="startRename()">{{ 'rename' | t }}</button>
+          <button type="button" class="item danger" role="menuitem" [disabled]="readOnly() || busy()" (click)="remove()">{{ (confirming() ? 'confirmDeleteGroup' : 'deleteGroup') | t }}</button>
+        </div>
+        @if (readOnly()) {
+          <div class="hint">{{ 'demoReadOnly' | t }}</div>
+        }
+      }
+      @if (error(); as e) {
+        <div class="error" role="alert">{{ e | t }}</div>
+      }
+    }
+  </gp-modal>
+}

@@ -262,6 +262,18 @@ agent")`. `source: file` med `path` går til noden selv.
 `health_failed` (advarsel, nr. 8): `snapshot.health.ok` usann i 2 min (fire øyeblikksbilder) → «GET /healthz · 503 ·
 1 240 ms», løses ved første ok. `server_down` utløses ikke mens status er `sleeping`.
 
+### Grupper (fase 13)
+
+`Features/Groups`, samlingen `groups`: personlige, navngitte samlinger av noder (`ownerId`, `name` 1–40 tegn,
+`memberIds[]`, `order`). `GET /api/groups` (egne, i `order`), `POST { name, memberIds? }` (201), `PATCH /api/groups/{id}
+{ name?, memberIds?, order? }`, `DELETE`. Grenser: 50 grupper per bruker, 100 medlemmer per gruppe; en node kan stå i
+flere. Medlemmer valideres mot `IAccessService.CanReadAsync` ved skriving (400 med node-id); ved lesing filtreres
+medlemmer brukeren ikke lenger ser bort uten at dokumentet endres. En slettet node fjernes fra alle grupper i
+`DELETE /api/servers/{id}`; sletting av konto sletter gruppene; eksporten har `groups`. Andres grupper gir 403,
+demokontoen får 403 på alle skriv. Ingen SignalR-meldinger: gruppekortet regnes i nettleseren fra `Card`-ene.
+Demomodus seeder «Acme» (`web-02`, `acme-backend`, `acme-frontend`, `db-prod`) og «Edge» (`edge-worker`, `worker-01`)
+med faste id-er `demo-acme`/`demo-edge` på eieren av demoserverne.
+
 ### Varsler (fase 7)
 
 **Motoren (`Features/Alerts`).** `AlertEngine` er en singleton med tilstand per (server, regel, instans): `ok` → `pending`

@@ -42,6 +42,9 @@
     </div>
     <div class="chips" role="group" [attr.aria-label]="'filter' | t">
       <button type="button" class="chip" [class.on]="allActive()" [attr.aria-pressed]="allActive()" (click)="clearAll()">{{ 'all' | t }}</button>
+      @if (groupFilter(); as g) {
+        <button type="button" class="chip on" data-testid="group-chip" (click)="clearGroupFilter()" [attr.aria-label]="('remove' | t) + ' ' + g.name">{{ 'groupLabel' | t }}: {{ g.name }} <span aria-hidden="true">×</span></button>
+      }
       @for (tag of tags(); track tag) {
         <button type="button" class="chip" [class.on]="filters().tag === tag" [attr.aria-pressed]="filters().tag === tag" (click)="toggleTag(tag)">{{ tag }}</button>
       }
@@ -55,7 +58,17 @@
       }
       <button type="button" class="chip" [class.on]="filters().alert" [attr.aria-pressed]="filters().alert" (click)="toggleAlert()"><span class="dot dot--warn" aria-hidden="true"></span>{{ 'hasAlert' | t }}</button>
     </div>
-    @if (cards().length === 0) {
+    @if (groupsView()) {
+      @if (groups().length === 0) {
+        <p class="empty" data-testid="no-groups">{{ 'noGroupsYet' | t }}</p>
+      } @else {
+        <div class="grid" role="list" [attr.aria-label]="'groups' | t" data-testid="groups-grid">
+          @for (g of groups(); track g.id) {
+            <gp-group-card role="listitem" [id]="g.id" (move)="moveGroup(g.id, $event)" (showAsCards)="showGroupAsCards($event)" />
+          }
+        </div>
+      }
+    } @else if (cards().length === 0) {
       <p class="empty muted">{{ 'loading' | t }}</p>
     } @else if (visibleCards().length === 0) {
       <p class="empty">{{ 'noMatch' | t }}</p>

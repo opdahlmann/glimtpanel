@@ -1,8 +1,8 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { ConfigService } from './config.service';
 
-/** Flaggene fra GLIMT_FEATURE_FLAGS (example.env): textmode,snapshot,share,compact,groups,whatsnew,certs,containersPage,crossLogs. */
-export type FeatureFlag = 'textmode' | 'snapshot' | 'share' | 'compact' | 'groups' | 'whatsnew' | 'certs' | 'containersPage' | 'crossLogs';
+/** Flaggene fra GLIMT_FEATURE_FLAGS (example.env): textmode,snapshot,share,compact,whatsnew,certs,containersPage,crossLogs. `groups` er levert (fase 13) og finnes ikke lenger som flagg. */
+export type FeatureFlag = 'textmode' | 'snapshot' | 'share' | 'compact' | 'whatsnew' | 'certs' | 'containersPage' | 'crossLogs';
 
 @Injectable({ providedIn: 'root' })
 export class FeatureFlags {
@@ -14,7 +14,6 @@ export class FeatureFlags {
   readonly snapshot = computed(() => this.all().has('snapshot'));
   readonly share = computed(() => this.all().has('share'));
   readonly compact = computed(() => this.all().has('compact'));
-  readonly groups = computed(() => this.all().has('groups'));
   readonly whatsNew = computed(() => this.all().has('whatsnew'));
   readonly certs = computed(() => this.all().has('certs'));
   readonly crossLogs = computed(() => this.all().has('crossLogs'));

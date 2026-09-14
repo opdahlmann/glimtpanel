@@ -41,7 +41,7 @@ describe('ConfigService', () => {
     expect(service.config()).toEqual(remote);
     expect(service.loaded()).toBe(true);
     expect(service.hasFlag('textmode')).toBe(true);
-    expect(service.hasFlag('groups')).toBe(false);
+    expect(service.hasFlag('whatsnew')).toBe(false);
     expect(warn).not.toHaveBeenCalled();
   });
 

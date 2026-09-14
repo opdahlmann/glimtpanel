@@ -64,6 +64,13 @@ public static class DemoData
         new("edge-worker", ["edge"], "ghcr.io/acme/edge-worker:0.7.3", 1, 512, false, null, [new("queue", "rabbit:5672")], null, null, "02:00", "06:00", 17, 44, [], [9100]),
     ];
 
+    /// <summary>The demo groups (step 13.3): id, name, order, member names (prefixed with <see cref="ServerIdPrefix"/>).</summary>
+    public static readonly (string Id, string Name, int Order, string[] Members)[] Groups =
+    [
+        ("demo-acme", "Acme", 0, ["web-02", "acme-backend", "acme-frontend", "db-prod"]),
+        ("demo-edge", "Edge", 1, ["edge-worker", "worker-01"]),
+    ];
+
     public static readonly string[] ContainerKinds = ["web", "api", "db", "redis", "worker", "proxy", "cron", "mail", "search", "queue", "cache"];
 
     public static readonly Dictionary<string, string> Images = new(StringComparer.Ordinal)

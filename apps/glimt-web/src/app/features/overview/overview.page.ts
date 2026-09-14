@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ConnectionService } from '@core/connection.service';
 import { FeatureFlags } from '@core/feature-flags';
+import { GroupsStore } from '@core/groups.store';
 import { I18nService } from '@core/i18n.service';
 import { LiveService } from '@core/live.service';
 import { LiveStore } from '@core/live.store';
@@ -19,6 +22,7 @@ import { AddContainerDialogComponent, AddContainerStep } from './add-container/a
 import { AddServerDialogComponent, AddStep } from './add-server/add-server-dialog.component';
 import { ContainerCardComponent } from './container-card/container-card.component';
 import { EnrolPanelComponent } from './enrol/enrol-panel.component';
+import { GroupCardComponent } from './group-card/group-card.component';
 import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, sortCards, toggleAlert, toggleKind, toggleStatus, toggleTag } from './overview.model';
 import { ServerCardComponent } from './server-card/server-card.component';
 
@@ -36,7 +40,7 @@ const SORT_LABEL_KEYS = { name: 'name', cpu: 'cpu', mem: 'memory', disk: 'disk',
  */
 @Component({
   selector: 'gp-overview-page',
-  imports: [FormsModule, InputComponent, SelectComponent, SegmentComponent, ButtonComponent, ServerCardComponent, ContainerCardComponent, EnrolPanelComponent, AddServerDialogComponent, AddContainerDialogComponent, TPipe],
+  imports: [FormsModule, InputComponent, SelectComponent, SegmentComponent, ButtonComponent, ServerCardComponent, ContainerCardComponent, GroupCardComponent, EnrolPanelComponent, AddServerDialogComponent, AddContainerDialogComponent, TPipe],
   templateUrl: './overview.page.html',
   styleUrl: './overview.page.css',
   host: { '(document:keydown)': 'onDocumentKeydown($event)', '(document:click)': 'onDocumentClick($event)' },
@@ -51,6 +55,9 @@ export class OverviewPage {
   private readonly serverList = inject(ServerListService);
   private readonly flags = inject(FeatureFlags);
   private readonly conn = inject(ConnectionService);
+  private readonly groupsStore = inject(GroupsStore);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   private readonly searchField = viewChild<InputComponent, ElementRef<HTMLElement>>(InputComponent, { read: ElementRef });
   private readonly grid = viewChild<ElementRef<HTMLElement>>('grid');
@@ -70,18 +77,31 @@ export class OverviewPage {
   readonly hasNodes = computed(() => this.counts().containers > 0);
   readonly titleKey = computed<'nodes' | 'servers'>(() => (this.hasNodes() ? 'nodes' : 'servers'));
   readonly tags = computed(() => collectTags(this.cards()));
-  readonly visibleCards = computed(() => sortCards(filterCards(this.cards(), this.debouncedSearch(), this.filters()), this.sort()));
-  readonly allActive = computed(() => isAllActive(this.filters()));
+  /** `?group=id` (fase 13, «Show as cards»): kortvisningen begrenset til gruppens medlemmer, vist som chip «Group: Acme ×». */
+  private readonly groupParam = toSignal(this.route.queryParamMap, { initialValue: this.route.snapshot.queryParamMap });
+  readonly groupFilter = computed(() => {
+    const id = this.groupParam()?.get('group');
+    return id ? (this.groupsStore.byId().get(id) ?? null) : null;
+  });
+  readonly groups = this.groupsStore.groups;
+  readonly visibleCards = computed(() => {
+    const group = this.groupFilter();
+    const cards = group ? this.cards().filter((c) => group.memberIds.includes(c.id)) : this.cards();
+    return sortCards(filterCards(cards, this.debouncedSearch(), this.filters()), this.sort());
+  });
+  readonly allActive = computed(() => isAllActive(this.filters()) && !this.groupFilter());
 
   readonly sortOptions = computed<SelectOption<SortKey>[]>(() => SORT_KEYS.map((k) => ({ value: k, label: `${this.i18n.t('sort')}: ${this.i18n.t(SORT_LABEL_KEYS[k])}` })));
   readonly viewOptions = computed<SegmentOption<ViewKey>[]>(() => {
     const opts: SegmentOption<ViewKey>[] = [{ value: 'cards', label: this.i18n.t('cards') }];
     if (this.flags.compact()) opts.push({ value: 'compact', label: this.i18n.t('compact') });
-    if (this.flags.groups()) opts.push({ value: 'groups', label: this.i18n.t('groups') });
+    // Grupper er levert (fase 13): visningen finnes alltid.
+    opts.push({ value: 'groups', label: this.i18n.t('groups') });
     return opts;
   });
-  /** Segmentet rendres ikke når bare én visning er tilgjengelig (MVP). */
+  /** Segmentet rendres når flere visninger finnes (alltid fra fase 13). */
   readonly showViewSegment = computed(() => this.viewOptions().length > 1);
+  readonly groupsView = computed(() => this.view() === 'groups');
 
   /** Klokken i sammendraget («live · 08:14:05»). */
   private readonly now = signal(Date.now());
@@ -124,6 +144,7 @@ export class OverviewPage {
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(this.live.subscribeOverview());
     void this.serverList.load().catch((err: unknown) => console.warn('[overview] could not load the server list', err));
+    void this.groupsStore.load().catch((err: unknown) => console.warn('[overview] could not load the groups', err));
     destroyRef.onDestroy(
       this.live.onServerAdded((card) => {
         // Skjerm 3: mens vi venter (tom-tilstanden eller dialogens trinn 0) hopper dialogen til trinn 2 (indeks 1).
@@ -164,6 +185,23 @@ export class OverviewPage {
 
   clearAll(): void {
     this.prefs.filters.set(clearFilters());
+    if (this.groupFilter()) this.clearGroupFilter();
+  }
+
+  clearGroupFilter(): void {
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { group: null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
+  // ---- grupper (fase 13) ---------------------------------------------------------------------------
+
+  /** «Show as cards» på gruppekortet: kortvisningen med `?group=id`. */
+  showGroupAsCards(id: string): void {
+    this.prefs.view.set('cards');
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { group: id }, queryParamsHandling: 'merge' });
+  }
+
+  moveGroup(id: string, dir: -1 | 1): void {
+    void this.groupsStore.move(id, dir).catch((err: unknown) => console.warn('[overview] could not move the group', err));
   }
 
   toggleTag(tag: string): void {

@@ -1,5 +1,5 @@
 @if (open()) {
-  <div class="overlay" tabindex="-1" (click)="onOverlay($event)" (keydown)="onKeydown($event)">
+  <div class="overlay" [class.sheet]="sheet()" tabindex="-1" (click)="onOverlay($event)" (keydown)="onKeydown($event)">
     <div #card class="card" role="dialog" aria-modal="true" [attr.aria-label]="title() || null" [style.max-width.px]="maxWidth()" tabindex="-1">
       <div class="head">
         <div class="title">{{ title() }}</div>

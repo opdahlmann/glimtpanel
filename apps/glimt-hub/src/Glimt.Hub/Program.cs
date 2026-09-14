@@ -5,6 +5,7 @@ using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Auth;
 using Glimt.Hub.Features.Buffer;
 using Glimt.Hub.Features.Demo;
+using Glimt.Hub.Features.Groups;
 using Glimt.Hub.Features.Health;
 using Glimt.Hub.Features.Live;
 using Glimt.Hub.Features.Servers;
@@ -51,6 +52,7 @@ builder.Services
     .AddBufferFeature(options)
     .AddLiveFeature(options)
     .AddServersFeature()
+    .AddGroupsFeature()
     .AddDemoFeature(options);
 
 var app = builder.Build();
@@ -75,6 +77,7 @@ app.MapAlertsFeature();
 app.MapBufferFeature();
 app.MapLiveFeature();
 app.MapServersFeature();
+app.MapGroupsFeature();
 app.MapDemoFeature();
 
 app.Run();

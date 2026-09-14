@@ -1,0 +1,46 @@
+/* Gruppekortet (skjerm 23): serverkortets ramme, summer som chips, kompakte medlemsrader. Kun tokens. */
+:host { display: block; min-width: 0; border-radius: var(--radius-window); outline-offset: 3px; }
+:host(.dim) .card { opacity: .6; }
+.card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden; height: 100%;
+  background: var(--color-glass); border-radius: var(--radius-window); box-shadow: var(--shadow-window);
+  transition: opacity var(--t-data);
+}
+.stripe { height: 3px; flex: none; transition: background var(--t-hover); }
+.title { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 2px 14px; }
+.name { font-size: 13px; font-weight: 700; color: var(--w-90); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status { display: flex; align-items: center; gap: 6px; flex: none; }
+.more {
+  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -8px -6px 0; padding: 0;
+  background: none; border: 0; color: var(--w-60); cursor: pointer; border-radius: 50%;
+}
+.dots { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; line-height: 1; transition: background var(--t-hover), color var(--t-hover); }
+.dots::before { content: '⋯'; }
+.more:hover .dots, .more:focus-visible .dots { background: var(--s-8); color: var(--w-100); }
+.summary { padding: 0 14px 10px; font-size: 10.5px; color: var(--w-45); }
+.chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0 12px; }
+.members { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; }
+.member {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border: 0; border-radius: var(--radius-row);
+  background: var(--s-5); box-shadow: var(--hairline-card); color: var(--w-85); font-size: 11px; cursor: pointer; text-align: left; width: 100%;
+  transition: background var(--t-hover);
+}
+.member:hover { background: var(--s-8); }
+.mname { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mnum { color: var(--w-60); white-space: nowrap; }
+.items { display: flex; flex-direction: column; gap: 2px; }
+.item {
+  display: flex; align-items: center; min-height: 44px; padding: 0 10px; border: 0; border-radius: var(--radius-chip); background: transparent;
+  color: var(--w-85); font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; width: 100%; transition: background var(--t-hover);
+}
+.item:hover:not(:disabled) { background: var(--s-5); }
+.item:disabled { cursor: default; opacity: .6; }
+.item.danger { color: var(--color-crit); }
+.row { display: flex; justify-content: flex-end; gap: 8px; }
+.hint { font-size: 11px; color: var(--w-45); padding: 6px 10px; }
+.error { font-size: 11px; color: var(--color-crit); }
+/* Mobil: medlemsraden bryter så tallene havner på egen linje. */
+@media (max-width: 759.98px) {
+  .member { flex-wrap: wrap; padding-block: 6px; }
+  .mnum { flex-basis: 45%; }
+}

@@ -84,6 +84,11 @@ internal sealed class MongoIndexes(MongoContext mongo, ILogger<MongoIndexes> log
             ],
             cancellationToken);
 
+        var groups = mongo.Db.GetCollection<Groups.GroupDocument>(Groups.GroupDocument.Collection);
+        await groups.Indexes.CreateOneAsync(
+            new CreateIndexModel<Groups.GroupDocument>(Builders<Groups.GroupDocument>.IndexKeys.Ascending(g => g.OwnerId), new CreateIndexOptions { Name = "ownerId" }),
+            cancellationToken: cancellationToken);
+
         var grants = mongo.Db.GetCollection<AccessGrantDocument>(AccessGrantDocument.Collection);
         await grants.Indexes.CreateManyAsync(
             [

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Glimt.Hub.Features.Agents;
 using Glimt.Hub.Features.Agents.Protocol;
 using Glimt.Hub.Features.Auth;
+using Glimt.Hub.Features.Groups;
 using Glimt.Hub.Infrastructure;
 using Glimt.Hub.Infrastructure.Access;
 using Glimt.Hub.Infrastructure.Auth;
@@ -252,6 +253,7 @@ public static class ServersEndpoints
         IAccessService access,
         IServerStore servers,
         IServerLifecycle lifecycle,
+        GroupStore groups,
         CancellationToken cancellationToken)
     {
         if (!await access.IsOwnerAsync(principal.RequireUserId(), id, cancellationToken))
@@ -266,6 +268,8 @@ public static class ServersEndpoints
         }
 
         await lifecycle.ServerRemovedAsync(id, cancellationToken);
+        // A deleted node leaves every group (step 13.1).
+        await groups.RemoveMemberAsync(id, cancellationToken);
         var kind = NodeKinds.Normalize(doc.Kind);
         return kind == NodeKinds.Container
             ? Results.Ok(new DeleteServerResponse(null, kind, RemoveSidecarHint))

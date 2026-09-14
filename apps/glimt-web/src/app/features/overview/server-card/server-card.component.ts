@@ -10,6 +10,7 @@ import { ChipComponent } from '@shared/chip/chip.component';
 import { LiveDotComponent } from '@shared/live-dot/live-dot.component';
 import { RingComponent } from '@shared/ring/ring.component';
 import { SparklineComponent } from '@shared/sparkline/sparkline.component';
+import { NodeMenuComponent } from '../node-menu/node-menu.component';
 import { cardView } from './card-view';
 
 export type CardPanel = 'cpu' | 'mem' | 'disk';
@@ -27,7 +28,7 @@ interface Frame {
  */
 @Component({
   selector: 'gp-server-card',
-  imports: [RingComponent, ChipComponent, BadgeComponent, LiveDotComponent, SparklineComponent, TPipe],
+  imports: [RingComponent, ChipComponent, BadgeComponent, LiveDotComponent, SparklineComponent, NodeMenuComponent, TPipe],
   templateUrl: './server-card.component.html',
   styleUrl: './server-card.component.css',
   host: {
@@ -35,7 +36,7 @@ interface Frame {
     '[class.dim]': 'view()?.dimmed',
     '[attr.aria-label]': 'view()?.ariaLabel',
     '[attr.data-status]': 'view()?.status',
-    '(keydown.enter)': 'open()',
+    '(keydown.enter)': 'onEnter($event)',
   },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -83,6 +84,12 @@ export class ServerCardComponent {
 
   open(): void {
     void this.router.navigate(['/servers', this.id()]);
+  }
+
+  /** Enter på selve kortet åpner serveren; Enter inne i ⋯-menyen (dialogen) gjør ikke det. */
+  onEnter(e: Event): void {
+    if ((e.target as HTMLElement | null)?.closest('gp-node-menu')) return;
+    this.open();
   }
 
   openPanel(panel: CardPanel): void {

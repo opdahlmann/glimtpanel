@@ -506,6 +506,15 @@ export interface RotateKeyResponse {
   oldTokenValidUntil: string;
 }
 
+/** `GET /api/groups` (fase 13): en personlig, navngitt samling av noder. `memberIds` er filtrert til det brukeren ser. */
+export interface GroupDto {
+  id: string;
+  name: string;
+  memberIds: string[];
+  order: number;
+  createdAt: string;
+}
+
 /** `DELETE /api/servers/{id}`. */
 export interface DeleteServerResponse {
   uninstallCommand: string | null;
