@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Agents.Protocol;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Buffer;
 
 namespace Glimt.Hub.Features.Agents;
@@ -37,6 +38,7 @@ public sealed record CardDto(
     bool? RebootRequired,
     int FailedServices,
     int ActiveAlerts,
+    string? AlertSeverity,
     int?[] CpuLastHour,
     int?[] MemLastHour);
 
@@ -71,8 +73,9 @@ public sealed record ServerDto(
 /// <summary>Builds the Card and Server projections from a session (and the buffer for the sparklines).</summary>
 public static class Projections
 {
-    public static CardDto Card(AgentSession session, ServerBuffer? buffer, DateTimeOffset now)
+    public static CardDto Card(AgentSession session, ServerBuffer? buffer, DateTimeOffset now, AlertSummary? alerts = null)
     {
+        alerts ??= AlertSummary.None;
         var snapshot = session.LastSnapshot;
         var host = MergedHost(session);
         var containers = MergedContainers(session);
@@ -129,7 +132,8 @@ public static class Projections
             maintenance?.SecurityUpdates,
             maintenance?.RebootRequired,
             snapshot?.Services?.Failed?.Count ?? 0,
-            0,
+            alerts.Count,
+            alerts.WorstSeverity,
             HistoryQuery.LastHourPercent(buffer, "cpu", now),
             HistoryQuery.LastHourPercent(buffer, "mem", now));
     }

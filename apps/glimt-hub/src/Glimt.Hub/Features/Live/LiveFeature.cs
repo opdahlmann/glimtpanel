@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Infrastructure;
 
 namespace Glimt.Hub.Features.Live;
@@ -16,6 +17,7 @@ public static class LiveFeature
         services.AddSingleton<LivePublisher>();
         services.AddSingleton<ILivePublisher>(sp => sp.GetRequiredService<LivePublisher>());
         services.AddSingleton<ILogReceiver>(sp => sp.GetRequiredService<LivePublisher>());
+        services.AddSingleton<IAlertSink, LiveAlertSink>();
 
         if (WebOrigin(options) is { } origin)
         {

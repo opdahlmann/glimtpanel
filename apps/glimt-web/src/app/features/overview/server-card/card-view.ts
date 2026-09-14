@@ -61,9 +61,10 @@ export function osShort(card: Pick<CardDto, 'os' | 'versionId'>): string {
   return card.os ?? '';
 }
 
-export function severityColor(card: Pick<CardDto, 'activeAlerts' | 'status'>): string {
-  // Alvorsgrad per varsel kommer i fase 7 (AlertStore); til da teller alle aktive varsler som kritiske.
+export function severityColor(card: Pick<CardDto, 'activeAlerts' | 'status' | 'alertSeverity'>): string {
   if (card.status === 'paused' || !(card.activeAlerts > 0)) return 'transparent';
+  if (card.alertSeverity === 'warning') return 'var(--color-warn)';
+  if (card.alertSeverity === 'info') return 'var(--color-info)';
   return 'var(--color-crit)';
 }
 

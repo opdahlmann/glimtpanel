@@ -1,0 +1,51 @@
+<div class="page">
+  <gp-logo [size]="56" />
+  <h1 class="title">{{ 'pwaTitle' | t }}</h1>
+  <p class="sub">{{ 'pwaSub' | t }}</p>
+
+  <ol class="steps">
+    <li class="step" [class.hl]="needsHomeScreen()" [class.ok]="pwa.standalone()">
+      <span class="n num" aria-hidden="true">1</span>
+      <div>
+        <div class="stitle">{{ 'pwa1' | t }}</div>
+        <div class="ssub">{{ 'pwa1s' | t }}</div>
+      </div>
+    </li>
+    <li class="step" [class.ok]="done()">
+      <span class="n num" aria-hidden="true">2</span>
+      <div>
+        <div class="stitle">{{ 'pwa2' | t }}</div>
+        <div class="ssub">{{ 'pwa2s' | t }}</div>
+      </div>
+    </li>
+  </ol>
+
+  @if (showInstall()) {
+    <section class="glass" data-testid="install-card">
+      <div class="gtext">{{ 'installDesktop' | t }}</div>
+      @if (pwa.installed()) {
+        <span class="pill"><span class="pdot" aria-hidden="true"></span>{{ 'installed' | t }}</span>
+      } @else {
+        <gp-button variant="primary" (click)="install()">{{ 'install' | t }}</gp-button>
+      }
+    </section>
+  }
+
+  <div class="actions">
+    @if (done()) {
+      <span class="pill" role="status" data-testid="push-on"><span class="pdot" aria-hidden="true"></span>{{ 'pwaDone' | t }}</span>
+    } @else if (needsHomeScreen()) {
+      <p class="hint" data-testid="ios-hint">{{ 'iosHomeScreen' | t }}</p>
+    } @else if (denied()) {
+      <p class="hint warn" data-testid="push-denied">{{ 'pushDenied' | t }}</p>
+    } @else if (unsupported()) {
+      <p class="hint" data-testid="push-unsupported">{{ 'pushNotSupported' | t }}</p>
+    } @else {
+      @if (failed()) {
+        <p class="hint warn">{{ 'pushError' | t }}</p>
+      }
+      <gp-button variant="primary" size="lg" [loading]="asking()" (click)="enable()">{{ 'enableNotif' | t }}</gp-button>
+    }
+    <gp-button variant="ghost" (click)="later()">{{ (done() ? 'done' : 'later') | t }}</gp-button>
+  </div>
+</div>

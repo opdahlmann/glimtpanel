@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Access;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Auth;
 using Glimt.Hub.Infrastructure;
 using MongoDB.Driver;
@@ -91,6 +92,27 @@ internal sealed class MongoIndexes(MongoContext mongo, ILogger<MongoIndexes> log
                 new CreateIndexModel<AccessGrantDocument>(
                     Builders<AccessGrantDocument>.IndexKeys.Ascending(g => g.OwnerId).Ascending(g => g.Email),
                     new CreateIndexOptions { Name = "ownerId_email_unique", Unique = true }),
+            ],
+            cancellationToken);
+
+        var alerts = mongo.Db.GetCollection<AlertDocument>(AlertDocument.Collection);
+        await alerts.Indexes.CreateManyAsync(
+            [
+                new CreateIndexModel<AlertDocument>(Builders<AlertDocument>.IndexKeys.Ascending(a => a.OwnerId).Descending(a => a.FiredAt), new CreateIndexOptions { Name = "ownerId_firedAt" }),
+                new CreateIndexModel<AlertDocument>(Builders<AlertDocument>.IndexKeys.Ascending(a => a.ServerId).Ascending(a => a.State), new CreateIndexOptions { Name = "serverId_state" }),
+            ],
+            cancellationToken);
+
+        var alertSettings = mongo.Db.GetCollection<AlertSettingsDocument>(AlertSettingsDocument.Collection);
+        await alertSettings.Indexes.CreateOneAsync(
+            new CreateIndexModel<AlertSettingsDocument>(Builders<AlertSettingsDocument>.IndexKeys.Ascending(s => s.UserId), new CreateIndexOptions { Name = "userId_unique", Unique = true }),
+            cancellationToken: cancellationToken);
+
+        var push = mongo.Db.GetCollection<PushSubscriptionDocument>(PushSubscriptionDocument.Collection);
+        await push.Indexes.CreateManyAsync(
+            [
+                new CreateIndexModel<PushSubscriptionDocument>(Builders<PushSubscriptionDocument>.IndexKeys.Ascending(p => p.UserId), new CreateIndexOptions { Name = "userId" }),
+                new CreateIndexModel<PushSubscriptionDocument>(Builders<PushSubscriptionDocument>.IndexKeys.Ascending(p => p.Endpoint), new CreateIndexOptions { Name = "endpoint_unique", Unique = true }),
             ],
             cancellationToken);
     }

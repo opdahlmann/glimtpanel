@@ -31,7 +31,8 @@ export function uniqueEmail(prefix: string, testInfo: TestInfo): string {
 /** Unikt vertsnavn per prosjekt og kjøring (huben avviser et navn som allerede finnes). */
 export function uniqueHostname(testInfo: TestInfo): string {
   const project = testInfo.project.name.replace(/[^a-z0-9]+/g, '-');
-  return `web-${project}-${Date.now().toString(36).slice(-5)}`;
+  // Tid + tilfeldig hale: to tester i samme prosjekt kan starte i samme millisekund (parallelle arbeidere).
+  return `web-${project}-${Date.now().toString(36).slice(-5)}${Math.random().toString(36).slice(2, 5)}`;
 }
 
 /** En falsk agent bruker nøkkelen: serveren dukker opp for eieren som ServerAdded. */

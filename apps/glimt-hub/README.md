@@ -9,7 +9,8 @@ Dette er «det gående skjelettet» fra steg 0.9, bygget i den formen som skal l
 Fase 2 del A er på plass: auth (steg 2.2), konto og plasser (2.3), servere og nøkler (2.4), tilganger (2.8),
 Ubuntu-støtte, eksport og sletting (2.9). Del B også: agentregister med engangsnøkler, rotasjon og loggrelé (2.5),
 ringbuffer med historikk og lagring (2.6), SignalR-projeksjonene `Card`/`Server` med MessagePack (2.7) og demo-/e2e-modus
-(2.10). Varsler kommer i fase 7.
+(2.10). Fase 7 gir varselmotoren, kanalene (egen Web Push, e-post, webhook), daglig oppsummering og endepunktene for
+varsler og varselinnstillinger (steg 7.1–7.2), se «Varsler» under.
 
 ## Kjøre
 
@@ -71,7 +72,7 @@ Alle har prefiks `GLIMT_` og er beskrevet i `example.env`. Huben bruker:
 | `GLIMT_BUFFER_PATH` | | – | Mappe for `buffer.bin` (24-timersbufferen). Tom = ingen lagring, bufferen lever bare i minnet |
 | `GLIMT_DEMO_MODE` | | `false` | Demomodus: 16 falske servere på demokontoen og `POST /api/demo/session`. Alltid på når `GLIMT_ENV=e2e` |
 | `GLIMT_APPMAIL_URL`, `GLIMT_APPMAIL_API_KEY`, `GLIMT_MAIL_FROM` | | – | E-post via appmail. Tom URL = `ConsoleEmailSender` (e-posten med lenken logges) |
-| `GLIMT_VAPID_PUBLIC`, `GLIMT_VAPID_PRIVATE`, `GLIMT_VAPID_SUBJECT` | | – | Web Push (steg 7.2) |
+| `GLIMT_VAPID_PUBLIC`, `GLIMT_VAPID_PRIVATE`, `GLIMT_VAPID_SUBJECT` | | – | Web Push (steg 7.2): P-256-paret fra `vapid-keys` (base64url, rå 65-byte punkt og 32-byte skalar) og `mailto:`-adressen i VAPID-tokenet. Tomme = push av, med en advarsel ved oppstart; alt annet virker |
 
 Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før noe annet starter.
 
@@ -87,7 +88,7 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 | `GET /api/servers/{id}/history?metric=&range=1h\|24h` | Bearer + lesetilgang. `metric` = `cpu`, `mem`, `swap`, `disk:<sti>`, `net:<grensesnitt>`, `cont:<container-id>` (CPU %) eller `cont:<container-id>:mem` (minne % av grensen). Svar `{ metric, range, stepMs, from, to, values[] }` (`net:` gir `rx[]`/`tx[]` i stedet for `values`); `null` der bufferen mangler punkt |
 | `POST /api/demo/session` | Kun i demomodus: `{ accessToken (1 t), expiresAt, user }` for `demo@glimtpanel.com` (leser). 404 ellers |
 | `POST /api/dev/token` | Kun `development`/`e2e`: `{ email }` → samme form, for en eksisterende bruker (brukes av `scripts/live-tail.mjs --dev-token`) |
-| `POST /api/e2e/{disconnect-server\|reconnect-server\|fail-service\|advance}` | Kun `GLIMT_ENV=e2e`: `{ serverId?, unit?, seconds? }` styrer de falske serverne; `advance` flytter hubens klokke og kjører nede-deteksjonen |
+| `POST /api/e2e/{disconnect-server\|reconnect-server\|fail-service\|advance}` | Kun `GLIMT_ENV=e2e`: `{ serverId?, unit?, seconds? }` styrer de falske serverne; `advance` flytter hubens klokke og kjører nede-deteksjonen og varselsveipet; `disconnect-server` med `seconds` bakdaterer «sist sett» og kjører de samme sveipene, så «Server down» utløses uten å flytte klokken for alle andre |
 | `POST /api/e2e/enrol-fake-agent` | Kun `GLIMT_ENV=e2e`: `{ key, hostname? }` – en falsk agent bruker en ekte engangsnøkkel fra `POST /api/servers/enrol-key` (én gang; 404 ukjent/utløpt/brukt, 409 navnet finnes) og starter som ny server (`demo-<hostname>`, standard `web-03`, 2 kjerner, 4 GB, uten historikk) eid av nøkkelens eier. Eieren får `ServerAdded` (skjerm 3) |
 | `GET /api/e2e/agent-streams` | Kun `GLIMT_ENV=e2e`: `{ total, byServer: { serverId: antall } }` åpne loggstrømmer i `LogRelay` (fase 6: «ingen strøm står igjen etter at siden forlates») |
 | `POST /api/e2e/ensure-user` | Kun `GLIMT_ENV=e2e`: `{ email, password?, readerOf? }` – bekreftet testkonto (standardpassord `GlimtE2E-2026!`, idempotent). `readerOf: "all"` gir akseptert lesetilgang til demoserverne (skjerm 18); uten gir en eier uten servere (skjerm 3) |
@@ -115,6 +116,15 @@ Rate limiting: `auth`-policyen (10/min per IP i produksjon) på register/confirm
 | `GET /api/subscription` | Bearer | `{ slotsUsed, slotsFree: 2, slotsBeta, plan, plannedPricePerSlotUsd: 12, discountPct (50 for earlyAdopter), wouldCostUsd, wouldCostWithDiscountUsd, noticeDays: 60 }`. Beta har ingen grense; modellen bare teller |
 | `GET /api/account/export` | Bearer | Vedlegg `glimtpanel-export.json`: `user` (uten hash), `servers` (med tagger, uten token-hash), `accessGrants` {`given`, `received`}, `alertSettings`, `alerts`, `pushSubscriptions` (kun endpoint/device) |
 | `DELETE /api/account` | Bearer | `{ password }` → sletter servere (agentene får beskjed via `IServerLifecycle`), nøkler, tilganger begge veier, tokens, varselinnstillinger, push-abonnementer og brukeren. 204 |
+| `GET /api/alerts?state=active\|resolved\|all` | Bearer | Varsler på serverne brukeren ser, nyeste først, maks 200: `{ alerts: [ { id, serverId, serverName, rule, key, severity, state, detail, firedAt, resolvedAt, lastReminderAt, silenced, notifiedVia } ], active, resolved }`. `silenced` = serveren er stille eller dempet akkurat nå |
+| `POST /api/alerts/silence` | eier | `{ serverId, until: "1h" \| "tomorrow" \| "monday" }` → `{ serverId, silencedUntil }`. «tomorrow» og «monday» er 08:00 i brukerens tidssone (mandag = neste uke når det er mandag) |
+| `GET /api/alert-settings` | Bearer | Kontoen: `{ rules: [ { id, severity, thresholdUnit, defaultThreshold, defaultDurationSec, enabled, threshold, durationSec, overridden } ], channels: { push, email, webhookUrl, webhookSecret, pushConfigured }, digest: { enabled, time }, pushDevices: [ { id, device, createdAt } ], email }` |
+| `PUT /api/alert-settings` | Bearer | `{ rules: { <rule>: { enabled?, threshold?, durationSec? } } }` – hele kartet erstattes; terskel 1–100 % (disk, minne, prosessor) eller heltall 1–1000 (container), varighet 30 s–24 t. 400 per regel ved feil |
+| `PUT /api/channels` | Bearer | `{ push?, email?, webhookUrl? ("" fjerner), digest?: { enabled, time "HH:mm" }, rotateWebhookSecret? }` → samme svar som `GET /api/alert-settings` |
+| `POST /api/channels/webhook-test` | Bearer | Ett signert testkall til den lagrede URL-en: `{ ok, status }` |
+| `GET/PUT /api/servers/{id}/alert-settings` | eier | `{ serverId, serverName, useAccountDefaults, muted, silencedUntil, rules[] }` (`defaultThreshold` er kontoens verdi, `overridden` markerer serverens); `PUT { useAccountDefaults?, muted?, clearSilence?, rules? }` – `rules` er hele overstyringen (`servers.alertOverrides`), `useAccountDefaults: true` tømmer den |
+| `POST /api/push-subscriptions` | Bearer | `{ endpoint (https), keys: { p256dh, auth }, device }` → 201 `{ id, device, createdAt }`; samme `endpoint` erstatter (unik indeks) |
+| `DELETE /api/push-subscriptions` | Bearer | `{ endpoint }` → 204 |
 | `POST /api/servers/enrol-key` | Bearer, bekreftet e-post | `{ dockerMode: "proxy" \| "simple" \| "none" }` → `{ key: "gp_…" (22 base62-tegn), command, expiresAt (+1 t), dockerMode }`. Kun hashen lagres i `enrolKeys`; agentens `hello` bruker den én gang |
 | `GET /api/servers` | Bearer | Servere brukeren eier eller har lesetilgang til: `{ id, name, hostname, tags, status, lastSeenAt, role: "owner" \| "reader", ownerEmail?, os, kernel, arch, cores, ramBytes, dockerMode, createdAt, supportUntil, eol }`. `supportUntil`/`eol` fra Ubuntu-tabellen (20.04 → 2025-05-31, 22.04 → 2027-04-30, 24.04 → 2029-04-30, 26.04 → 2031-04-30), ellers `null`/`false`. Status og «sist sett» kommer fra registeret når serveren er kjent der |
 | `GET /api/servers/{id}` | Bearer | Samme form; 403 uten tilgang |
@@ -191,12 +201,13 @@ tilgang; gruppe `server:{id}`, sender `Server` straks), `UnsubscribeServer(id)`,
 `StopLog(streamId)`. Hub → klient: `ServerStatus(dto)` (tilkobling, frakobling, nede), `Card(dto)` (under 600 byte i
 MessagePack: `id, name, hostname, tags, status, connected, lastSeenAt, os, versionId, arch, cores, ramBytes, cpu, mem,
 diskWorst { path, pct }, netRx, netTx, containersRunning, containersTotal, containersBad, updates, securityUpdates,
-rebootRequired, failedServices, activeAlerts (0 til fase 7), cpuLastHour[120], memLastHour[120]`), `Server(dto)` (`id, name,
+rebootRequired, failedServices, activeAlerts, alertSeverity (verste: critical/warning/info), cpuLastHour[120], memLastHour[120]`), `Server(dto)` (`id, name,
 hostname, tags, status, connected, lastSeenAt, agentVersion, os, kernel, arch, cores, ramBytes, dockerMode, bootTime,
 uptimeSec, host { cpu, load, mem, mounts[], ifaces[] }, processes[], processTotals, containers[], services, maintenance,
 security, snapshotAt, streamAt` – nyeste `host` vinner, containere fra `snapshot` med cpu/mem/nett/state fra `stream`;
 sendes fullt på hvert `stream` og `snapshot`, TODO: bare snapshot-delene som er nye), `Log(streamId, lines[], dropped?)`,
-`LogEnded(streamId, reason, message?)`, `ServerAdded(card)`, `ServerRemoved(id)`. `Card`, `ServerStatus`, `ServerAdded` og
+`LogEnded(streamId, reason, message?)`, `ServerAdded(card)`, `ServerRemoved(id)`, `Alert(event)` (`{ kind: fired|resolved|reminder,
+alert: <rad som i GET /api/alerts>, activeOnServer, worstSeverity }`, til `alerts:{id}`-gruppen alle tilkoblinger er med i). `Card`, `ServerStatus`, `ServerAdded` og
 `ServerRemoved` går til `user:{id}` for alle med tilgang (`IAccessService.UserIdsWithAccessAsync`, mellomlagret 30 s, pluss
 eieren, dev-brukeren for eierløse servere utenfor produksjon og alle oversiktsabonnenter som ser serveren).
 `scripts/live-tail.mjs` viser alt dette i terminalen (`--dev-token`, `--login`, `--token` eller `--demo`; `--server`, `--log`,
@@ -218,6 +229,58 @@ Demoserverne bruker binære enheter (GiB/MiB), så «8 GB» i designet vises som
 valideres mot den ekte klokken, så et token utstedt etter en stor `advance` er «ikke gyldig ennå» til sanntid tar igjen
 (30 s slingringsmonn) – logg inn før du flytter klokken.
 
+### Varsler (fase 7)
+
+**Motoren (`Features/Alerts`).** `AlertEngine` er en singleton med tilstand per (server, regel, instans): `ok` → `pending`
+(betingelsen er sann, varigheten ikke nådd) → `firing` → `ok`. Instansen er monteringen (`disk_full`), containernavnet
+(`cont_restart`) eller enheten (`svc_failed`); vertsreglene har tom instans. `AgentIngest` kaller
+`AlertEngine.SnapshotAsync` etter hvert `snapshot` (30 s); `RuleEvaluator` er rene funksjoner over ett øyeblikksbilde og gir
+observasjonene som er sanne nå, og alt som ikke lenger observeres løses. Varigheter måles i tid siden første sanne
+øyeblikksbilde (`mem_pressure` 95 % i 5 min, `cpu_sat` 95 % i 15 min: utløses på øyeblikksbildet som kommer ≥ varigheten
+etter det første). `cont_restart` bruker `ContainerTracker` per server: stoppet etter å ha kjørt, `restarting`, eller
+`restartCount` økt med mer enn 3 innenfor 10 minutter (vinduet er `durationSec`, ikke en ventetid). `server_down` og
+påminnelsene (24 t etter forrige melding, ikke for info) evalueres i `SweepAsync` hvert 10. sekund (`AlertEngineService`,
+også fra `POST /api/e2e/advance` og `disconnect-server` med `seconds`); en agent som kobler til igjen løser `server_down`
+straks (`ServerUpAsync`). Reglene og standardene står i `AlertRules`; `AlertConfigProvider` slår sammen
+standard ← kontoens `alertSettings.rules` ← serverens `alertOverrides` og legger til `silencedUntil`/`alertsMuted` (cache
+1 min, ugyldiggjøres av endepunktene). Stille, dempet og avslått regel stopper varsling, ikke tilstandssporing: hendelsen
+merkes `Quiet`, vises i listen, sendes ikke. Alt persisteres i `alerts` (`IAlertStore`, no-op uten MongoDB); ved oppstart
+gjenopprettes `firing`-dokumentene, og det som ikke lenger gjelder løses på første øyeblikksbilde. `ActiveAlertCounts`
+gir kortet `activeAlerts` og `alertSeverity` (verste). Hendelsene går til `IAlertSink`-ene: `LiveAlertSink` (Live) sender
+`Alert(event)` til `alerts:{userId}`-gruppen som hver SignalR-tilkobling blir med i ved tilkobling (uansett side), fulgt
+av et nytt `Card`; `NotificationDispatcher` velger kanaler.
+
+**Kanaler (`Features/Alerts/Channels`).** Mottakere er alle med tilgang til serveren. Push går til hver av dem som har
+push på (alle enheter i `pushSubscriptions`); e-post og webhook kun til eieren. `server_down` og `disk_full` e-postes alltid
+til eieren; de andre reglene når e-post er på. Info-varsler (`reboot`) sendes ikke, de venter på oppsummeringen. Alle
+kanaler er `IChannel` og kaster aldri inn i motoren; `notifiedVia` på varselet får kanalene som gikk ut ved utløsing.
+E-post går gjennom `IEmailSender` (`AlertEmailTemplates`: utløst, løst, påminnelse, oppsummering på engelsk og norsk,
+tidspunkt i mottakerens tidssone) – Brevo-koblingen kommer som en `IEmailSender` bak samme grensesnitt, ingenting annet
+endres. Webhook: `POST` JSON `{ event, server: { id, name }, rule, severity, detail, at, url }` med
+`X-Glimtpanel-Signature: sha256=<hex HMAC-SHA256 av kroppen med kontoens webhookSecret>`, 5 s tidsavbrudd, tre forsøk
+(1 s, 10 s, 60 s) i bakgrunnen. `DigestService` går hvert minutt: brukere der lokal tid er `digest.time` (standard 08:00)
+får info-varslene siste døgn og alt som fortsatt står på serverne de ser, én gang per lokal dato (`lastDigestDate`),
+ingen e-post når begge er tomme.
+
+**Web Push (`Features/Alerts/Push`), egen implementasjon uten bibliotek.** `VapidKeyPair` importerer nøklene fra env;
+`VapidToken` signerer JWT `{ typ: JWT, alg: ES256 }` med `aud` (endepunktets opprinnelse), `exp` (nå + 12 t) og `sub`
+(`GLIMT_VAPID_SUBJECT`), mellomlagret per `aud` i en time, som `Authorization: vapid t=<jwt>, k=<offentlig nøkkel>`.
+`WebPushEncryptor` er RFC 8291 med `aes128gcm`: engangs P-256-nøkkel per melding, ECDH mot abonnentens `p256dh`,
+HKDF-SHA256 med `auth` som salt og info `"WebPush: info\0" ‖ ua_public ‖ as_public` → IKM, tilfeldig 16-byte salt → CEK
+og nonce, AES-128-GCM over `nyttelast ‖ 0x02`, rammehode `salt ‖ rs=4096 ‖ idlen=65 ‖ as_public`; nøkkel og salt kan
+injiseres, så testvektoren i RFC 8291 vedlegg A kjøres bit for bit. `WebPushClient` sender `POST` med
+`Content-Encoding: aes128gcm`, `TTL: 86400`, `Urgency: high` (kritisk) eller `normal`, `Topic: <serverId>-<rule>` (en
+påminnelse erstatter forrige melding); 2xx levert, 404/410 sletter abonnementet, 413 logges, 429/5xx prøves én gang til
+etter 30 s, 400/401/403 logges som VAPID-feil med `aud`. Nyttelasten er `{ title: "web-02 · Disk almost full", body:
+"/ · 92 %", url: "/servers/<id>#disk", tag: "<serverId>:<rule>" }` under 3 kB.
+
+**Tester.** `AlertEngineTests` kjører hver regel med `FakeTimeProvider` og lagre i minnet (utløser etter riktig varighet
+og ikke før, løser, påminnelse etter 24 t, stille og dempet, kontoterskel og serveroverstyring, avslått regel,
+container-vindu, gjenoppretting etter omstart, glem server). `WebPushTests`: RFC 8291 vedlegg A, VAPID verifisert med den
+offentlige nøkkelen, svarkodene og opprydding av døde abonnementer. `AlertChannelTests`: kanalvalg, quiet/info hoppes over,
+webhook-signatur og forsøk, oppsummeringstidspunkt i to tidssoner, maler, `SilenceUntil`. `AlertsTests` (MongoDB): hele
+veien fra demoserverne til listen, kortet, `Alert`-hendelsen og kanalene (falske `IChannel`), og alle endepunktene.
+
 ## Struktur
 
 ```
@@ -235,8 +298,12 @@ src/Glimt.Hub/
   Features/Access/           # /api/access: AccessGrantDocument/Store, MongoAccessService
   Features/Agents/           # /agent/ws: Protocol/ (records + JSON), AgentConnection (IAgentLink), AgentRegistry, AgentSession, AgentAuthenticator,
                              #   AgentIngest, SubscriptionCounter, LogRelay, AgentLifecycle (IServerLifecycle), DownDetector, Projections (Card/Server), UserDirectory, /api/servers/{id}/snapshot
+  Features/Alerts/           # /api/alerts, /api/alert-settings, /api/channels, /api/servers/{id}/alert-settings, /api/push-subscriptions: AlertRules, AlertEngine (+ AlertEngineService),
+                             #   RuleEvaluator (+ ContainerTracker), AlertConfigProvider, ActiveAlertCounts, AlertDocuments, IAlertStore (Mongo), AlertDtos;
+                             #   Channels/ (IChannel, PushChannel, EmailChannel + AlertEmailTemplates, WebhookChannel, NotificationDispatcher, DigestService, AlertTexts);
+                             #   Push/ (VapidKeyPair, VapidToken, WebPushEncryptor, WebPushClient)
   Features/Buffer/           # ServerBuffer (ring 2 880 × Point), BufferStore, HistoryQuery, BufferFile (MessagePack), BufferPersistence, /api/servers/{id}/history
-  Features/Live/             # SignalR LiveHub (JWT, MessagePack), ILiveClient, LiveConnections, LivePublisher (ILivePublisher + ILogReceiver), ServerStatusDto, CORS
+  Features/Live/             # SignalR LiveHub (JWT, MessagePack), ILiveClient, LiveConnections, LivePublisher (ILivePublisher + ILogReceiver), LiveAlertSink, ServerStatusDto, CORS
   Features/Demo/             # FakeAgentService + FakeServer + DemoData (glimtData.js), ShiftableTimeProvider, /api/demo/session, /api/dev/token, /api/e2e/*
   Features/Servers/          # /api/servers: servers/users-dokumenter, MongoServerStore, MongoEnrolKeyStore, ServerDtos, MongoIndexes, DevSeeder, /install
 tests/Glimt.Hub.Tests/       # xUnit + WebApplicationFactory

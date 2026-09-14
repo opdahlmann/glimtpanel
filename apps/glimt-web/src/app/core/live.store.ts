@@ -260,6 +260,13 @@ export class LiveStore {
     this.track(status.id);
   }
 
+  /** `Alert(event)`: kortets varseltall og verste alvorsgrad, uten å vente på neste `Card`. */
+  applyAlertCount(serverId: string, activeAlerts: number, alertSeverity: CardDto['alertSeverity']): void {
+    const cardSignal = this.cardSignals.get(serverId);
+    const existing = cardSignal?.();
+    if (cardSignal && existing) cardSignal.set({ ...existing, activeAlerts, alertSeverity });
+  }
+
   remove(id: string): void {
     this.cardSignals.get(id)?.set(null);
     this.serverSignals.get(id)?.set(null);
@@ -375,6 +382,7 @@ export function cardFromStatus(s: ServerStatusDto): CardDto {
     rebootRequired: null,
     failedServices: 0,
     activeAlerts: 0,
+    alertSeverity: null,
     cpuLastHour: [],
     memLastHour: [],
   };

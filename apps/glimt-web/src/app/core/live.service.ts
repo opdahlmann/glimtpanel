@@ -1,9 +1,10 @@
 import { effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
 import { ActivityMode, ActivityService } from './activity.service';
+import { AlertStore } from './alert.store';
 import { ConfigService } from './config.service';
 import { LiveStore } from './live.store';
-import { CardDto, LiveState, LogLineDto, LogRequest, ServerDto, ServerStatusDto } from './live.types';
+import { AlertEventDto, CardDto, LiveState, LogLineDto, LogRequest, ServerDto, ServerStatusDto } from './live.types';
 import { SessionService } from './session.service';
 
 /** Forsinkelser for automatisk gjenoppkobling (IMPLEMENTERINGSPLAN 3.4). */
@@ -31,6 +32,7 @@ export class LiveService {
   private readonly configService = inject(ConfigService);
   private readonly session = inject(SessionService);
   private readonly store = inject(LiveStore);
+  private readonly alerts = inject(AlertStore);
   private readonly activity = inject(ActivityService);
 
   private connection: HubConnection | null = null;
@@ -220,6 +222,11 @@ export class LiveService {
       this.touch();
       this.store.remove(id);
       for (const cb of this.removedCallbacks) cb(id);
+    });
+    connection.on('Alert', (event: AlertEventDto) => {
+      this.touch();
+      this.alerts.applyEvent(event);
+      this.store.applyAlertCount(event.alert.serverId, event.activeOnServer, event.worstSeverity);
     });
     connection.onreconnecting(() => {
       this._state.set('reconnecting');

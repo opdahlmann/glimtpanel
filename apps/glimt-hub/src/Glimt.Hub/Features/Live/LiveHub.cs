@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Buffer;
 using Glimt.Hub.Infrastructure.Access;
 using Glimt.Hub.Infrastructure.Auth;
@@ -20,6 +21,7 @@ public sealed class LiveHub(
     SubscriptionCounter subscriptions,
     LogRelay logs,
     BufferStore buffers,
+    ActiveAlertCounts alerts,
     IAccessService access,
     TimeProvider clock) : Hub<ILiveClient>
 {
@@ -29,12 +31,16 @@ public sealed class LiveHub(
 
     public static string ServerGroup(string serverId) => "server:" + serverId;
 
+    /// <summary>Every connection of a user, whatever page it shows: `Alert(event)` goes here (step 7.1).</summary>
+    public static string AlertGroup(string userId) => "alerts:" + userId;
+
     private string UserId => Context.UserIdentifier ?? Context.User?.GetUserId() ?? throw new HubException("unauthenticated");
 
-    public override Task OnConnectedAsync()
+    public override async Task OnConnectedAsync()
     {
         connections.Connected(Context.ConnectionId, UserId);
-        return base.OnConnectedAsync();
+        await Groups.AddToGroupAsync(Context.ConnectionId, AlertGroup(UserId), Context.ConnectionAborted);
+        await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
@@ -61,7 +67,7 @@ public sealed class LiveHub(
             if (registry.TryGet(id, out var session))
             {
                 await Clients.Caller.ServerStatus(ServerStatusDto.From(session));
-                await Clients.Caller.Card(Projections.Card(session, buffers.Get(id), now));
+                await Clients.Caller.Card(Projections.Card(session, buffers.Get(id), now, alerts.Get(id)));
             }
         }
     }

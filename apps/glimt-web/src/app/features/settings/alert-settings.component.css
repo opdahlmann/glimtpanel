@@ -1,0 +1,60 @@
+/* Innstillinger › Varsler (6.4, skjerm 10). Kun tokens. */
+:host { display: flex; flex-direction: column; gap: 14px; }
+.muted { margin: 0; padding: 24px 12px; text-align: center; font-size: 12px; color: var(--w-45); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.grid.single { grid-template-columns: 1fr; }
+.col { display: flex; flex-direction: column; gap: 12px; }
+.card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--radius-card); background: var(--s-5); box-shadow: inset 0 0 0 .5px var(--s-8); }
+.section { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--w-55); }
+.note { margin: 0; font-size: 11px; color: var(--w-45); }
+
+/* Per server. */
+.serverhead { display: flex; flex-direction: column; gap: 6px; }
+.back { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; min-height: 24px; padding: 0; background: none; border: 0; color: var(--w-60); font-size: 11px; font-weight: 600; cursor: pointer; }
+.back:hover { color: var(--w-100); }
+@media (pointer: coarse) { .back { min-height: 44px; } }
+.h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.serverswitches { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.silence { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--w-60); }
+.link { align-self: flex-start; min-height: 24px; padding: 0; background: none; border: 0; color: var(--color-disk); font-size: 11px; cursor: pointer; }
+@media (pointer: coarse) { .link { min-height: 44px; } }
+
+/* Regelrader. */
+.rules { display: flex; flex-direction: column; gap: 4px; }
+.rules.dim { opacity: .6; }
+.rrow { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; min-height: 44px; padding: 4px 10px; border-radius: var(--radius-row); background: var(--s-4); }
+.rrow.off .rname, .rrow.off .rdef { opacity: .55; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.rname { font-size: 12px; font-weight: 600; color: var(--w-90); }
+.rdef { flex: 1; min-width: 0; text-align: left; font-size: 11px; color: var(--w-50); background: none; border: 0; padding: 0; margin: 0; font-family: inherit; }
+button.rdef { cursor: pointer; min-height: 28px; border-radius: var(--radius-badge); text-decoration: underline dotted; text-underline-offset: 3px; }
+button.rdef:hover { color: var(--w-85); }
+@media (pointer: coarse) { button.rdef { min-height: 44px; } }
+.edit { flex: 1; display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.field { display: inline-flex; align-items: center; gap: 4px; }
+.num-in { width: 64px; min-height: 36px; padding: 0 8px; border: 0; border-radius: var(--radius-chip); outline: none; background: var(--s-8); color: var(--w-100); font-size: 12px; font-weight: 600; text-align: right; }
+.num-in:focus { box-shadow: 0 0 0 2px var(--color-cpu); }
+.unit { font-size: 11px; color: var(--w-50); }
+.switch { margin-left: auto; }
+@media (max-width: 759.98px) {
+  .rdef, .edit { flex-basis: 100%; order: 3; padding-left: 18px; }
+}
+
+/* Kanaler. */
+.chrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; box-shadow: inset 0 -.5px 0 var(--s-8); }
+.chrow:last-child { box-shadow: none; }
+.chrow.sub { padding-top: 0; padding-left: 12px; }
+.chrow.column { flex-direction: column; align-items: stretch; }
+.chmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.chname { font-size: 12px; font-weight: 600; color: var(--w-90); }
+.chsub { font-size: 11px; color: var(--w-55); overflow-wrap: anywhere; }
+.chsub.warn { color: var(--color-warn); }
+.secret { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.label { font-size: 10px; color: var(--w-45); }
+.code { font-family: var(--font-mono); font-size: 11px; color: var(--w-85); background: var(--color-ink); padding: 6px 8px; border-radius: var(--radius-chip); overflow-wrap: anywhere; }
+.timerow { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; }
+.time { width: 64px; min-height: 36px; padding: 0 8px; border: 0; border-radius: var(--radius-chip); outline: none; background: var(--s-8); color: var(--w-100); font-size: 12px; font-weight: 600; text-align: center; }
+.time:focus { box-shadow: 0 0 0 2px var(--color-cpu); }
+.time[aria-invalid="true"] { box-shadow: 0 0 0 2px var(--color-crit); }
+@media (pointer: coarse) { .time, .num-in { min-height: 44px; } }
+.foot { display: flex; justify-content: flex-end; }

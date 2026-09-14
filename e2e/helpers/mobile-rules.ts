@@ -1,5 +1,10 @@
 // Mobilsjekklisten fra IMPLEMENTERINGSPLAN 6.8, som kjørbar hjelper. Brukes på hver skjerm i mobilprosjektene.
-import { expect, type Page, type TestInfo } from '@playwright/test';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+
+/** Det som lever i navigasjonen og på kortene etter fase 7: varsel-badgen og kortets varselstripe (varsler utløses etter hvert). */
+export function navMasks(page: Page): Locator[] {
+  return [page.locator('gp-sidebar .badge'), page.locator('gp-bottom-nav .badge'), page.locator('gp-server-card .stripe')];
+}
 
 export function isMobileProject(testInfo: TestInfo): boolean {
   return testInfo.project.name.startsWith('mobile');

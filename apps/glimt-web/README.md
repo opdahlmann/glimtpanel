@@ -6,7 +6,9 @@ kjerne-tjenestene (3.4), felleskomponentene med `/dev/components` (3.5) og auth-
 på `/`: serverkortet, verktøylinje med søk, sortering og filterchips, tom-tilstanden med innrulleringskortet og dialogen
 «Legg til server» (steg 4.1–4.5). Fase 5 gir serversiden på `/servers/:id` med alle ti panelene og kurver for siste time
 og 24 timer, og containerdetaljen på `/servers/:id/containers/:cid` (steg 5.1–5.14). Fase 6 gir loggsiden på `/logs`
-(steg 6.1–6.5). Se «Serversiden» og «Loggsiden» under.
+(steg 6.1–6.5). Fase 7 gir varselsiden på `/alerts`, Innstillinger › Varsler på `/settings/alerts` (også per server),
+skjerm 14 på `/welcome`, PWA med service worker, installasjon og push (steg 7.3–7.6). Se «Serversiden», «Loggsiden»,
+«Varsler» og «PWA og push» under.
 
 ## Struktur
 
@@ -25,7 +27,9 @@ apps/glimt-web/
 │       │   ├── session.service.ts           # bruker, tilgangstoken, login/logout/refresh, isOwnerOf
 │       │   ├── live.service.ts              # SignalR (/hub/live): refcount-abonnement, adaptivt intervall, logger
 │       │   ├── live.store.ts                # signal per server (Card/Server), siste-time-ring
-│       │   ├── activity.service.ts, connection.service.ts, prefs.service.ts, clipboard.service.ts, alert.store.ts
+│       │   ├── activity.service.ts, connection.service.ts, prefs.service.ts, clipboard.service.ts
+│       │   ├── alert.store.ts, alerts.service.ts   # varslene (liste + Alert-hendelser, badgen) og REST for varsler/innstillinger (fase 7)
+│       │   ├── push.service.ts, pwa.service.ts     # Web Push i nettleseren; installasjon, hjemskjerm og «ny versjon» (steg 7.5)
 │       │   ├── guards.ts                    # authGuard, guestGuard, ownerGuard, devGuard
 │       │   ├── live.reducer.ts              # rene funksjoner fra skjelettet (applyServerStatus, sortServers)
 │       │   └── live.types.ts                # DTO-ene fra huben (CardDto, ServerDto, UserDto, …)
@@ -49,9 +53,14 @@ apps/glimt-web/
 │           │   └── panels/                  # gp-cpu-panel, gp-mem-panel, gp-disk-panel, gp-net-panel, gp-proc-panel, gp-cont-panel,
 │           │                                #   gp-svc-panel, gp-maint-panel, gp-sec-panel, gp-logs-panel (kun innhold; gp-panel er rammen)
 │           ├── container/                   # containerdetalj (rute `/servers/:id/containers/:cid`, steg 5.13)
-│           └── logs/                        # loggsiden (rute `/logs`, fase 6), se «Loggsiden» under
+│           ├── logs/                        # loggsiden (rute `/logs`, fase 6), se «Loggsiden» under
+│           ├── alerts/                      # varselsiden (rute `/alerts`, steg 7.3) + alerts.model.ts (rene funksjoner, testet)
+│           ├── settings/                    # innstillingsskallet med faner (skjerm 9–13); alert-settings.component (steg 7.4), resten i fase 8
+│           └── pwa/                         # /welcome (skjerm 14, steg 7.5)
 ├── scripts/i18n-check.mjs                   # `npm run i18n:check`: nøkkelsett og ukjente nøkler i maler
-├── public/                                  # favicon.svg; config.json genereres hit (git-ignorert)
+├── scripts/icons.mjs                        # `npm run icons`: PWA-ikonene i public/icons fra favicon.svg (Playwrights Chromium)
+├── ngsw-config.json                         # service worker: app-shell prefetch, config.json som freshness, /api og /hub aldri
+├── public/                                  # favicon.svg, manifest.webmanifest, icons/; config.json genereres hit (git-ignorert)
 ├── nginx/default.conf.template              # nginx i containeren, ${GLIMT_HUB_INTERNAL_URL} fylles inn ved start
 ├── nginx/10-glimt-resolver.envsh            # entrypoint: DNS-resolver for hub-oppslag fra /etc/resolv.conf
 ├── nginx/40-glimt-config.sh                 # entrypoint-skript som skriver config.json fra GLIMT_*-env
@@ -329,6 +338,66 @@ filter og siden kan deles internt. Hvert valg skriver hele spørrestrengen fra s
 Playwright (`e2e/tests/logs.spec.ts`) dekker kilde, prioritet, tidsrom, pause/resume, tekstfilter i URL-en, kopiering,
 containere flettet med farge og side om side, dyplenken fra en feilet tjeneste på worker-01, og at
 `GET /api/e2e/agent-streams` viser 0 strømmer for serveren etter at siden forlates.
+
+## Varsler (fase 7)
+
+`AlertStore` (`core/`) holder listen fra `GET /api/alerts?state=all` (nyeste først; løste på `resolvedAt`) og de levende
+`Alert(event)`-meldingene som `LiveService` gir videre (huben sender dem til alle tilkoblinger, uansett side). Skallet
+laster listen ved innlogging, så badgen i navigasjonen (`activeCount`) er riktig fra første skjerm; hendelsen oppdaterer
+også kortets `activeAlerts`/`alertSeverity` i `LiveStore` uten å vente på neste `Card`, og kortets stripe følger alvoret
+(rød kritisk, oransje advarsel, grå info). `AlertsService` er REST-en: stille, kontoinnstillinger, kanaler, per server,
+push-abonnementer.
+
+- **Varselsiden** (`features/alerts/`, skjerm 8 og 17): sammendrag «5 active · 3 resolved», segment Active / Resolved /
+  All, rader med prikk (rød/oransje/info, grønn når løst), servernavn (→ serversiden), regel + detalj (→ panelet:
+  `#disk`, `#mem`, `#cpu`, `#cont`, `#maint`; «Service failed» → `/logs?server=&source=journal&unit=`), badges «silenced» og
+  «Resolved 02:15», tid som «08:11» / «yesterday 23:10» / «Sep 7 14:20» i brukerens tidssone, og «Silence» for eiere med
+  1 hour / Until tomorrow / Until Monday som glir inn under raden (`POST /api/alerts/silence`, regnet i brukerens
+  tidssone av huben). Tom-tilstanden er grønn. Regelseksjonen viser de sju reglene med standard fra
+  `GET /api/alert-settings`, så justerte terskler vises («> 90 % for 10 min» bygges av deler i `alerts.model.ts`),
+  alvor-badge, «Off» når regelen er av, og oppsummeringsteksten med kontoens klokkeslett.
+- **Innstillinger › Varsler** (`features/settings/alert-settings.component`, skjerm 10): «Default thresholds» med én rad per
+  regel (prikk, navn, standard som tekst; klikk gir små tallfelt for prosent/antall og minutter, Enter/Esc lukker; bryter
+  av/på), Kanaler (Push med antall enheter og navn fra `pushDevices` og en egen bryter for *denne* enheten, E-post med
+  adressen og «Always on for server down and disk full», Webhook med URL, hemmelighet med Show/Copy/New secret og
+  «Send test»), Daglig oppsummering (bryter + «HH:mm» som tekstfelt, 24-timers i alle nettlesere). «Save» er bare aktiv ved
+  endring (utkastet sammenlignes med det lagrede), lagrer regler (`PUT /api/alert-settings`, hele avviket fra
+  standardene) og kanaler (`PUT /api/channels`), og viser toasten «Saved». Med `?server=:id` (fra serversidens «Alert
+  settings»): «‹ web-02», «Alerts for web-02», bryterne «Use account defaults» og «Mute all alerts for this server»,
+  «Silenced until …» med «Resume alerts», og per-regel overstyring merket «overridden» (`PUT
+  /api/servers/{id}/alert-settings` med hele overstyringen). `settings.page` er fanesegmentet (Account, Alerts, Servers,
+  Access, Subscription, Data); de andre fanene sier «Not available yet» til fase 8.
+- **PWA og push** (`features/pwa/welcome.page`, `core/push.service`, `core/pwa.service`, skjerm 14): `manifest.webmanifest`
+  (Glimtpanel, `standalone`, `#0f1013`, ikoner 192/512 + maskable fra logoen, `start_url /`), service worker fra
+  `@angular/service-worker` (`provideServiceWorker`, kun i produksjonsbygg; `ngsw-config.json` prefetcher app-skallet,
+  henter `config.json` med `freshness` og rører aldri `/api`, `/hub`, `/agent`), `apple-touch-icon` og
+  `black-translucent`-statuslinje for iOS. `/welcome`: logo 56, «Get alerts on your phone», to nummererte trinn, på
+  desktop et glasskort «Install Glimtpanel as an app on this computer» når nettleseren gir `beforeinstallprompt`
+  (`PwaService.install()`), «Turn on notifications» (48 px) → `Notification.requestPermission` →
+  `SwPush.requestSubscription({ serverPublicKey: config.vapidPublic })` → `POST /api/push-subscriptions` med enhetsnavn
+  («iPhone · Safari», «Mac · Chrome» fra `userAgentData`/UA) → grønn pille «Notifications are on for this device»;
+  «Later». På iPhone i Safari (ikke hjemskjerm, `navigator.standalone === false`) er trinn 1 fremhevet og knappen byttet ut
+  med forklaringen om hjemskjermen. Avslått tillatelse og manglende støtte forklares. Siden vises første gang appen
+  åpnes på mobil etter innlogging (`PrefsService.welcomeSeen`, skallet sender dit én gang) og fra «Show me» i
+  legg-til-server-dialogen. Et klikk på et push-varsel navigerer til `url` i nyttelasten (`notificationClicks`).
+  `SwUpdate` gir banneret «New version available · Reload» øverst i skallet. Utenom produksjon kan Playwright sette
+  `window.__gpFakePush = 'granted' | 'denied'`: tillatelsen svarer slik og abonnementet simuleres lokalt, siden `ng serve`
+  ikke har service worker og WebKit på iPhone ikke har `Notification`.
+
+**Manuell sjekkliste for push (før fasen lukkes, ikke gjennomført ennå):** hub med `GLIMT_VAPID_*` satt og
+`GLIMT_WEB_PUBLIC_URL` på https; produksjonsbygg av web (service worker); (1) Chrome på macOS: `/welcome` → «Turn on
+notifications» → enhet vises under Innstillinger › Varsler › Push; utløs et varsel (`POST /api/e2e/fail-service` i e2e,
+eller fyll en disk) → push kommer, klikk åpner serveren/loggene; (2) Firefox og Safari på macOS likt; (3) iPhone: åpne i
+Safari → Del → Legg til på Hjem-skjerm → åpne fra hjemskjermen → `/welcome` → varsler på → push mottas låst skjerm;
+(4) Android Chrome: installer fra banneret → varsler på → push mottas; (5) e-post til eieren for «Disk almost full» og
+webhook mot en `requestbin`-URL med gyldig signatur.
+
+Playwright (`e2e/tests/alerts.spec.ts`, `settings-alerts.spec.ts`, `welcome.spec.ts`) dekker skjerm 8, 10, 14 og 17 i alle
+tre prosjektene: radene fra demoserverne, badgen, stille, segmentene, dyplenkene, redigering av terskler og kanaler med
+«Save» kun ved endring, per-server-visningen med overstyring og demp, skjerm 14 med falsk push (og iPhone-varianten i
+WebKit), installasjonskortet på desktop, første besøk på mobil → `/welcome`, og ende til ende: `disconnect-server` med
+bakdatert «sist sett» gir «Server down» i listen og badgen uten omlasting, `reconnect-server` løser det. Varsel-badgen og
+kortets stripe maskeres i alle skjermbildene (varsler utløses etter hvert som demoserverne lever).
 
 ## Dockerfile
 

@@ -10,6 +10,13 @@ main { flex: 1; padding: 24px 28px 40px; max-width: 100%; min-width: 0; }
   animation: pdIn var(--t-panel) var(--ease-out-expo);
 }
 :host(:not(.mobile)) .offline { margin: 16px 28px 0; }
+.update {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 12px 0; padding: 8px 12px;
+  border-radius: var(--radius-card); background: color-mix(in srgb, var(--color-disk) 8%, transparent);
+  box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--color-disk) 25%, transparent); font-size: 12px;
+  animation: pdIn var(--t-panel) var(--ease-out-expo);
+}
+:host(:not(.mobile)) .update { margin: 16px 28px 0; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-crit); animation: blink 1.2s infinite; }
 .strong { font-weight: 600; color: var(--w-85); }
 .sub { color: var(--w-60); }

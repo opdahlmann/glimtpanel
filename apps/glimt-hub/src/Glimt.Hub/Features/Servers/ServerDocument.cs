@@ -1,3 +1,4 @@
+using Glimt.Hub.Features.Alerts;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Glimt.Hub.Features.Servers;
@@ -28,6 +29,16 @@ public sealed class ServerDocument
     public int Cores { get; set; }
     public long RamBytes { get; set; }
     public string? DockerMode { get; set; }
+
+    /// <summary>Per-server rule overrides (step 7.4): rule id → enabled/threshold/durationSec. Empty or null = account defaults.</summary>
+    public Dictionary<string, RuleSettingDocument>? AlertOverrides { get; set; }
+
+    /// <summary>Notifications are suppressed until this time (POST /api/alerts/silence); the state machine keeps running.</summary>
+    public DateTime? SilencedUntil { get; set; }
+
+    /// <summary>«Mute all alerts for this server»: like a silence without an end.</summary>
+    public bool AlertsMuted { get; set; }
+
     public DateTime CreatedAt { get; set; }
 }
 

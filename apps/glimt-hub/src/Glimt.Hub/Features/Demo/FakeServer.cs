@@ -174,6 +174,12 @@ public sealed class FakeServer
                 continue;
             }
 
+            // A restart loop restarts about every 30 s; the counter climbs so the cont_restart rule (> 3 in 10 min) fires (step 7.1).
+            if (c.State == "restarting" && UptimeSeconds % 30 == 0)
+            {
+                c.RestartCount++;
+            }
+
             c.CpuPct = Clamp(c.CpuPct + Rnd(-1.5, 1.5), 0.1, 60);
             c.MemMb = Clamp(c.MemMb + Rnd(-6, 6), 10, c.LimitMb > 0 ? c.LimitMb : 2000);
             c.NetIn = Clamp(c.NetIn + Rnd(-0.3, 0.3), 0, 10);
@@ -402,7 +408,7 @@ public sealed class FakeContainer
     public double CpuPct { get; set; }
     public double MemMb { get; set; }
     public int LimitMb { get; init; }
-    public int RestartCount { get; init; }
+    public int RestartCount { get; set; }
     public int ImageAgeDays { get; init; }
     public required string Health { get; init; }
     public long UpSeconds { get; init; }

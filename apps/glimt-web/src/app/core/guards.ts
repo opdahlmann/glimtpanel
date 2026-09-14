@@ -1,6 +1,8 @@
 import { inject } from '@angular/core';
 import { ActivatedRouteSnapshot, CanActivateFn, CanMatchFn, Router, RouterStateSnapshot, UrlSegment } from '@angular/router';
+import { BreakpointService } from '@shared/util/breakpoint.service';
 import { ConfigService } from './config.service';
+import { PrefsService } from './prefs.service';
 import { SessionService } from './session.service';
 
 /** Stiene under AuthShellComponent. */
@@ -12,12 +14,24 @@ export const AUTH_PATHS = ['login', 'register', 'forgot', 'reset', 'confirm'];
  */
 export const authShellMatch: CanMatchFn = (_route, segments: UrlSegment[]) => AUTH_PATHS.includes(segments[0]?.path ?? '');
 
-/** Venter på første oppfriskningsforsøk, og sender uinnloggede til `/login?next=<url>`. */
+/**
+ * Venter på første oppfriskningsforsøk, og sender uinnloggede til `/login?next=<url>`. Første gang appen åpnes på mobil
+ * etter innlogging går `/` til `/welcome` (skjerm 14), én gang per nettleser (`gp.welcomeSeen`, steg 7.5).
+ */
 export const authGuard: CanActivateFn = async (_route, state: RouterStateSnapshot) => {
   const session = inject(SessionService);
   const router = inject(Router);
+  // inject() må skje før første await (injeksjonskonteksten varer bare synkront).
+  const prefs = inject(PrefsService);
+  const breakpoint = inject(BreakpointService);
   await session.whenReady();
-  if (session.isAuthenticated()) return true;
+  if (session.isAuthenticated()) {
+    if ((state.url === '/' || state.url === '') && breakpoint.isMobile() && !prefs.welcomeSeen.value() && !session.demoMode()) {
+      prefs.welcomeSeen.set(true);
+      return router.createUrlTree(['/welcome']);
+    }
+    return true;
+  }
   const next = state.url && state.url !== '/' ? state.url : null;
   return router.createUrlTree(['/login'], { queryParams: next ? { next } : {} });
 };

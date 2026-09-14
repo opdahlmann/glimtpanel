@@ -54,6 +54,12 @@ public sealed class JwtTokens
         return _handler.CreateToken(descriptor);
     }
 
+    public static readonly TimeSpan ClockSkew = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Lifetime is checked against the injected clock (not the machine clock), so in e2e a token issued after
+    /// POST /api/e2e/advance is valid right away and one issued before it expires as the shifted clock says.
+    /// </summary>
     public TokenValidationParameters ValidationParameters => new()
     {
         ValidateIssuer = true,
@@ -63,7 +69,12 @@ public sealed class JwtTokens
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = _key,
         ValidateLifetime = true,
-        ClockSkew = TimeSpan.FromSeconds(30),
+        ClockSkew = ClockSkew,
+        LifetimeValidator = (notBefore, expires, _, _) =>
+        {
+            var now = _clock.GetUtcNow().UtcDateTime;
+            return (notBefore is null || notBefore.Value <= now + ClockSkew) && (expires is null || expires.Value >= now - ClockSkew);
+        },
         NameClaimType = JwtRegisteredClaimNames.Name,
         RoleClaimType = "role",
     };

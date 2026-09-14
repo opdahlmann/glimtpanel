@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Infrastructure;
 using Glimt.Hub.Infrastructure.Auth;
 
@@ -91,7 +92,7 @@ public static class DemoFeature
                 return Results.Ok(new { total = byServer.Values.Sum(), byServer });
             });
 
-            app.MapPost("/api/e2e/{action}", async (string action, E2eRequest? request, FakeAgentService demo, E2eUsers e2eUsers, ShiftableTimeProvider clock, DownDetector down, CancellationToken ct) =>
+            app.MapPost("/api/e2e/{action}", async (string action, E2eRequest? request, FakeAgentService demo, E2eUsers e2eUsers, ShiftableTimeProvider clock, DownDetector down, AlertEngine alerts, CancellationToken ct) =>
             {
                 request ??= new E2eRequest(null, null, null);
                 switch (action)
@@ -107,7 +108,18 @@ public static class DemoFeature
                             ? Results.Ok(new { ok = true, id = ensured.Id, email = ensured.Email, created = ensured.Created, reader = ensured.Reader })
                             : Results.Json(new { error = ensured.Error }, statusCode: ensured.Status);
                     case "disconnect-server":
-                        return await demo.DisconnectAsync(request.ServerId, ct) ? Results.Ok(new { ok = true }) : Results.NotFound();
+                        if (!await demo.DisconnectAsync(request.ServerId, request.Seconds, ct))
+                        {
+                            return Results.NotFound();
+                        }
+
+                        if (request.Seconds is > 0)
+                        {
+                            await down.SweepAsync(persist: false, ct);
+                            await alerts.SweepAsync(ct);
+                        }
+
+                        return Results.Ok(new { ok = true });
                     case "reconnect-server":
                         return await demo.ReconnectAsync(request.ServerId, ct) ? Results.Ok(new { ok = true }) : Results.NotFound();
                     case "fail-service":
@@ -115,6 +127,7 @@ public static class DemoFeature
                     case "advance":
                         clock.Advance(TimeSpan.FromSeconds(request.Seconds is > 0 ? request.Seconds.Value : 60));
                         await down.SweepAsync(persist: false, ct);
+                        await alerts.SweepAsync(ct);
                         return Results.Ok(new { ok = true, now = clock.GetUtcNow().ToString("o"), offsetSec = (long)clock.Offset.TotalSeconds });
                     default:
                         return Results.NotFound(new { error = "unknown e2e action; use disconnect-server, reconnect-server, fail-service, advance, enrol-fake-agent or ensure-user" });

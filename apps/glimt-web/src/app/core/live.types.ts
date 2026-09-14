@@ -59,6 +59,8 @@ export interface CardDto {
   rebootRequired: boolean | null;
   failedServices: number;
   activeAlerts: number;
+  /** Verste alvorsgrad blant aktive varsler: critical, warning, info eller null. */
+  alertSeverity: AlertSeverity | null;
   /** 120 punkter à 30 s, hele prosent, null der bufferen mangler. */
   cpuLastHour: (number | null)[];
   memLastHour: (number | null)[];
@@ -287,6 +289,104 @@ export interface LoginResponse {
 }
 
 export type ServerRole = 'owner' | 'reader';
+
+// ---- varsler (fase 7) --------------------------------------------------------------------------
+
+export type AlertRuleId = 'server_down' | 'disk_full' | 'mem_pressure' | 'cpu_sat' | 'cont_restart' | 'svc_failed' | 'reboot';
+export const ALERT_RULE_IDS: readonly AlertRuleId[] = ['server_down', 'disk_full', 'mem_pressure', 'cpu_sat', 'cont_restart', 'svc_failed', 'reboot'];
+export type AlertSeverity = 'critical' | 'warning' | 'info';
+export type AlertState = 'firing' | 'resolved';
+export type AlertEventKind = 'fired' | 'resolved' | 'reminder';
+export type ThresholdUnit = 'percent' | 'seconds' | 'count' | 'none';
+
+/** Én rad på varselsiden og nyttelasten i `Alert(event)` (Features/Alerts/AlertDtos.cs). */
+export interface AlertDto {
+  id: string;
+  serverId: string;
+  serverName: string;
+  rule: AlertRuleId;
+  key: string;
+  severity: AlertSeverity;
+  state: AlertState;
+  detail: string;
+  firedAt: string;
+  resolvedAt: string | null;
+  lastReminderAt: string | null;
+  silenced: boolean;
+  notifiedVia: string[];
+}
+
+/** Hub → klient `Alert(event)`. */
+export interface AlertEventDto {
+  kind: AlertEventKind;
+  alert: AlertDto;
+  activeOnServer: number;
+  worstSeverity: AlertSeverity | null;
+}
+
+export interface AlertListResponse {
+  alerts: AlertDto[];
+  active: number;
+  resolved: number;
+}
+
+export type SilenceChoice = '1h' | 'tomorrow' | 'monday';
+
+export interface RuleInfoDto {
+  id: AlertRuleId;
+  severity: AlertSeverity;
+  thresholdUnit: ThresholdUnit;
+  defaultThreshold: number | null;
+  defaultDurationSec: number | null;
+  enabled: boolean;
+  threshold: number | null;
+  durationSec: number | null;
+  overridden: boolean;
+}
+
+export interface RuleSettingDto {
+  enabled?: boolean | null;
+  threshold?: number | null;
+  durationSec?: number | null;
+}
+
+export interface ChannelsDto {
+  push: boolean;
+  email: boolean;
+  webhookUrl: string | null;
+  webhookSecret: string;
+  pushConfigured: boolean;
+}
+
+export interface DigestDto {
+  enabled: boolean;
+  time: string;
+}
+
+export interface PushDeviceDto {
+  id: string;
+  device: string;
+  createdAt: string;
+}
+
+/** `GET /api/alert-settings` (skjerm 10). */
+export interface AlertSettingsDto {
+  rules: RuleInfoDto[];
+  channels: ChannelsDto;
+  digest: DigestDto;
+  pushDevices: PushDeviceDto[];
+  email: string;
+}
+
+/** `GET /api/servers/{id}/alert-settings` (skjerm 10 med ?server=). */
+export interface ServerAlertSettingsDto {
+  serverId: string;
+  serverName: string;
+  useAccountDefaults: boolean;
+  muted: boolean;
+  silencedUntil: string | null;
+  rules: RuleInfoDto[];
+}
 
 /** `GET /api/servers` og `GET /api/servers/{id}`. */
 export interface ServerListItem {

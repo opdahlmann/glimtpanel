@@ -104,10 +104,11 @@ test.describe('innlogging', () => {
     try {
       await expect(page.getByRole('heading', { name: 'Servere' })).toBeVisible();
       if (!isMobileProject(testInfo)) {
-        await expect(page.locator('gp-sidebar nav a')).toHaveText(['Servere', 'Logger', 'Varsler', 'Innstillinger']);
+        // «Varsler» har badgen med antall aktive varsler etter seg (fase 7).
+        await expect(page.locator('gp-sidebar nav a')).toHaveText([/^Servere$/, /^Logger$/, /^Varsler\d*$/, /^Innstillinger$/]);
         await expect(page.locator('gp-sidebar').getByText('av Kodetank')).toBeVisible();
       } else {
-        await expect(page.locator('gp-bottom-nav a')).toHaveText(['Servere', 'Logger', 'Varsler', 'Innstillinger']);
+        await expect(page.locator('gp-bottom-nav a')).toHaveText([/^Servere$/, /^Logger$/, /^Varsler\d*$/, /^Innstillinger$/]);
       }
       expect((await saved).ok()).toBeTruthy();
       // valget huskes i localStorage

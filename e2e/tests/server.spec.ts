@@ -4,7 +4,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { loginViaApi } from '../helpers/auth';
 import { forceLang } from '../helpers/e2e-api';
-import { expectMobileRules, isMobileProject } from '../helpers/mobile-rules';
+import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
 const PANELS = ['cpu', 'mem', 'disk', 'net', 'proc', 'cont', 'svc', 'maint', 'sec', 'logs'];
 
@@ -32,6 +32,7 @@ function liveMasks(page: Page): Locator[] {
     page.locator('gp-log-view'),
     page.locator('gp-sec-panel .attempt'),
     page.locator('gp-sec-panel .user'),
+    ...navMasks(page),
   ];
 }
 

@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Agents.Protocol;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Buffer;
 using Glimt.Hub.Infrastructure.Servers;
 
@@ -15,11 +16,15 @@ public sealed class AgentLifecycle(
     SubscriptionCounter subscriptions,
     LogRelay logs,
     ILivePublisher live,
+    AlertEngine alerts,
+    IAlertStore alertStore,
     TimeProvider clock,
     ILogger<AgentLifecycle> logger) : IServerLifecycle
 {
     public async Task ServerRemovedAsync(string serverId, CancellationToken cancellationToken)
     {
+        await alerts.ForgetAsync(serverId, cancellationToken);
+        await alertStore.DeleteByServerAsync(serverId, cancellationToken);
         if (!registry.TryGet(serverId, out var session))
         {
             buffer.Remove(serverId);

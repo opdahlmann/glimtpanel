@@ -1,3 +1,4 @@
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Infrastructure;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -32,6 +33,12 @@ public interface IServerStore
 
     /// <summary>Moves tokenHash to previousTokenHash (valid until the given time) and stores the new hash.</summary>
     Task<bool> RotateTokenAsync(string serverId, string newTokenHash, DateTime previousTokenValidUntil, CancellationToken cancellationToken);
+
+    /// <summary>Sets silencedUntil (null clears it). False when the server is unknown.</summary>
+    Task<bool> SilenceAsync(string serverId, DateTime? until, CancellationToken cancellationToken);
+
+    /// <summary>Replaces the rule overrides (null = unchanged, empty = use account defaults) and/or the mute flag; returns the new document.</summary>
+    Task<ServerDocument?> UpdateAlertSettingsAsync(string serverId, Dictionary<string, RuleSettingDocument>? overrides, bool? muted, bool clearSilence, CancellationToken cancellationToken);
 }
 
 internal sealed class MongoServerStore(MongoContext mongo, ILogger<MongoServerStore> logger) : IServerStore
@@ -198,5 +205,51 @@ internal sealed class MongoServerStore(MongoContext mongo, ILogger<MongoServerSt
         ]);
         var result = await Servers.UpdateOneAsync(s => s.Id == serverId, Builders<ServerDocument>.Update.Pipeline(pipeline), cancellationToken: cancellationToken);
         return result.MatchedCount > 0;
+    }
+
+    public async Task<bool> SilenceAsync(string serverId, DateTime? until, CancellationToken cancellationToken)
+    {
+        if (!mongo.IsAvailable)
+        {
+            return false;
+        }
+
+        var result = await Servers.UpdateOneAsync(s => s.Id == serverId, Builders<ServerDocument>.Update.Set(s => s.SilencedUntil, until), cancellationToken: cancellationToken);
+        return result.MatchedCount > 0;
+    }
+
+    public async Task<ServerDocument?> UpdateAlertSettingsAsync(string serverId, Dictionary<string, RuleSettingDocument>? overrides, bool? muted, bool clearSilence, CancellationToken cancellationToken)
+    {
+        if (!mongo.IsAvailable)
+        {
+            return null;
+        }
+
+        var updates = new List<UpdateDefinition<ServerDocument>>();
+        if (overrides is not null)
+        {
+            updates.Add(Builders<ServerDocument>.Update.Set(s => s.AlertOverrides, overrides.Count == 0 ? null : overrides));
+        }
+
+        if (muted is { } m)
+        {
+            updates.Add(Builders<ServerDocument>.Update.Set(s => s.AlertsMuted, m));
+        }
+
+        if (clearSilence)
+        {
+            updates.Add(Builders<ServerDocument>.Update.Set(s => s.SilencedUntil, null));
+        }
+
+        if (updates.Count == 0)
+        {
+            return await FindAsync(serverId, cancellationToken);
+        }
+
+        return await Servers.FindOneAndUpdateAsync(
+            s => s.Id == serverId,
+            Builders<ServerDocument>.Update.Combine(updates),
+            new FindOneAndUpdateOptions<ServerDocument> { ReturnDocument = ReturnDocument.After },
+            cancellationToken);
     }
 }

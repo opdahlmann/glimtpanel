@@ -1,0 +1,61 @@
+/* Varselsiden (6.4, skjerm 8 og 17). Padding kommer fra skallet. Kun tokens. */
+:host { display: block; }
+.page { max-width: var(--page-max); display: flex; flex-direction: column; gap: 14px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em; }
+.summary { font-size: 11px; color: var(--w-45); }
+.muted { margin: 0; padding: 24px 12px; text-align: center; font-size: 12px; color: var(--w-45); }
+
+/* Skjerm 17: grønt tonet tom-kort. */
+.empty {
+  padding: 22px 16px; border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-ram) 8%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--color-ram) 25%, transparent);
+}
+.empty-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--w-90); }
+.edot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ram); flex: none; }
+.empty-sub { margin-top: 6px; font-size: 12px; color: var(--w-60); line-height: 1.5; }
+
+/* Rader som gp-row: --s-5, radius 9, hårlinje, min 44 px, bryter på mobil. */
+.rows { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; min-height: 44px; background: var(--s-5); border-radius: var(--radius-row); box-shadow: var(--hairline-card); }
+.main { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.server, .rule {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0; margin: 0; background: none; border: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-badge);
+}
+.server { font-size: 12px; font-weight: 600; color: var(--w-100); }
+.server:hover, .rule:hover .rname { text-decoration: underline; }
+.rule { flex: 1; min-width: 0; flex-wrap: wrap; }
+.rname { font-size: 12px; color: var(--w-85); }
+.detail { font-size: 11px; color: var(--w-50); }
+.badges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.when { font-size: 11px; color: var(--w-45); white-space: nowrap; margin-left: auto; }
+.snooze { flex: none; }
+.choices { display: flex; gap: 6px; flex-wrap: wrap; padding-left: 18px; animation: pdIn var(--t-panel); }
+@media (pointer: coarse) {
+  .server, .rule { min-height: 44px; }
+}
+@media (max-width: 759.98px) {
+  .rule { flex-basis: 100%; order: 2; }
+  .badges { order: 3; }
+  .when { order: 1; }
+  .snooze { order: 4; margin-left: auto; }
+  .choices { padding-left: 0; }
+}
+
+/* Regelseksjonen. */
+.rules { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.section { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--w-55); }
+.rulelist { display: flex; flex-direction: column; gap: 4px; }
+.rrow { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; min-height: 36px; padding: 6px 10px; border-radius: var(--radius-row); background: var(--s-4); }
+.rrow.off { opacity: .55; }
+.rrow .rname { font-weight: 600; }
+.rdef { flex: 1; min-width: 0; font-size: 11px; color: var(--w-50); }
+.digest { margin: 4px 0 0; font-size: 11px; color: var(--w-60); }
+.digest.off { color: var(--w-45); }
+.note { margin: 0; font-size: 11px; color: var(--w-45); }
+@media (max-width: 759.98px) {
+  .rdef { flex-basis: 100%; order: 3; padding-left: 18px; }
+}

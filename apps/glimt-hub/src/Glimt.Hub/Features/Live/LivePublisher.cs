@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Glimt.Hub.Features.Agents;
 using Glimt.Hub.Features.Agents.Protocol;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Buffer;
 using Glimt.Hub.Infrastructure;
 using Glimt.Hub.Infrastructure.Access;
@@ -19,6 +20,7 @@ internal sealed class LivePublisher(
     LiveConnections connections,
     SubscriptionCounter subscriptions,
     BufferStore buffers,
+    ActiveAlertCounts alerts,
     IAccessService access,
     UserDirectory users,
     GlimtOptions options,
@@ -55,7 +57,7 @@ internal sealed class LivePublisher(
         var groups = await UserGroupsAsync(session.ServerId, session.OwnerId, cancellationToken);
         if (groups.Count > 0)
         {
-            await hub.Clients.Groups(groups).ServerAdded(Projections.Card(session, buffers.Get(session.ServerId), clock.GetUtcNow()));
+            await hub.Clients.Groups(groups).ServerAdded(Card(session));
         }
     }
 
@@ -104,14 +106,33 @@ internal sealed class LivePublisher(
         }
 
         _lastCard[session.ServerId] = now;
-        await hub.Clients.Groups(groups).Card(Projections.Card(session, buffers.Get(session.ServerId), clock.GetUtcNow()));
+        await hub.Clients.Groups(groups).Card(Card(session));
     }
+
+    /// <summary>A forced Card (name/tags changed, alert fired or resolved).</summary>
+    public async Task CardAsync(AgentSession session, CancellationToken cancellationToken) =>
+        await SendCardAsync(session, await UserGroupsAsync(session.ServerId, session.OwnerId, cancellationToken), force: true);
+
+    /// <summary>`Alert(event)` to every connection of everyone who can see the server (the alerts:{id} groups), whatever page they are on (step 7.1).</summary>
+    public async Task AlertAsync(AlertEventDto alertEvent, string? ownerId, CancellationToken cancellationToken)
+    {
+        var groups = (await UserIdsAsync(alertEvent.Alert.ServerId, ownerId, cancellationToken)).Select(LiveHub.AlertGroup).ToArray();
+        if (groups.Length > 0)
+        {
+            await hub.Clients.Groups(groups).Alert(alertEvent);
+        }
+    }
+
+    private CardDto Card(AgentSession session) => Projections.Card(session, buffers.Get(session.ServerId), clock.GetUtcNow(), alerts.Get(session.ServerId));
 
     /// <summary>
     /// user:{id} groups for: the access service's readers (cached 30 s), the owner, the dev user for
     /// ownerless servers in development, and every overview subscriber whose visible set has the server.
     /// </summary>
-    private async Task<IReadOnlyList<string>> UserGroupsAsync(string serverId, string? ownerId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<string>> UserGroupsAsync(string serverId, string? ownerId, CancellationToken cancellationToken) =>
+        (await UserIdsAsync(serverId, ownerId, cancellationToken)).Select(LiveHub.UserGroup).ToArray();
+
+    private async Task<HashSet<string>> UserIdsAsync(string serverId, string? ownerId, CancellationToken cancellationToken)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var id in await AccessIdsAsync(serverId, cancellationToken))
@@ -129,7 +150,7 @@ internal sealed class LivePublisher(
         }
 
         ids.UnionWith(connections.OverviewUsersSeeing(serverId));
-        return ids.Select(LiveHub.UserGroup).ToArray();
+        return ids;
     }
 
     private async Task<string[]> AccessIdsAsync(string serverId, CancellationToken cancellationToken)

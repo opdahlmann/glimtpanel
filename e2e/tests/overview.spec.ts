@@ -4,12 +4,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import { gotoOverviewLoggedIn, loginViaApi } from '../helpers/auth';
 import { ensureReader, forceLang } from '../helpers/e2e-api';
-import { expectMobileRules, isMobileProject } from '../helpers/mobile-rules';
+import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
 const DEMO_NAMES = ['web-01', 'web-02', 'api-prod', 'db-prod', 'worker-01', 'cache-01', 'staging-web', 'staging-db', 'acme-app', 'acme-db', 'nordic-shop', 'nordic-db', 'nas', 'pi-hole', 'media', 'backup'];
 
 function liveMasks(page: Page) {
-  return [page.locator('gp-ring'), page.locator('gp-chip'), page.locator('gp-sparkline'), page.getByTestId('summary'), page.locator('gp-server-card .info')];
+  return [page.locator('gp-ring'), page.locator('gp-chip'), page.locator('gp-sparkline'), page.getByTestId('summary'), page.locator('gp-server-card .info'), ...navMasks(page)];
 }
 
 /** Alle 16 demoserverne står i oversikten (første Card kommer rett etter SubscribeOverview). */
@@ -68,7 +68,7 @@ test.describe('oversikten', () => {
     await page.waitForTimeout(700);
     await expect(page).toHaveScreenshot('overview.png', { fullPage: true, mask: liveMasks(page) });
     // Ett kort per tilstand i begge bredder (steg 4.2). Pauset finnes ikke i demodataene ennå (pause er Neste).
-    await expect(web02).toHaveScreenshot('card-up.png', { mask: [web02.locator('gp-ring'), web02.locator('gp-chip'), web02.locator('gp-sparkline'), web02.locator('.info')] });
+    await expect(web02).toHaveScreenshot('card-up.png', { mask: [web02.locator('gp-ring'), web02.locator('gp-chip'), web02.locator('gp-sparkline'), web02.locator('.info'), web02.locator('.stripe')] });
     await expect(nordic).toHaveScreenshot('card-down.png', { mask: [nordic.locator('.status')] });
   });
 
@@ -89,8 +89,12 @@ test.describe('oversikten', () => {
     await chip('down').click();
     await expect(cards).toHaveCount(1);
     await expect(cards.first()).toHaveAttribute('aria-label', /^nordic-db:/);
+    await chip('All').click();
     await chip('Has alert').click();
-    await expect(cards).toHaveCount(0); // varsler kommer i fase 7
+    // Fase 7: web-02 (disk 92 %) og nordic-db (nede) har aktive varsler fra første øyeblikksbilde.
+    await expect(page.locator('gp-server-card[aria-label^="web-02:"]')).toBeVisible();
+    await expect(page.locator('gp-server-card[aria-label^="nordic-db:"]')).toBeVisible();
+    await expect(page.locator('gp-server-card[aria-label^="cache-01:"]')).toHaveCount(0);
     await chip('All').click();
 
     await page.locator('gp-select select').selectOption('cpu');

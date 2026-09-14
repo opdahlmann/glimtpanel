@@ -3,7 +3,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi } from '../helpers/auth';
 import { forceLang } from '../helpers/e2e-api';
-import { expectMobileRules } from '../helpers/mobile-rules';
+import { expectMobileRules, navMasks } from '../helpers/mobile-rules';
 
 async function gotoContainer(page: Page): Promise<void> {
   await forceLang(page, 'en');
@@ -54,7 +54,7 @@ test.describe('containersiden', () => {
     await expect(page).toHaveScreenshot('container.png', {
       fullPage: true,
       // Blokkelementer med fast bredde (en maske på inline-tekst får ny bredde når tallet bytter sifre).
-      mask: [page.locator('header .meta'), page.locator('header .status'), page.locator('gp-chart .title'), page.locator('gp-chart .plot'), page.locator('gp-chart .ticks'), page.locator('gp-log-view'), page.locator('.logbtns')],
+      mask: [page.locator('header .meta'), page.locator('header .status'), page.locator('gp-chart .title'), page.locator('gp-chart .plot'), page.locator('gp-chart .ticks'), page.locator('gp-log-view'), page.locator('.logbtns'), ...navMasks(page)],
     });
   });
 

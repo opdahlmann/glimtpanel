@@ -1,9 +1,10 @@
 using Glimt.Hub.Features.Agents;
 using Glimt.Hub.Features.Agents.Protocol;
+using Glimt.Hub.Features.Alerts;
 
 namespace Glimt.Hub.Features.Live;
 
-/// <summary>Methods the hub calls on the browser (IMPLEMENTERINGSPLAN 4.3). Alert(event) arrives in step 7.1.</summary>
+/// <summary>Methods the hub calls on the browser (IMPLEMENTERINGSPLAN 4.3).</summary>
 public interface ILiveClient
 {
     Task ServerStatus(ServerStatusDto status);
@@ -19,4 +20,7 @@ public interface ILiveClient
     Task ServerAdded(CardDto card);
 
     Task ServerRemoved(string id);
+
+    /// <summary>An alert fired, resolved or reminded (step 7.1), to everyone who can see the server.</summary>
+    Task Alert(AlertEventDto alertEvent);
 }

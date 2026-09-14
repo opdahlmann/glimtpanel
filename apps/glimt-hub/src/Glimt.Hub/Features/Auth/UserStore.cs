@@ -4,8 +4,14 @@ using MongoDB.Driver;
 
 namespace Glimt.Hub.Features.Auth;
 
+/// <summary>The part of the user store the alert dispatcher needs (faked in tests).</summary>
+public interface IUserLookup
+{
+    Task<IReadOnlyList<UserDocument>> FindByIdsAsync(IEnumerable<string> ids, CancellationToken cancellationToken);
+}
+
 /// <summary>Persistence for `users` and the `counters` sequence. Callers guard with <see cref="RequireDatabase"/>.</summary>
-public sealed class UserStore(MongoContext mongo)
+public sealed class UserStore(MongoContext mongo) : IUserLookup
 {
     public const int EarlyAdopterLimit = 100;
 
@@ -28,6 +34,10 @@ public sealed class UserStore(MongoContext mongo)
 
         return await Users.Find(Builders<UserDocument>.Filter.In(u => u.Id, list)).ToListAsync(cancellationToken);
     }
+
+    /// <summary>Every user (id, e-mail, name, zone, language); the digest walks this once a minute.</summary>
+    public async Task<IReadOnlyList<UserDocument>> ListAsync(CancellationToken cancellationToken) =>
+        mongo.IsAvailable ? await Users.Find(FilterDefinition<UserDocument>.Empty).ToListAsync(cancellationToken) : [];
 
     /// <summary>Next value of the "users" sequence (1 for the first account ever created).</summary>
     public async Task<long> NextUserNumberAsync(CancellationToken cancellationToken)

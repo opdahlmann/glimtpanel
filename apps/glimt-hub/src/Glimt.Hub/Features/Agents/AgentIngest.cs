@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Agents.Protocol;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Buffer;
 using Glimt.Hub.Features.Servers;
 
@@ -6,7 +7,7 @@ namespace Glimt.Hub.Features.Agents;
 
 /// <summary>
 /// The one path every agent event takes, whether it came over a WebSocket or from the demo fake agents:
-/// session state → ring buffer → subscriptions/log relay → Live projections → persistence.
+/// session state → ring buffer → subscriptions/log relay → Live projections → alert engine → persistence.
 /// </summary>
 public sealed class AgentIngest(
     BufferStore buffer,
@@ -14,6 +15,7 @@ public sealed class AgentIngest(
     LogRelay logs,
     ILivePublisher live,
     IServerStore store,
+    AlertEngine alerts,
     TimeProvider clock,
     ILogger<AgentIngest> logger)
 {
@@ -27,6 +29,7 @@ public sealed class AgentIngest(
 
         await store.UpsertAsync(session.ToDocument(), cancellationToken);
         await subscriptions.AgentConnectedAsync(session.ServerId, cancellationToken);
+        await SafeAsync(() => alerts.ServerUpAsync(session, cancellationToken), session, "alerts");
     }
 
     public async Task DisconnectedAsync(AgentSession session)
@@ -42,6 +45,7 @@ public sealed class AgentIngest(
         session.StoreSnapshot(snapshot, now);
         buffer.Record(session.ServerId, ToPoint(snapshot, session.RamBytes, now));
         await SafeAsync(() => live.SnapshotAsync(session, cancellationToken), session, "snapshot");
+        await SafeAsync(() => alerts.SnapshotAsync(session, snapshot, cancellationToken), session, "alerts");
     }
 
     public async Task StreamAsync(AgentSession session, Protocol.Stream stream, CancellationToken cancellationToken)
@@ -106,7 +110,7 @@ public sealed class AgentIngest(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogDebug("live publish ({What}) for {ServerId} failed: {Error}", what, session.ServerId, ex.Message);
+            logger.LogWarning("{What} for {ServerId} failed: {Error}", what, session.ServerId, ex.Message);
         }
     }
 }

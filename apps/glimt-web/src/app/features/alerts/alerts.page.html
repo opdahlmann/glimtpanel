@@ -1,0 +1,77 @@
+<div class="page">
+  <header class="head">
+    <div class="heading">
+      <h1 class="title">{{ 'alerts' | t }}</h1>
+      <div class="summary num" data-testid="alerts-summary">{{ summary() }}</div>
+    </div>
+    <gp-segment [options]="filterOptions()" [value]="filter()" (valueChange)="setFilter($event)" [label]="'alerts' | t" />
+  </header>
+
+  @if (noActive() && filter() === 'active') {
+    <section class="empty" data-testid="no-active">
+      <div class="empty-title"><span class="edot" aria-hidden="true"></span>{{ 'noActive' | t }}</div>
+      <div class="empty-sub">{{ 'noActiveSub' | t }}</div>
+    </section>
+  } @else if (emptyList()) {
+    <p class="muted">{{ 'noAlertsHere' | t }}</p>
+  } @else if (!store.loaded()) {
+    <p class="muted">{{ 'loading' | t }}</p>
+  } @else {
+    <div class="rows" role="list" data-testid="alert-rows">
+      @for (r of rows(); track r.alert.id) {
+        <div class="row" role="listitem" [attr.data-rule]="r.alert.rule" [attr.data-server]="r.alert.serverId" [attr.data-state]="r.alert.state">
+          <div class="main">
+            <span class="dot" [style.background]="r.color" aria-hidden="true"></span>
+            <button type="button" class="server" (click)="openServer(r.alert)">{{ r.alert.serverName }}</button>
+            <button type="button" class="rule" (click)="openRule(r.alert)">
+              <span class="rname">{{ r.ruleKey | t }}</span>
+              @if (r.alert.detail) {
+                <span class="detail num">{{ r.alert.detail }}</span>
+              }
+            </button>
+            <span class="badges">
+              @if (r.alert.silenced) {
+                <gp-badge>{{ 'silenced' | t }}</gp-badge>
+              }
+              @if (r.resolvedAt) {
+                <gp-badge tone="ok">{{ 'resolved' | t }} {{ r.resolvedAt }}</gp-badge>
+              }
+            </span>
+            <span class="when num">{{ r.when }}</span>
+            @if (r.canSilence) {
+              <gp-button class="snooze" variant="ghost" size="sm" (click)="toggleSilence(r.alert)" [attr.aria-expanded]="silencing() === r.alert.id">{{ 'snooze' | t }}</gp-button>
+            }
+          </div>
+          @if (silencing() === r.alert.id) {
+            <div class="choices" role="group" [attr.aria-label]="'snooze' | t">
+              @for (c of silenceChoices; track c.value) {
+                <gp-button variant="ghost" size="sm" [loading]="busy() === r.alert.id" (click)="silence(r.alert, c.value)">{{ c.key | t }}</gp-button>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <section class="rules" aria-labelledby="rules-title">
+    <h2 id="rules-title" class="section">{{ 'rules' | t }}</h2>
+    <div class="rulelist">
+      @for (rule of rules(); track rule.id) {
+        <div class="rrow" [class.off]="!rule.enabled" [attr.data-rule]="rule.id">
+          <span class="dot" [style.background]="rule.color" aria-hidden="true"></span>
+          <span class="rname">{{ rule.nameKey | t }}</span>
+          <span class="rdef num">{{ rule.text }}</span>
+          <gp-badge [tone]="rule.severityKey === 'critical' ? 'crit' : rule.severityKey === 'warning' ? 'warn' : 'default'">{{ rule.severityKey | t }}</gp-badge>
+          @if (!rule.enabled) {
+            <gp-badge>{{ 'off' | t }}</gp-badge>
+          }
+        </div>
+      } @empty {
+        <p class="muted">{{ 'loading' | t }}</p>
+      }
+    </div>
+    <p class="digest" [class.off]="digestOff()">{{ digestOff() ? ('digestOff' | t) : digestText() }}</p>
+    <p class="note">{{ 'rulesNote' | t }}</p>
+  </section>
+</div>

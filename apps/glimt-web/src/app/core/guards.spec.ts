@@ -20,6 +20,7 @@ describe('guards', () => {
     whenReady: ReturnType<typeof vi.fn>;
     isOwnerOf: ReturnType<typeof vi.fn>;
     ownsAnyServer: ReturnType<typeof signal<boolean>>;
+    demoMode: ReturnType<typeof signal<boolean>>;
   };
   let config: { config: ReturnType<typeof signal<typeof DEFAULT_CONFIG>> };
   let router: Router;
@@ -31,6 +32,7 @@ describe('guards', () => {
       whenReady: vi.fn().mockResolvedValue(undefined),
       isOwnerOf: vi.fn().mockReturnValue(false),
       ownsAnyServer: signal(false),
+      demoMode: signal(false),
     };
     config = { config: signal({ ...DEFAULT_CONFIG }) };
     TestBed.configureTestingModule({

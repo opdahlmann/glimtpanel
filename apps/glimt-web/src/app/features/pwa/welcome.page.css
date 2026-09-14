@@ -1,0 +1,24 @@
+/* Skjerm 14 (6.4): sentrert i min-height 70vh, ingen bunnlinje (ruten har bottomNav: false). Kun tokens. */
+:host { display: block; }
+.page { min-height: 70vh; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; padding: 16px 0; }
+.title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.025em; }
+.sub { margin: -8px 0 0; font-size: 13px; color: var(--w-60); line-height: 1.5; }
+.steps { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.step { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: var(--radius-card); background: var(--s-5); box-shadow: var(--hairline-card); }
+.step.hl { box-shadow: inset 0 0 0 1px var(--color-cpu); }
+.step.ok { box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--color-ram) 40%, transparent); background: color-mix(in srgb, var(--color-ram) 8%, transparent); }
+.n { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--w-100); color: var(--color-ink); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.step.ok .n { background: var(--color-ram); }
+.stitle { font-size: 13px; font-weight: 600; color: var(--w-90); }
+.ssub { margin-top: 3px; font-size: 11px; color: var(--w-60); line-height: 1.5; }
+.glass {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px;
+  background: var(--color-glass); border-radius: var(--radius-window); box-shadow: var(--shadow-window);
+}
+.gtext { flex: 1; min-width: 160px; text-align: left; font-size: 12px; color: var(--w-85); }
+.actions { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.actions gp-button { min-width: 220px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; color: var(--color-ram); background: color-mix(in srgb, var(--color-ram) 12%, transparent); animation: pdIn var(--t-panel); }
+.pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ram); }
+.hint { margin: 0; font-size: 12px; color: var(--w-60); line-height: 1.5; max-width: 360px; }
+.hint.warn { color: var(--color-warn); }

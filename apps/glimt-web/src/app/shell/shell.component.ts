@@ -2,9 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, u
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
+import { AlertStore } from '@core/alert.store';
 import { ConnectionService } from '@core/connection.service';
 import { I18nService } from '@core/i18n.service';
 import { LiveService } from '@core/live.service';
+import { PwaService } from '@core/pwa.service';
 import { SessionService } from '@core/session.service';
 import { TPipe } from '@core/t.pipe';
 import { ButtonComponent } from '@shared/button/button.component';
@@ -18,7 +20,8 @@ import { TopbarComponent } from './topbar.component';
 /**
  * Layout-skallet (6.2, steg 3.3): bakgrunn, sidepanel på desktop, topplinje + bunnlinje på mobil (< 760 px målt på rot),
  * `<main>` med 24/28/40 px eller 12/12/24 px, frakoblet-banner og toast. Ruter med `data: { bottomNav: false }`
- * (`/welcome`) får ingen bunnlinje. Holder live-forbindelsen åpen så lenge man er innlogget.
+ * (`/welcome`) får ingen bunnlinje. Holder live-forbindelsen åpen så lenge man er innlogget, henter varslene for badgen
+ * og viser «New version · Reload» når service workeren har en ny versjon (førstegangsbesøket på mobil → `/welcome` ligger i authGuard).
  */
 @Component({
   selector: 'gp-shell',
@@ -34,6 +37,8 @@ export class ShellComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly session = inject(SessionService);
   private readonly live = inject(LiveService);
+  private readonly alerts = inject(AlertStore);
+  readonly pwa = inject(PwaService);
   readonly conn = inject(ConnectionService);
   readonly i18n = inject(I18nService);
 
@@ -55,10 +60,19 @@ export class ShellComponent {
     effect(() => {
       const authed = this.session.isAuthenticated();
       untracked(() => {
-        if (authed) this.live.start();
-        else if (this.session.ready()) void this.router.navigate(['/login']);
+        if (authed) {
+          this.live.start();
+          void this.alerts.load();
+        } else if (this.session.ready()) {
+          this.alerts.clear();
+          void this.router.navigate(['/login']);
+        }
       });
     });
+  }
+
+  reload(): void {
+    void this.pwa.reload();
   }
 
   reconnect(): void {

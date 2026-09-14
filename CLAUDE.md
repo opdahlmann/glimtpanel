@@ -67,7 +67,8 @@ npm --workspace e2e run report
 ```
 
 E2E gjenbruker kjørende servere fra `npm run dev`. Uten dem starter Playwright hub (`GLIMT_ENV=e2e`) og web selv og
-spinner opp en `mongo:8`-container med tilfeldig port (se `e2e/playwright.config.ts` og `e2e/mongo.ts`).
+spinner opp en `mongo:8`-container med tilfeldig port (se `e2e/playwright.config.ts` og `e2e/mongo.ts`). Er port 4200
+opptatt av noe annet (`lsof -nP -iTCP:4200`), kjør med `GLIMT_WEB_PORT=4210`, ellers treffer testene feil server.
 
 ## Miljø
 
@@ -100,14 +101,17 @@ Regler som aldri brytes (IMPLEMENTERINGSPLAN 4.1):
 4. 1 s-strømmen (`stream`) går bare når noen ser. 30 s-øyeblikksbildet (`snapshot`) går alltid og driver buffer og varsler.
 
 **Hub.** `Program.cs` er liten: `GlimtOptions` fra miljø, så `Add*Feature()`/`Map*Feature()` per mappe under
-`Features/` (Auth, Account, Access, Agents, Buffer, Live, Servers, Demo, Health). Tverrgående ting i `Infrastructure/`
+`Features/` (Auth, Account, Access, Agents, Alerts, Buffer, Live, Servers, Demo, Health). Tverrgående ting i `Infrastructure/`
 (Mongo, JWT, e-post bak `IEmailSender`, `IAccessService`, `IServerLifecycle` som kobler Servers/Account → Agents,
 `RequireDatabase`-filter som gir 503). Alt sanntid er prosessminne: `AgentRegistry`/`AgentSession`, `ServerBuffer`
 (ring 2 880 × 30 s per server, MessagePack til `GLIMT_BUFFER_PATH/buffer.bin` hvert 15. min og ved stopp),
 `SubscriptionCounter` (0→1 abonnent sender `subscribe` til agenten, 1→0 `unsubscribe`), `LogRelay` (streamId bundet
 til én SignalR-tilkobling). `AgentIngest` er ett inngangspunkt for alt agenten sender; demomodusens `FakeAgentService`
 skriver rett inn der uten WebSocket. SignalR-projeksjonene er `Card` (< 600 byte, oversikten) og `Server` (alt for én
-server). Tilgang avgjøres alltid gjennom `IAccessService` (synlig = egne servere ∪ servere hos eiere som har gitt meg
+server). Varsler: `AlertEngine` (tilstand per server/regel/instans, evalueres på hvert `snapshot`, sveip hvert 10. s for
+`server_down` og påminnelser) → `IAlertSink` (`LiveAlertSink` sender `Alert(event)` til gruppen `alerts:{userId}` som alle
+tilkoblinger er med i; `NotificationDispatcher` → `IChannel`: push (egen RFC 8030/8291/8292-klient i `Alerts/Push`),
+e-post via `IEmailSender`, webhook). Tilgang avgjøres alltid gjennom `IAccessService` (synlig = egne servere ∪ servere hos eiere som har gitt meg
 tilgang med `all` eller taggoverlapp). Hemmeligheter (agent-token, engangsnøkler, oppfriskningstokens) lagres kun som hash.
 Tidsavhengig kode bruker `TimeProvider` (testene bruker `FakeTimeProvider`/`ShiftableTimeProvider`).
 

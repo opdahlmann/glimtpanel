@@ -6,6 +6,12 @@
   @if (isMobile()) {
     <gp-topbar />
   }
+  @if (pwa.updateReady()) {
+    <div class="update" role="status" aria-live="polite" data-testid="update-banner">
+      <span class="strong">{{ 'newVersion' | t }}</span>
+      <gp-button class="btn" variant="primary" size="sm" (click)="reload()">{{ 'reload' | t }}</gp-button>
+    </div>
+  }
   @if (conn.offline()) {
     <div class="offline" role="status" aria-live="polite">
       <span class="dot" aria-hidden="true"></span>

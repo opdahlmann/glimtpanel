@@ -93,7 +93,10 @@ describe('cardView', () => {
     expect(gbLabel(null)).toBe('—');
     expect(osShort({ os: 'Ubuntu 24.04.3 LTS', versionId: '24.04' })).toBe('Ubuntu 24.04');
     expect(osShort({ os: 'Debian GNU/Linux 12', versionId: '12' })).toBe('Debian GNU/Linux 12');
-    expect(severityColor({ activeAlerts: 0, status: 'up' })).toBe('transparent');
-    expect(severityColor({ activeAlerts: 1, status: 'up' })).toBe('var(--color-crit)');
+    expect(severityColor({ activeAlerts: 0, status: 'up', alertSeverity: null })).toBe('transparent');
+    expect(severityColor({ activeAlerts: 1, status: 'up', alertSeverity: 'critical' })).toBe('var(--color-crit)');
+    expect(severityColor({ activeAlerts: 1, status: 'up', alertSeverity: 'warning' })).toBe('var(--color-warn)');
+    expect(severityColor({ activeAlerts: 1, status: 'up', alertSeverity: 'info' })).toBe('var(--color-info)');
+    expect(severityColor({ activeAlerts: 2, status: 'paused', alertSeverity: 'critical' })).toBe('transparent');
   });
 });

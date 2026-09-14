@@ -1,0 +1,131 @@
+@if (error(); as e) {
+  <p class="muted">{{ e | t }}</p>
+} @else if (isServer() && !serverLoaded()) {
+  <p class="muted">{{ 'loading' | t }}</p>
+} @else if (!isServer() && !loaded()) {
+  <p class="muted">{{ 'loading' | t }}</p>
+} @else {
+  @if (isServer()) {
+    <div class="serverhead">
+      <button type="button" class="back" (click)="backToServer()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>{{ serverName() }}
+      </button>
+      <h2 class="h2" data-testid="alerts-for">{{ 'alertsFor' | t }} {{ serverName() }}</h2>
+      <div class="serverswitches">
+        <gp-toggle [checked]="useDefaults()" (checkedChange)="setUseDefaults($event)" [label]="'useAccountDefaults' | t" />
+        <gp-toggle [checked]="muted()" (checkedChange)="muted.set($event)" [label]="'muteServer' | t" />
+        @if (silencedUntil(); as until) {
+          <span class="silence num">{{ 'silencedUntil' | t }} {{ until }} <gp-button variant="ghost" size="sm" (click)="clearSilence()">{{ 'unsilence' | t }}</gp-button></span>
+        }
+      </div>
+      <button type="button" class="link" (click)="accountSettings()">{{ 'accountDefaultsLink' | t }}</button>
+    </div>
+  }
+
+  <div class="grid" [class.single]="isServer()">
+    <section class="card" aria-labelledby="thr-title">
+      <h2 id="thr-title" class="section">{{ 'defaults' | t }}</h2>
+      <div class="rules" [class.dim]="isServer() && useDefaults()">
+        @for (r of rows(); track r.draft.id) {
+          <div class="rrow" [class.off]="!r.draft.enabled" [attr.data-rule]="r.draft.id">
+            <span class="dot" [style.background]="r.color" aria-hidden="true"></span>
+            <span class="rname">{{ r.nameKey | t }}</span>
+            @if (editing() === r.draft.id) {
+              <span class="edit">
+                @if (r.hasThreshold) {
+                  <label class="field">
+                    <input type="number" class="num-in" [value]="r.draft.threshold" min="1" [max]="r.thresholdUnit === 'percent' ? 100 : 1000" step="1" (input)="setThreshold(r.draft.id, $any($event.target).value)" (keydown)="onEditKeydown($event)" [attr.aria-label]="'threshold' | t" gpAutofocus />
+                    <span class="unit">{{ r.thresholdUnit === 'percent' ? '%' : ('restarts' | t) }}</span>
+                  </label>
+                }
+                @if (r.hasMinutes) {
+                  <label class="field">
+                    <input type="number" class="num-in" [value]="r.draft.minutes" min="1" max="1440" step="1" (input)="setMinutes(r.draft.id, $any($event.target).value)" (keydown)="onEditKeydown($event)" [attr.aria-label]="'minutes' | t" />
+                    <span class="unit">{{ 'min' | t }}</span>
+                  </label>
+                }
+                <gp-button variant="ghost" size="sm" (click)="edit(r.draft.id)">{{ 'done' | t }}</gp-button>
+              </span>
+            } @else if (r.editable && !(isServer() && useDefaults())) {
+              <button type="button" class="rdef num" (click)="edit(r.draft.id)" [attr.aria-label]="('edit' | t) + ' ' + (r.nameKey | t)">{{ r.text }}</button>
+            } @else {
+              <span class="rdef num">{{ r.text }}</span>
+            }
+            @if (r.overridden) {
+              <gp-badge tone="new">{{ 'overridden' | t }}</gp-badge>
+            }
+            <gp-badge [tone]="r.severityKey === 'critical' ? 'crit' : r.severityKey === 'warning' ? 'warn' : 'default'">{{ r.severityKey | t }}</gp-badge>
+            <gp-toggle class="switch" [checked]="r.draft.enabled" (checkedChange)="toggleRule(r.draft.id, $event)" [disabled]="isServer() && useDefaults()" [label]="''" />
+          </div>
+        }
+      </div>
+      <p class="note">{{ 'rulesNote' | t }}</p>
+    </section>
+
+    @if (!isServer()) {
+      <div class="col">
+        <section class="card" aria-labelledby="ch-title">
+          <h2 id="ch-title" class="section">{{ 'channels' | t }}</h2>
+          <div class="chrow">
+            <div class="chmain">
+              <div class="chname">{{ 'push' | t }}</div>
+              <div class="chsub num" data-testid="push-devices">{{ deviceLine() }}</div>
+              @if (!loaded()!.channels.pushConfigured) {
+                <div class="chsub warn">{{ 'pushOff' | t }}</div>
+              }
+            </div>
+            <gp-toggle [checked]="channels().push" (checkedChange)="setChannel('push', $event)" [label]="''" />
+          </div>
+          <div class="chrow sub">
+            <div class="chmain"><div class="chsub">{{ 'thisDevice' | t }}</div></div>
+            @if (push.status() === 'denied') {
+              <span class="chsub warn">{{ 'pushDenied' | t }}</span>
+            } @else {
+              <gp-toggle [checked]="push.isOn()" (checkedChange)="togglePushDevice($event)" [disabled]="!push.supported() || push.status() === 'asking'" [label]="''" data-testid="push-this-device" />
+            }
+          </div>
+          <div class="chrow">
+            <div class="chmain">
+              <div class="chname">{{ 'email' | t }}</div>
+              <div class="chsub" data-testid="email-line">{{ loaded()!.email }} · {{ 'emailSub' | t }}</div>
+            </div>
+            <gp-toggle [checked]="channels().email" (checkedChange)="setChannel('email', $event)" [label]="''" />
+          </div>
+          <div class="chrow column">
+            <div class="chmain">
+              <div class="chname">{{ 'webhook' | t }}</div>
+              <div class="chsub">{{ 'webhookSub' | t }}</div>
+            </div>
+            <gp-input [mono]="true" size="sm" name="webhookUrl" autocomplete="off" placeholder="https://" [ngModel]="channels().webhookUrl" (ngModelChange)="setChannel('webhookUrl', $event)" [label]="'webhookUrl' | t" />
+            <div class="secret">
+              <span class="label">{{ 'secret' | t }}</span>
+              <code class="code num" data-testid="webhook-secret">{{ revealSecret() ? loaded()!.channels.webhookSecret : '••••••••••••' }}</code>
+              <gp-button variant="ghost" size="sm" (click)="revealSecret.set(!revealSecret())">{{ (revealSecret() ? 'hide' : 'show') | t }}</gp-button>
+              <gp-button variant="ghost" size="sm" icon="M9 9h11v11H9zM5 15V5a1 1 0 011-1h9" (click)="copySecret()">{{ 'copy' | t }}</gp-button>
+              <gp-button variant="ghost" size="sm" (click)="rotateSecret()">{{ 'rotateSecret' | t }}</gp-button>
+              <gp-button variant="ghost" size="sm" [loading]="testing()" [disabled]="!channels().webhookUrl" (click)="sendTest()">{{ 'sendTest' | t }}</gp-button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="dg-title">
+          <h2 id="dg-title" class="section">{{ 'dailyDigest' | t }}</h2>
+          <div class="chrow">
+            <div class="chmain">
+              <div class="chsub">{{ 'digestSub' | t }}</div>
+              <label class="timerow">
+                <span class="chsub">{{ 'dailyAt' | t }}</span>
+                <input type="text" class="time num" inputmode="numeric" maxlength="5" placeholder="08:00" data-testid="digest-time" [value]="channels().digestTime" (input)="setChannel('digestTime', $any($event.target).value)" [attr.aria-label]="'time' | t" [attr.aria-invalid]="timeValid() ? null : true" />
+              </label>
+            </div>
+            <gp-toggle [checked]="channels().digestEnabled" (checkedChange)="setChannel('digestEnabled', $event)" [label]="''" />
+          </div>
+        </section>
+      </div>
+    }
+  </div>
+
+  <div class="foot">
+    <gp-button variant="primary" size="lg" [disabled]="!dirty() || (!isServer() && !timeValid())" [loading]="saving()" (click)="save()">{{ 'save' | t }}</gp-button>
+  </div>
+}

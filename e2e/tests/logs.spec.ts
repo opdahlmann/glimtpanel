@@ -4,7 +4,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi } from '../helpers/auth';
 import { forceLang } from '../helpers/e2e-api';
-import { expectMobileRules, isMobileProject } from '../helpers/mobile-rules';
+import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
 /** Åpne strømmer for én server (tallet er globalt for huben, så bare en server ingen annen test bruker gir et sikkert svar). */
 async function openStreams(page: Page, serverId: string): Promise<number> {
@@ -74,7 +74,7 @@ test.describe('loggsiden', () => {
     await page.addStyleTag({ content: 'gp-log-view .box { height: 300px; overflow: hidden; }' });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot('logs.png', { fullPage: true, mask: [page.locator('gp-log-view'), page.locator('.status'), page.locator('.bar')] });
+    await expect(page).toHaveScreenshot('logs.png', { fullPage: true, mask: [page.locator('gp-log-view'), page.locator('.status'), page.locator('.bar'), ...navMasks(page)] });
   });
 
   test('tekstfilter filtrerer det som er lastet og står i URL-en; Copy lines kopierer', async ({ page, context }, testInfo) => {

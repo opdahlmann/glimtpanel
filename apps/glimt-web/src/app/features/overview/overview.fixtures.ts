@@ -78,6 +78,7 @@ export function demoCard(def: Def, i: number): CardDto {
     rebootRequired: def.reboot ?? false,
     failedServices: def.failed ?? 0,
     activeAlerts: def.alerts ?? 0,
+    alertSeverity: def.alerts ? (def.name === 'web-02' ? 'critical' : 'warning') : null,
     cpuLastHour: series,
     memLastHour: series.map((v) => (v === null ? null : Math.round(def.mem))),
   };

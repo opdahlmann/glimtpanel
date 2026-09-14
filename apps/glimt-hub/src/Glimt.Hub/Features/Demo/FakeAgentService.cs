@@ -212,7 +212,9 @@ public sealed class FakeAgentService(
 
     // ---- e2e controls ----------------------------------------------------------------------------
 
-    public async Task<bool> DisconnectAsync(string? serverId, CancellationToken cancellationToken)
+    /// <summary>Takes the fake server offline. With <paramref name="secondsAgo"/> the last-seen time is backdated, so a
+    /// following sweep sees it as down (and server_down fires) without moving the e2e clock for everyone else.</summary>
+    public async Task<bool> DisconnectAsync(string? serverId, int? secondsAgo, CancellationToken cancellationToken)
     {
         if (Find(serverId) is not { } fake || !registry.TryGet(fake.ServerId, out var session))
         {
@@ -222,6 +224,11 @@ public sealed class FakeAgentService(
         fake.Online = false;
         if (session.Detach(Link(fake).ConnectionId))
         {
+            if (secondsAgo is > 0)
+            {
+                session.Touch(clock.GetUtcNow().AddSeconds(-secondsAgo.Value));
+            }
+
             await ingest.DisconnectedAsync(session);
         }
 

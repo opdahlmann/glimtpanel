@@ -13,7 +13,6 @@ public static class AuthFeature
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt =>
         {
             jwt.MapInboundClaims = false;
-            jwt.TokenValidationParameters = new JwtTokens(options, TimeProvider.System).ValidationParameters;
             jwt.Events = new JwtBearerEvents
             {
                 OnMessageReceived = context =>
@@ -28,8 +27,12 @@ public static class AuthFeature
                 },
             };
         });
+        // The validation parameters come from the same JwtTokens (and clock) that issues the tokens.
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<JwtTokens>((jwt, tokens) => jwt.TokenValidationParameters = tokens.ValidationParameters);
         services.AddAuthorization();
         services.AddSingleton<UserStore>();
+        services.AddSingleton<IUserLookup>(sp => sp.GetRequiredService<UserStore>());
         services.AddSingleton<RefreshTokenStore>();
         services.AddSingleton<EmailTokenStore>();
         services.AddSingleton<AuthSessions>();

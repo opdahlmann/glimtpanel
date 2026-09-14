@@ -1,6 +1,7 @@
 using Glimt.Hub.Features.Access;
 using Glimt.Hub.Features.Account;
 using Glimt.Hub.Features.Agents;
+using Glimt.Hub.Features.Alerts;
 using Glimt.Hub.Features.Auth;
 using Glimt.Hub.Features.Buffer;
 using Glimt.Hub.Features.Demo;
@@ -46,6 +47,7 @@ builder.Services
     .AddAccountFeature()
     .AddAccessFeature()
     .AddAgentsFeature()
+    .AddAlertsFeature()
     .AddBufferFeature(options)
     .AddLiveFeature(options)
     .AddServersFeature()
@@ -69,6 +71,7 @@ app.MapAuthFeature();
 app.MapAccountFeature();
 app.MapAccessFeature();
 app.MapAgentsFeature();
+app.MapAlertsFeature();
 app.MapBufferFeature();
 app.MapLiveFeature();
 app.MapServersFeature();
