@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Glimt.Hub.Features.Auth;
-using Glimt.Hub.Features.Demo;
 using Glimt.Hub.Infrastructure;
 using Glimt.Hub.Infrastructure.Access;
 using Glimt.Hub.Infrastructure.Auth;
@@ -50,18 +49,12 @@ public static class GroupsEndpoints
     private static async Task<IResult> CreateAsync(
         CreateGroupRequest request,
         ClaimsPrincipal principal,
-        UserStore users,
         GroupStore groups,
         IAccessService access,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
         var userId = principal.RequireUserId();
-        if (await DemoReadOnlyAsync(userId, users, cancellationToken) is { } readOnly)
-        {
-            return readOnly;
-        }
-
         var name = Validation.NormalizeName(request.Name, GroupDocument.NameMaxLength);
         if (name is null)
         {
@@ -90,18 +83,12 @@ public static class GroupsEndpoints
         string id,
         PatchGroupRequest request,
         ClaimsPrincipal principal,
-        UserStore users,
         GroupStore groups,
         IAccessService access,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
         var userId = principal.RequireUserId();
-        if (await DemoReadOnlyAsync(userId, users, cancellationToken) is { } readOnly)
-        {
-            return readOnly;
-        }
-
         var doc = await groups.FindAsync(id, cancellationToken);
         if (doc is null)
         {
@@ -150,14 +137,9 @@ public static class GroupsEndpoints
         return Results.Ok(GroupDto.From(doc, visible));
     }
 
-    private static async Task<IResult> DeleteAsync(string id, ClaimsPrincipal principal, UserStore users, GroupStore groups, CancellationToken cancellationToken)
+    private static async Task<IResult> DeleteAsync(string id, ClaimsPrincipal principal, GroupStore groups, CancellationToken cancellationToken)
     {
         var userId = principal.RequireUserId();
-        if (await DemoReadOnlyAsync(userId, users, cancellationToken) is { } readOnly)
-        {
-            return readOnly;
-        }
-
         var doc = await groups.FindAsync(id, cancellationToken);
         if (doc is null)
         {
@@ -194,12 +176,4 @@ public static class GroupsEndpoints
         return (ids, null);
     }
 
-    /// <summary>The demo account (demo@glimtpanel.com) may look at its groups, never change them.</summary>
-    private static async Task<IResult?> DemoReadOnlyAsync(string userId, UserStore users, CancellationToken cancellationToken)
-    {
-        var user = await users.FindByIdAsync(userId, cancellationToken);
-        return user is not null && string.Equals(user.Email, DemoData.DemoUserEmail, StringComparison.OrdinalIgnoreCase)
-            ? Validation.Forbidden("The demo account cannot change groups")
-            : null;
-    }
 }
