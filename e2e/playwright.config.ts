@@ -40,7 +40,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 4 : undefined,
   reporter: process.env.CI ? [['html', { open: 'never' }], ['github']] : [['html', { open: 'never' }], ['list']],
-  timeout: 30_000,
+  timeout: process.env.CI ? 90_000 : 30_000, // runneren bruker 2–5 s per klikk på de levende kortene
   expect: { timeout: 10_000, toHaveScreenshot: { maxDiffPixelRatio: 0.01 } },
   // Skjermbildene i tests/*-snapshots er tatt på macOS (-darwin.png); Linux-runneren i CI har ingen og tegner fonter
   // annerledes, så CI sjekker atferd, ikke piksler. ponytail: egne -linux-snapshots om CI skal fange designavvik.
