@@ -19,6 +19,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app .
+# Glimtpanel-agenten i samme container, så appen vises som containernode i dashbordet. Den starter bare når GLIMT_TOKEN
+# er satt (fra «Add container»); ellers kjører appen alene som før. Appen er PID 1 via exec og får signalene selv.
+# :latest = siste agentutgivelse (infra/glimt-agent/README.md); en Rebuild etter en utgivelse henter den nye.
+COPY --from=ghcr.io/opdahlmann/glimt-agent:latest /glimt-agent /usr/local/bin/glimt-agent
 RUN mkdir -p /data/buffer && chown -R app:app /data
 USER app
 ENV ASPNETCORE_HTTP_PORTS= \
@@ -28,4 +32,5 @@ EXPOSE 8080
 VOLUME /data
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8080/healthz || exit 1
-ENTRYPOINT ["dotnet", "Glimt.Hub.dll"]
+ENTRYPOINT ["/bin/sh", "-c", "[ -z \"$GLIMT_TOKEN\" ] || glimt-agent run & exec \"$0\" \"$@\""]
+CMD ["dotnet", "Glimt.Hub.dll"]

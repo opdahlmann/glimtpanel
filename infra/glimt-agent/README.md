@@ -44,6 +44,9 @@ Versjonsnummeret kommer fra taggen og bakes inn i binæren; `glimt-agent version
 
 6. Gjør det samme for produksjon: `infra/glimt-hub/.env.prod` og `glimt-hub-prod`, så «Redeploy».
 
+7. Hub, web og site har agenten innebygd fra `ghcr.io/opdahlmann/glimt-agent:latest`. Velg **Rebuild** (ikke Redeploy)
+   på de seks Dokploy-appene, dev først, så imagene bygges med den nye binæren. Ingen kodeendring trengs.
+
 ## Servere og containere som allerede kjører agenten
 
 Agenten oppdaterer seg ikke selv. På en server kjører du installkommandoen på nytt uten `--key`. Tokenet beholdes, så

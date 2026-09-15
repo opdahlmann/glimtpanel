@@ -28,5 +28,12 @@ COPY infra/glimt-web/security-headers.conf /etc/nginx/glimt/security-headers.con
 COPY --chmod=755 infra/glimt-web/10-glimt-resolver.envsh /docker-entrypoint.d/10-glimt-resolver.envsh
 COPY --chmod=755 infra/glimt-web/40-glimt-config.sh /docker-entrypoint.d/40-glimt-config.sh
 COPY --from=build /repo/apps/glimt-web/dist/glimt-web/browser /usr/share/nginx/html
+# Glimtpanel-agenten i samme container, så appen vises som containernode i dashbordet. Den starter bare når GLIMT_TOKEN
+# er satt (fra «Add container»); ellers kjører appen alene som før. Appen er PID 1 via exec og får signalene selv.
+# :latest = siste agentutgivelse (infra/glimt-agent/README.md); en Rebuild etter en utgivelse henter den nye.
+COPY --from=ghcr.io/opdahlmann/glimt-agent:latest /glimt-agent /usr/local/bin/glimt-agent
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 EXPOSE 80
+# nginx-imagets eget /docker-entrypoint.sh kjøres fortsatt (malen, config.json); CMD må gjentas når ENTRYPOINT settes.
+ENTRYPOINT ["/bin/sh", "-c", "[ -z \"$GLIMT_TOKEN\" ] || glimt-agent run & exec /docker-entrypoint.sh \"$0\" \"$@\""]
+CMD ["nginx", "-g", "daemon off;"]

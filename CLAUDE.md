@@ -15,7 +15,7 @@ Glimtpanel: ett nettleservindu som viser hva alle Ubuntu-serverne dine gjør akk
 | packages/protocol | JSON Schema for agent ↔ hub (v1) + eksempler. Kontrakten begge sider testes mot. |
 | packages/design-tokens | `tokens.css` og Inter-fonter, delt av web og site. |
 | e2e | Playwright i tre prosjekter: `desktop-chromium`, `mobile-webkit`, `mobile-chromium`. |
-| infra | `infra/<app>/` | Dockerfile og nginx-filer for Dokploy (hub, web, site), git-ignorerte `.env.dev`/`.env.prod` med verdiene per miljø, og `infra/glimt-agent/README.md` om agentutgivelser. |
+| infra | `infra/<app>/` | Dockerfile (med agentbinæren innebygd, startes bare når `GLIMT_TOKEN` er satt) og nginx-filer for Dokploy (hub, web, site), git-ignorerte `.env.dev`/`.env.prod` med verdiene per miljø, og `infra/glimt-agent/README.md` om agentutgivelser. |
 
 Dokumentasjonen (`IMPLEMENTERINGSPLAN.md`, `FUNKSJONSBESKRIVELSE.md`, `DESIGN.md`, `VURDERING.md`, `MARKEDSANALYSE.md`, `design/`)
 ligger **lokalt og er git-ignorert**. `IMPLEMENTERINGSPLAN.md` er fasit for faser og steg; kode og READMEs refererer til den

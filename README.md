@@ -168,7 +168,8 @@ etter en endring.
 | glimt-web | `infra/glimt-web/Dockerfile` | 80 | `app.glimtpanel.com` | `dev-app.glimtpanel.com` |
 | glimt-site | `infra/glimt-site/Dockerfile` | 80 | `glimtpanel.com`, `www.glimtpanel.com` | `dev.glimtpanel.com` |
 
-Agenten rulles ikke ut med Dokploy; `infra/glimt-agent/README.md` beskriver hvordan en ny versjon publiseres.
+Agenten rulles ikke ut med Dokploy; `infra/glimt-agent/README.md` beskriver hvordan en ny versjon publiseres. De tre
+imagene har agentbinæren innebygd, så appene selv vises i dashbordet når `GLIMT_TOKEN` er satt.
 
 - **Variabler.** Nøklene er dokumentert i `example.env`. Verdiene per app og miljø ligger i `infra/<app>/.env.dev` og
   `.env.prod`, som er git-ignorert. Begge miljøene kjører med `GLIMT_ENV=production`: `development` slår på
