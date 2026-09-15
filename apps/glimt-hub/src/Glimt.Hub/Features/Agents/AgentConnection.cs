@@ -31,6 +31,8 @@ public sealed class AgentConnection(
     private readonly Dictionary<string, long> _lastWarned = new(StringComparer.Ordinal);
     private WebSocket? _socket;
     private DateTimeOffset _lastActivity;
+    /// <summary>Last message we sent. The agent closes a socket with no inbound traffic for 2 minutes, so the ping must follow our silence, not the agent's.</summary>
+    private DateTimeOffset _lastSent;
 
     public string ConnectionId => _connectionId;
 
@@ -45,6 +47,7 @@ public sealed class AgentConnection(
 
         AgentSession? session = null;
         _lastActivity = clock.GetUtcNow();
+        _lastSent = _lastActivity;
         try
         {
             var first = await ReceiveAsync(socket, HelloTimeout);
@@ -213,7 +216,9 @@ public sealed class AgentConnection(
             using var timer = new PeriodicTimer(options.Heartbeat, clock);
             while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                if (clock.GetUtcNow() - _lastActivity >= options.Heartbeat)
+                // Step 11.4 (load test): a streaming agent kept the hub busy, the hub therefore never pinged, and the
+                // agent's own read deadline closed the socket every two minutes. Ping whenever *we* have been quiet.
+                if (clock.GetUtcNow() - _lastSent >= options.Heartbeat)
                 {
                     await SendAsync(socket, new Ping(), cancellationToken);
                 }
@@ -286,6 +291,7 @@ public sealed class AgentConnection(
             if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
                 await socket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+                _lastSent = clock.GetUtcNow();
             }
         }
         finally

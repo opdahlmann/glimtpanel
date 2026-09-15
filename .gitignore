@@ -45,3 +45,7 @@ e2e/blob-report/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Steg 11: publisert hub for e2e mot bygget hub, og lasttestens buffer
+apps/glimt-hub/publish/
+apps/glimt-hub/loadtest-buffer-*/

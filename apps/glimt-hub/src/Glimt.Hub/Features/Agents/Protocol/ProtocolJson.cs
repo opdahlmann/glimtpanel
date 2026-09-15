@@ -14,6 +14,7 @@ public static class ProtocolJson
     public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        MaxDepth = Infrastructure.RequestLimits.MaxJsonDepth,
     };
 
     public static byte[] Serialize(AgentMessage message) =>

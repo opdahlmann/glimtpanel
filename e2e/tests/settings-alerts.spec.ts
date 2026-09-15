@@ -4,7 +4,7 @@
 // prosjektene ikke skriver over hverandres innstillinger mens de kjører parallelt.
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { loginViaApi } from '../helpers/auth';
-import { enrolFakeAgent, ensureEmptyOwner, forceLang, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
+import { enrolFakeAgent, ensureEmptyOwner, forceLang, triggerE2E, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
 import { expectMobileRules, navMasks } from '../helpers/mobile-rules';
 
 const ruleRow = (page: Page, rule: string) => page.locator(`.rrow[data-rule="${rule}"]`);
@@ -110,7 +110,7 @@ test.describe('innstillinger › varsler', () => {
     await expect(ruleRow(page, 'disk_full').locator('.rdef')).toHaveText('> 95 % on a mount');
 
     // Dempet: en tjeneste feiler → varselet står i listen som «silenced» (vist, ikke sendt).
-    expect((await page.request.post('/api/e2e/fail-service', { data: { serverId, unit: 'backup.service' } })).ok()).toBeTruthy();
+    await triggerE2E(page, 'fail-service', { serverId, unit: 'backup.service' });
     await page.goto('/alerts');
     const row = page.locator(`.row[data-server="${serverId}"][data-rule="svc_failed"]`);
     await expect(row).toBeVisible({ timeout: 15_000 });

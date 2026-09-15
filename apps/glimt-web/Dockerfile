@@ -23,6 +23,7 @@ ENV GLIMT_HUB_INTERNAL_URL=http://glimt-hub:8080 \
     GLIMT_ENV=production \
     NGINX_ENVSUBST_FILTER=GLIMT_
 COPY apps/glimt-web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+COPY apps/glimt-web/nginx/security-headers.conf /etc/nginx/glimt/security-headers.conf
 COPY --chmod=755 apps/glimt-web/nginx/10-glimt-resolver.envsh /docker-entrypoint.d/10-glimt-resolver.envsh
 COPY --chmod=755 apps/glimt-web/nginx/40-glimt-config.sh /docker-entrypoint.d/40-glimt-config.sh
 COPY --from=build /repo/apps/glimt-web/dist/glimt-web/browser /usr/share/nginx/html

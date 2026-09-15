@@ -8,6 +8,7 @@ public static class InfrastructureSetup
     {
         services.AddSingleton(options);
         services.AddSingleton(TimeProvider.System);
+        services.ConfigureHttpJsonOptions(json => json.SerializerOptions.MaxDepth = RequestLimits.MaxJsonDepth);
         services.AddSingleton<MongoContext>();
         services.AddHostedService<MongoConnectService>();
         // Replaced by the Agents feature (step 2.5); features are registered after infrastructure, so the last wins.

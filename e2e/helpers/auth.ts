@@ -1,5 +1,6 @@
 // Innlogging i e2e. Dev-brukeren seedes av huben (GLIMT_DEV_USER_EMAIL/PASSWORD, satt i playwright.config.ts).
 import { expect, type Page } from '@playwright/test';
+import { ensureReader } from './e2e-api';
 
 export const DEV_USER = {
   email: process.env.GLIMT_DEV_USER_EMAIL ?? 'dev@glimtpanel.local',
@@ -45,6 +46,21 @@ export async function loginViaForm(page: Page, user = DEV_USER): Promise<void> {
   await page.getByPlaceholder(/^(Email|E-post)$/).fill(user.email);
   await page.getByPlaceholder(/^(Password|Passord)$/).fill(user.password);
   await page.keyboard.press('Enter');
+}
+
+/**
+ * Felles inngang (steg 11.1): `owner` er dev-brukeren som eier demoserverne, `reader` en konto med lesetilgang til dem
+ * (opprettes ved behov), `demo` er `/demo` uten innlogging. Returnerer kontoen (null for demo).
+ */
+export async function loginAs(page: Page, role: 'owner' | 'reader' | 'demo'): Promise<{ email: string; password: string } | null> {
+  if (role === 'demo') {
+    await page.goto('/demo');
+    await expect(page.getByTestId('demo-banner')).toBeVisible();
+    return null;
+  }
+  const user = role === 'owner' ? DEV_USER : await ensureReader(page);
+  await loginViaApi(page, user);
+  return user;
 }
 
 /** Innlogget og på oversikten (venter på skallet). */

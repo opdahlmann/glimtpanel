@@ -4,6 +4,10 @@
         <RootNamespace>Glimt.Hub</RootNamespace>
         <AssemblyName>Glimt.Hub</AssemblyName>
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Steg 11.4: workstation GC. Server GC (standard for ASP.NET) la 100 agenter på 1,2 GB RSS med én heap per kjerne;
+             huben er liten og latensfølsom bare i sekundskala, så én konkurrerende heap holder RSS langt under 1 GB. -->
+        <ServerGarbageCollection>false</ServerGarbageCollection>
+        <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     </PropertyGroup>
 
     <ItemGroup>
@@ -16,6 +20,11 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="Glimt.Hub.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Agentens installasjonsskript serveres av GET /install (steg 11.3): get.glimtpanel.com peker hit. -->
+        <EmbeddedResource Include="..\..\..\glimt-agent\install\install.sh" LogicalName="install.sh" />
     </ItemGroup>
 
 </Project>

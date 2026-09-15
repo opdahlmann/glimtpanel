@@ -9,6 +9,20 @@ export interface E2eUser {
   password: string;
 }
 
+/** Hubens e2e-hendelser (steg 11.1): `POST /api/e2e/<action>` med valgfri kropp. Feiler testen på alt annet enn 2xx. */
+export type E2eAction = 'disconnect-server' | 'reconnect-server' | 'fail-service' | 'advance' | 'enrol-fake-agent' | 'ensure-user' | 'connect-fake-container' | 'sleep-node' | 'fail-health';
+
+export async function triggerE2E<T = { ok: boolean }>(page: Page, action: E2eAction, data: Record<string, unknown> = {}): Promise<T> {
+  const res = await page.request.post(`/api/e2e/${action}`, { data });
+  expect(res.ok(), `${action} ${JSON.stringify(data)}: ${res.status()} ${await res.text()}`).toBeTruthy();
+  return (await res.json()) as T;
+}
+
+/** Flytter hubens klokke (kun e2e) og kjører nede-deteksjon og varselmotor. Returnerer hubens nye «nå». */
+export async function advanceClock(page: Page, seconds: number): Promise<string> {
+  return (await triggerE2E<{ now: string }>(page, 'advance', { seconds })).now;
+}
+
 /** En bekreftet konto uten servere (skjerm 3). Idempotent. */
 export async function ensureEmptyOwner(page: Page, email = 'empty-owner@glimtpanel.e2e'): Promise<E2eUser> {
   const res = await page.request.post('/api/e2e/ensure-user', { data: { email, password: E2E_PASSWORD } });
@@ -37,9 +51,7 @@ export function uniqueHostname(testInfo: TestInfo): string {
 
 /** En falsk agent bruker nøkkelen: serveren dukker opp for eieren som ServerAdded. */
 export async function enrolFakeAgent(page: Page, key: string, hostname: string): Promise<string> {
-  const res = await page.request.post('/api/e2e/enrol-fake-agent', { data: { key, hostname } });
-  expect(res.ok(), `enrol-fake-agent: ${res.status()} ${await res.text()}`).toBeTruthy();
-  return ((await res.json()) as { serverId: string }).serverId;
+  return (await triggerE2E<{ serverId: string }>(page, 'enrol-fake-agent', { key, hostname })).serverId;
 }
 
 /** Låser språket i localStorage før siden lastes, så profilspråket (som en annen test kan bytte) ikke slår inn. */
@@ -55,19 +67,15 @@ export async function forceLang(page: Page, lang: 'en' | 'no'): Promise<void> {
 
 /** En falsk containeragent bruker nodetokenet fra `POST /api/servers` (fase 12): noden går til `up` og dialogen hopper til trinn 2. */
 export async function connectFakeContainer(page: Page, token: string): Promise<string> {
-  const res = await page.request.post('/api/e2e/connect-fake-container', { data: { token } });
-  expect(res.ok(), `connect-fake-container: ${res.status()} ${await res.text()}`).toBeTruthy();
-  return ((await res.json()) as { serverId: string }).serverId;
+  return (await triggerE2E<{ serverId: string }>(page, 'connect-fake-container', { token })).serverId;
 }
 
 /** Lar en containernode si `bye` (planlagt stopp): status `sleeping`. */
 export async function sleepNode(page: Page, serverId: string): Promise<void> {
-  const res = await page.request.post('/api/e2e/sleep-node', { data: { serverId } });
-  expect(res.ok(), `sleep-node ${serverId}: ${res.status()}`).toBeTruthy();
+  await triggerE2E(page, 'sleep-node', { serverId });
 }
 
 /** Lar en containernodes helsesjekk svare 503 (`ok: false`) eller 200 igjen. */
 export async function failHealth(page: Page, serverId: string, ok = false): Promise<void> {
-  const res = await page.request.post('/api/e2e/fail-health', { data: { serverId, ok } });
-  expect(res.ok(), `fail-health ${serverId}: ${res.status()}`).toBeTruthy();
+  await triggerE2E(page, 'fail-health', { serverId, ok });
 }

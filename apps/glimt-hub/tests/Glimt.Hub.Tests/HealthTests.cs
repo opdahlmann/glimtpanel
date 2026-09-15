@@ -1,3 +1,5 @@
+using Glimt.Hub.Infrastructure;
+using Glimt.Hub.Features.Servers;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -32,7 +34,27 @@ public sealed class HealthTests(HubFactory factory) : IClassFixture<HubFactory>
         Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
         var script = await response.Content.ReadAsStringAsync(Repo.Timeout());
         Assert.StartsWith("#!/bin/sh\n", script);
-        Assert.Contains("1.11", script);
+        // The real installer (apps/glimt-agent/install/install.sh): main() called last, this hub as the default, checksum verified.
+        Assert.EndsWith("main \"$@\"\n", script);
+        Assert.Contains("hub=\"ws://localhost:5080/agent/ws\"", script);
+        Assert.Contains("version=\"${GLIMT_AGENT_VERSION:-latest}\"", script);
+        Assert.Contains("sha256sum -c", script);
+        Assert.Equal("public, max-age=3600", response.Headers.CacheControl?.ToString());
+        Assert.Equal("wss://api.glimtpanel.com/agent/ws", InstallEndpoint.AgentWsUrl(new GlimtOptions { Env = GlimtOptions.E2e, MongoUri = HubFactory.UnreachableMongoUri, MongoDb = "t", JwtSecret = "t", HubUrl = "http://localhost:5080", HubPublicUrl = "https://api.glimtpanel.com/" }));
+    }
+
+    [Fact]
+    public async Task Bodies_over_one_megabyte_and_deep_json_are_rejected()
+    {
+        // Step 11.2: Kestrel caps REST bodies at 1 MB (413) and System.Text.Json stops at depth 32 (400) before any handler runs.
+        using var client = factory.CreateClient();
+        var big = new StringContent("{\"email\":\"" + new string('a', 2 * 1024 * 1024) + "\"}", System.Text.Encoding.UTF8, "application/json");
+        var tooLarge = await client.PostAsync("/api/auth/login", big, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, tooLarge.StatusCode);
+
+        var deep = new StringContent(string.Concat(Enumerable.Repeat("{\"a\":", 40)) + "1" + new string('}', 40), System.Text.Encoding.UTF8, "application/json");
+        var tooDeep = await client.PostAsync("/api/auth/login", deep, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.BadRequest, tooDeep.StatusCode);
     }
 
     [Fact]

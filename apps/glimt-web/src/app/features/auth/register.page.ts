@@ -1,7 +1,8 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, ElementRef, inject, signal } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal } from '@angular/core';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { errorKey } from '@core/api.service';
+import { ConfigService } from '@core/config.service';
 import { I18nKey, I18nService } from '@core/i18n.service';
 import { SessionService } from '@core/session.service';
 import { TPipe } from '@core/t.pipe';
@@ -26,6 +27,10 @@ export class RegisterPage {
   private readonly session = inject(SessionService);
   private readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+  private readonly config = inject(ConfigService);
+
+  /** Personvernnotatet i README (steg 11.5): docsUrl med ankeret #privacy. Flyttes til nettsiden når den lages. */
+  readonly privacyUrl = computed(() => this.config.config().docsUrl.replace(/#.*$/, '') + '#privacy');
 
   readonly form = new FormGroup({ name: nameControl(), email: emailControl(), password: passwordControl() });
   readonly submitted = signal(false);

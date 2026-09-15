@@ -19,7 +19,7 @@
         <div class="err" role="alert">{{ key | t }}</div>
       }
       <gp-button type="submit" variant="primary" size="lg" [block]="true" [loading]="busy()">{{ 'createAcc' | t }}</gp-button>
-      <p class="note">{{ 'registerNote' | t }}</p>
+      <p class="note">{{ 'registerNote' | t }} <a class="forgot" [href]="privacyUrl()" target="_blank" rel="noopener">{{ 'privacy' | t }}</a></p>
     </form>
   }
 </gp-auth-frame>

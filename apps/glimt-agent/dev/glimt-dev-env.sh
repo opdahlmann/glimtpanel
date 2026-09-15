@@ -23,6 +23,9 @@ mkdir -p /etc/glimt-agent
 	echo "GLIMT_HEARTBEAT_SECONDS=${heartbeat:-30}"
 	echo "GLIMT_LOG_LEVEL=${loglevel:-debug}"
 	echo "GLIMT_AGENT_DOCKER=socket"
+	# Containeren spiller en Ubuntu-server (systemd, journald, sshd); uten dette ville auto-deteksjonen (fase 12)
+	# sett /.dockerenv og valgt containerprofilen, som krever GLIMT_TOKEN.
+	echo "GLIMT_KIND=server"
 } >/etc/glimt-agent/env.tmp
 chmod 0600 /etc/glimt-agent/env.tmp
 mv -f /etc/glimt-agent/env.tmp /etc/glimt-agent/env

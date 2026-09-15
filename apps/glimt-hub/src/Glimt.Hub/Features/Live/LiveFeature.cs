@@ -12,7 +12,7 @@ public static class LiveFeature
     {
         // JSON is the default for the web app; MessagePack (smaller Card/Server payloads) is negotiated by
         // clients that add the msgpack protocol. Note: MessagePack uses the DTOs' property names as-is.
-        services.AddSignalR().AddJsonProtocol().AddMessagePackProtocol();
+        services.AddSignalR().AddJsonProtocol(json => json.PayloadSerializerOptions.MaxDepth = RequestLimits.MaxJsonDepth).AddMessagePackProtocol();
         services.AddSingleton<LiveConnections>();
         services.AddSingleton<LivePublisher>();
         services.AddSingleton<ILivePublisher>(sp => sp.GetRequiredService<LivePublisher>());

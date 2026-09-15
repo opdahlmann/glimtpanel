@@ -304,8 +304,14 @@ and logs. It cannot change anything on this server.*
 og `AmbientCapabilities=CAP_SYS_PTRACE` (for å se hvilken prosess som eier en port), `MemoryMax=64M`, `Restart=always`,
 `RestartSec=5`, pluss `UMask`, `ProtectKernel*`, `ProtectClock`, `ProtectHostname`, `PrivateDevices`,
 `RestrictNamespaces`, `RestrictRealtime`, `RestrictSUIDSGID`, `LockPersonality` og `SystemCallArchitectures=native`.
-`ProtectProc`, `ProcSubset` og `ProtectControlGroups` settes bevisst ikke: agenten må lese `/proc` og
-`/sys/fs/cgroup`. En test sikrer at enheten innebygd i `install.sh` er identisk med filen.
+Steg 11.2 la til `RemoveIPC`, `ProtectControlGroups=yes` (`/sys/fs/cgroup` skrivebeskyttet; agenten leser bare),
+`MemoryDenyWriteExecute`, `SystemCallFilter=@system-service` minus `@privileged @resources @obsolete @mount @swap
+@reboot @raw-io @module @debug @cpu-emulation @clock` og `SystemCallErrorNumber=EPERM` (Go-kjøretiden prøver
+`setrlimit` ved oppstart og tåler EPERM; uten det ville filteret gitt SIGSYS). `ptrace`-syscallet er filtrert bort;
+`CAP_SYS_PTRACE` trengs bare for å lese `/proc/<pid>/` til andre brukere. `systemd-analyze security glimt-agent`
+gir **1,8** i dev-containeren (målt 2026-09-15; kravet er under 3). `ProtectProc` og `ProcSubset` settes bevisst ikke:
+agenten må lese hele `/proc`. En test sikrer at enheten innebygd i `install.sh` er identisk med filen; `shellcheck`
+(`koalaman/shellcheck:stable`) er rent på `install.sh`.
 
 ## Dev-container (`Dockerfile.dev`)
 
@@ -317,7 +323,7 @@ sikkerhetsseksjonen får en ekte port og journalen ekte `sshd`-linjer) og `libns
 
 | Enhet | Gjør |
 |---|---|
-| `glimt-dev-env.service` (oneshot, før agenten) | Leser `GLIMT_AGENT_HUB_WS`, `GLIMT_DEV_ENROL_KEY`, `GLIMT_AGENT_NAME`, `GLIMT_HEARTBEAT_SECONDS`, `GLIMT_LOG_LEVEL` (standard `debug` her) fra `/proc/1/environ` og skriver `/etc/glimt-agent/env` med `GLIMT_AGENT_DOCKER=socket`. Docker Desktop monterer socketen som `root:root 660`, så skriptet gir tjenesten socketens gruppe via drop-in (`SupplementaryGroups=root`) og kjører `daemon-reload` før agenten starter |
+| `glimt-dev-env.service` (oneshot, før agenten) | Leser `GLIMT_AGENT_HUB_WS`, `GLIMT_DEV_ENROL_KEY`, `GLIMT_AGENT_NAME`, `GLIMT_HEARTBEAT_SECONDS`, `GLIMT_LOG_LEVEL` (standard `debug` her) fra `/proc/1/environ` og skriver `/etc/glimt-agent/env` med `GLIMT_AGENT_DOCKER=socket` og `GLIMT_KIND=server` (containeren spiller en server; auto-deteksjonen ville ellers sett `/.dockerenv` og krevd `GLIMT_TOKEN`). Docker Desktop monterer socketen som `root:root 660`, så skriptet gir tjenesten socketens gruppe via drop-in (`SupplementaryGroups=root`) og kjører `daemon-reload` før agenten starter |
 | `glimt-agent.service` | Agenten, akkurat som på en ekte server |
 | `ssh.service` | sshd på port 22 |
 | `noise.service` | Hvert 60. sekund: fem journallinjer (én tagget `sshd` med «Failed password …») og 3 s CPU med `sha256sum /dev/zero` |
@@ -376,6 +382,17 @@ Dockerfile.sidecar    FROM scratch + CA-sertifikater + binæren, USER 65532, ENT
 - **Tjenester krever fast bruker.** `systemctl` virker ikke under `DynamicUser=yes` (dbus avviser dynamiske uid-er), så enheten kjører som systembrukeren `glimt-agent` som `install.sh` oppretter (`useradd --system`, ingen hjemmekatalog, ingen innlogging). `uninstall` fjerner brukeren.
 - **Eierprosess på lyttende porter** krever at agenten kan lese `/proc/<pid>/fd` for andre brukeres prosesser. Enheten gir `CAP_SYS_PTRACE` som ambient-kapabilitet, men i dev-containeren på Docker Desktop avvises lesingen likevel (`Permission denied` selv med `CapEff` satt). Portene vises da uten prosessnavn. Verifiseres på en ekte Ubuntu-server i fase 11; uten kapabiliteten viser dashbordet porten uten prosess.
 - **`MemoryMax=192M`** dekker også `apt-get -s dist-upgrade` som kjøres hvert 10. minutt når `updates-available` mangler. Den gamle grensen på 64 M ble nådd i containeren.
+
+## Lasttest (`cmd/glimt-loadtest`, steg 11.4)
+
+`node scripts/loadtest/run.mjs [--agents 100] [--browsers 10] [--duration 3m] [--hub http://localhost:5080]` kjører
+N falske agenter på den ekte WebSocket-klienten (`internal/ws`) i `golang:1.25`-containeren: hver melder seg inn med
+dev-nøkkelen som `load-001`…, sender `snapshot` i hubens intervall, `stream` når huben abonnerer (dropp telles når
+sendekøen er full) og syntetiske logglinjer på `logStart`. Samtidig åpner Playwright N nettlesere på oversikten, og
+skriptet måler hubens RSS og CPU hvert 5. sekund (`ps`) og leser `/healthz`. Finnes ingen hub på `--hub`, startes
+`mongo:8`, huben i e2e-modus og den bygde web-appen, og alt stoppes etterpå. Avslutter med 1 hvis noen agent ikke fikk
+`welcome`, noe ble droppet, huben brukte over 1 GB RSS eller over én kjerne i snitt, eller en nettleser fikk sidefeil.
+Resultatet fra 2026-09-15 står i rot-README («Målte tall»). Første kjøring avslørte at huben bare pinget agenter som var stille, så en strømmende agent aldri fikk trafikk fra huben og lukket forbindelsen hvert 2. minutt (100 gjenoppkoblinger på 3 min); rettet i `AgentConnection` (ping etter hubens egen stillhet, med test). Server GC ga 1,2 GB RSS; med workstation GC (`Glimt.Hub.csproj`) er toppen 340 MB.
 
 ## Målt ressursbruk
 

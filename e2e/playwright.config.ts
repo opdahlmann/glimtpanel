@@ -16,6 +16,9 @@ const baseURL = process.env.GLIMT_E2E_BASE_URL ?? `http://localhost:${webPort}`;
 const mongoUri = ensureMongo(hubUrl);
 
 // Miljø for hub og web når Playwright starter dem selv (CI). Lokalt gjenbrukes kjørende servere fra `npm run dev`.
+// GLIMT_E2E_BUILT=1 (steg 11.1, CI): hub fra `dotnet publish` og bygget web servert av scripts/serve-web.mjs med
+// proxy og de samme sikkerhetshodene som nginx, i stedet for `dotnet run` og `ng serve`.
+const built = process.env.GLIMT_E2E_BUILT === '1';
 const hubEnv = {
   ...process.env,
   GLIMT_ENV: process.env.GLIMT_ENV ?? 'e2e',
@@ -47,20 +50,24 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'dotnet run --project apps/glimt-hub/src/Glimt.Hub',
+      command: built
+        ? 'dotnet publish apps/glimt-hub/src/Glimt.Hub -c Release -o apps/glimt-hub/publish --nologo -v q && dotnet apps/glimt-hub/publish/Glimt.Hub.dll'
+        : 'dotnet run --project apps/glimt-hub/src/Glimt.Hub',
       url: `${hubUrl}/healthz`,
       cwd: repoRoot,
       reuseExistingServer: true,
-      timeout: 120_000,
+      timeout: built ? 300_000 : 120_000,
       env: hubEnv,
     },
     {
-      command: `node scripts/web-config.mjs && npm --workspace apps/glimt-web run start -- --port ${webPort}`,
+      command: built
+        ? `npm --workspace apps/glimt-web run build -- --configuration production && node scripts/serve-web.mjs --port ${webPort}`
+        : `node scripts/web-config.mjs && npm --workspace apps/glimt-web run start -- --port ${webPort}`,
       url: baseURL,
       cwd: repoRoot,
       reuseExistingServer: true,
-      timeout: 180_000,
-      env: { ...process.env, GLIMT_HUB_INTERNAL_URL: hubUrl },
+      timeout: built ? 400_000 : 180_000,
+      env: { ...process.env, GLIMT_HUB_INTERNAL_URL: hubUrl, GLIMT_ENV: process.env.GLIMT_ENV ?? 'e2e', GLIMT_WEB_PUBLIC_URL: process.env.GLIMT_WEB_PUBLIC_URL ?? baseURL },
     },
   ],
 });

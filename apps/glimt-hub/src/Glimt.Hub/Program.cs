@@ -38,6 +38,8 @@ catch (GlimtConfigurationException ex)
 }
 
 builder.WebHost.UseUrls(options.HubUrl);
+// Steg 11.2: ingen REST-kropp over 1 MB (413); WebSocket-rammer har egen grense i AgentSocket.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = RequestLimits.MaxBodyBytes);
 builder.Services.Configure<HostOptions>(host => host.ShutdownTimeout = TimeSpan.FromSeconds(8));
 builder.AddGlimtLogging(options);
 builder.Services
@@ -64,6 +66,7 @@ if (dotEnv.LoadedFiles.Count > 0)
     log.LogInformation("loaded {Count} variables from {Files}", dotEnv.AppliedKeys, string.Join(", ", dotEnv.LoadedFiles));
 }
 
+app.UseBodyLimit();
 app.UseLiveCors(options);
 app.UseAuthentication();
 app.UseDemoReadOnly(options);

@@ -3,7 +3,7 @@
 // listen uten omlasting. Radene lever (varsler utløses etter hvert), så listen får fast høyde og maskeres i skjermbildet.
 import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi } from '../helpers/auth';
-import { enrolFakeAgent, ensureEmptyOwner, forceLang, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
+import { enrolFakeAgent, ensureEmptyOwner, forceLang, triggerE2E, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
 import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
 // Fase 12: «Node down» og den åttende regelen «Health check failing».
@@ -116,8 +116,7 @@ test.describe('varselsiden', () => {
     await expect(page.getByTestId('no-active')).toBeVisible();
 
     // Agenten forsvinner og har ikke vært sett på 130 s (bakdatert, så hubens klokke står): nede-deteksjonen og varselmotoren sveiper.
-    const res = await page.request.post('/api/e2e/disconnect-server', { data: { serverId, seconds: 130 } });
-    expect(res.ok()).toBeTruthy();
+    await triggerE2E(page, 'disconnect-server', { serverId, seconds: 130 });
     const down = row(page, serverId, 'server_down');
     await expect(down).toBeVisible({ timeout: 15_000 });
     await expect(down.locator('.server')).toHaveText(hostname);
@@ -125,8 +124,7 @@ test.describe('varselsiden', () => {
     await expect(page.locator(isMobileProject(testInfo) ? 'gp-bottom-nav .badge' : 'gp-sidebar .badge')).toHaveText('1');
 
     // Agenten er tilbake: løst, og badgen forsvinner.
-    const back = await page.request.post('/api/e2e/reconnect-server', { data: { serverId } });
-    expect(back.ok()).toBeTruthy();
+    await triggerE2E(page, 'reconnect-server', { serverId });
     await expect(page.getByTestId('no-active')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('radio', { name: 'Resolved' }).click();
     await expect(down).toHaveAttribute('data-state', 'resolved');

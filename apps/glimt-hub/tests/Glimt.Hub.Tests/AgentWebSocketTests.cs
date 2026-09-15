@@ -6,6 +6,48 @@ namespace Glimt.Hub.Tests;
 
 public sealed class AgentWebSocketTests(HubFactory factory) : IClassFixture<HubFactory>
 {
+    /// <summary>A hub that pings after one second, so the keepalive rule is observable in a test.</summary>
+    private sealed class FastHeartbeatFactory : HubFactory
+    {
+        protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.UseSetting("HEARTBEAT_SECONDS", "1");
+        }
+    }
+
+    [Fact]
+    public async Task Hub_pings_a_streaming_agent_after_its_own_silence()
+    {
+        // Step 11.4 (load test): the agent closes a socket with no inbound traffic for two minutes. A busy agent used to keep
+        // the hub from pinging (the ping followed the agent's silence), so every streaming agent reconnected every two minutes.
+        var ct = Repo.Timeout(20);
+        using var fast = new FastHeartbeatFactory();
+        var (agent, _, _) = await LiveTestSupport.ConnectAgentAsync(fast, "chatty-host", ct);
+        await using (agent)
+        {
+            var pinged = false;
+            var until = DateTime.UtcNow + TimeSpan.FromSeconds(6);
+            while (DateTime.UtcNow < until && !pinged)
+            {
+                await agent.SendAsync(LiveTestSupport.Stream(10), ct);
+                using var window = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                window.CancelAfter(300);
+                try
+                {
+                    var message = await agent.ReceiveAsync(window.Token);
+                    pinged = message?.GetProperty("type").GetString() == "ping";
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // nothing from the hub in this 300 ms slot; keep streaming
+                }
+            }
+
+            Assert.True(pinged, "the hub should ping an agent that streams every 300 ms once the hub itself has been quiet for a heartbeat");
+        }
+    }
+
     [Fact]
     public async Task Enrol_with_dev_key_then_resume_with_token()
     {

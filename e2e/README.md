@@ -9,6 +9,25 @@ Playwright-tester for Glimtpanel i tre prosjekter: `desktop-chromium` (1440×900
 - Uten `npm run dev` starter Playwright hub (`GLIMT_ENV=e2e`, demomodus med 16 falske servere) og web selv.
 - `npx playwright install chromium webkit` første gang. Rapport: `npm --workspace e2e run report`.
 
+## Bygget hub og web (steg 11.1)
+
+`GLIMT_E2E_BUILT=1 npm --workspace e2e test` (slik CI kjører) starter huben fra `dotnet publish`
+(`apps/glimt-hub/publish/`) og den bygde web-appen gjennom `scripts/serve-web.mjs` (statiske filer med SPA-fallback,
+`/config.json` fra miljøet, proxy for `/api` og `/hub` inkludert WebSocket, og nginx-hodene fra
+`apps/glimt-web/nginx/security-headers.conf`, CSP medregnet). Uten variabelen brukes `dotnet run` og `ng serve` som
+før. Hele suiten (tre prosjekter, ca. 180 tester) tar under ett minutt lokalt og går med fire arbeidere i CI
+(`timeout-minutes: 20` på jobben; planens mål er 15 min).
+
+Felles hjelpere: `loginAs(page, 'owner' | 'reader' | 'demo')` (`helpers/auth.ts`), `expectMobileRules`
+(`helpers/mobile-rules.ts`), `triggerE2E(page, action, data)` og `advanceClock(page, seconds)` (`helpers/e2e-api.ts`,
+hubens `POST /api/e2e/*`).
+
+- `tests/real-agent.spec.ts` (nattlig jobb `.github/workflows/nightly.yml`): den ekte agenten i Ubuntu-containeren
+  (`node scripts/agent-container.mjs --start` med `GLIMT_DEV_ENROL_KEY=gp_e2e` og `GLIMT_AGENT_HUB_WS` mot huben) i
+  stedet for de falske, for skjerm 4, 5 og 7. Kjøres bare med `GLIMT_E2E_REAL_AGENT=1`.
+- `tests/screenshots.spec.ts`: `GLIMT_DOCS_SHOTS=1 … --project desktop-chromium` lager `docs/overview-1440.png`,
+  `docs/overview-390.png` og `docs/overview.png` (side om side) til README, uten masker.
+
 ## MongoDB for innlogging
 
 Innlogging trenger MongoDB (dev-brukeren `dev@glimtpanel.local` / `GlimtDev-2026!` seedes der ved oppstart, og

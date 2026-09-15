@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -158,6 +159,44 @@ public sealed class BufferTests
         finally
         {
             Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void A_hundred_full_buffers_are_saved_in_under_a_second()
+    {
+        // Step 11.4: the 15-minute save (and the one at shutdown) must not stall a hub with a hundred servers.
+        var dir = Path.Combine(Path.GetTempPath(), "glimt-buffer-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var factory = new BufferPathFactory(dir);
+            var store = factory.Services.GetRequiredService<BufferStore>();
+            var input = new PointInput(
+                0, 50, 50, 0,
+                [new DiskInput("/", 40), new DiskInput("/data", 70)],
+                [new IfaceInput("eth0", 1, 1), new IfaceInput("docker0", 1, 1)],
+                Enumerable.Range(0, 8).Select(i => new ContainerInput("c" + i, 1, 1)).ToList());
+            for (var s = 0; s < 100; s++)
+            {
+                var buffer = store.GetOrAdd("load-" + s);
+                for (var i = 0; i < ServerBuffer.Capacity; i++)
+                {
+                    buffer.Add(input with { Ts = i * 30_000L });
+                }
+            }
+
+            var watch = Stopwatch.StartNew();
+            Assert.True(factory.Services.GetRequiredService<BufferPersistence>().Save("test"));
+            watch.Stop();
+            Assert.True(watch.ElapsedMilliseconds < 1000, $"saving 100 full buffers took {watch.ElapsedMilliseconds} ms");
+            Assert.True(new FileInfo(Path.Combine(dir, BufferFile.FileName)).Length > 1_000_000);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, true);
+            }
         }
     }
 

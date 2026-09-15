@@ -549,6 +549,17 @@ Vitest: `session.service.spec.ts` (startDemo/endDemo/refresh/logout i demoen), `
 (oversikt med 19 noder og to grupper, serverside, containerside, logger, innstillinger, «Create a free account», 403 fra
 huben) og `/demo`-skjermene i `a11y.spec.ts`.
 
+## Sikkerhetshoder (steg 11.2)
+
+`nginx/security-headers.conf` er én fil med CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy` og
+`Permissions-Policy`, inkludert i hver `location` i `default.conf.template` (nginx nullstiller `add_header` i en
+location som setter sine egne). CSP: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'`
+(Angular setter komponentstiler som inline `<style>`; ingen inline script), `img-src 'self' data: blob:`,
+`connect-src 'self'` (dekker SignalR over ws/wss mot samme opprinnelse), `manifest-src`/`worker-src 'self'`
+(service worker), `frame-ancestors 'self' https://glimtpanel.com`, `object-src 'none'`. `scripts/serve-web.mjs` leser
+den samme filen, så e2e mot bygget web (`GLIMT_E2E_BUILT=1`, CI) kjører hele suiten under identisk CSP og fanger en
+regel som knekker appen.
+
 ## Dockerfile
 
 Bygg-kontekst er repo-roten, slik Dokploy og `npm run build:images` gjør det:

@@ -1,0 +1,41 @@
+name: Nightly
+
+# Steg 11.1: hver natt kjøres skjerm 4, 5 og 7 mot den ekte agenten i Ubuntu-containeren (Dockerfile.dev, systemd +
+# journald + sshd) i stedet for de falske agentene, sammen med røyk- og demotestene. Kan også startes for hånd.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  real-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 26, cache: npm }
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 10.0.x }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - name: agent-containeren (bygger Dockerfile.dev, systemd som PID 1) mot huben Playwright starter
+        run: node scripts/agent-container.mjs --start
+        env:
+          GLIMT_AGENT_HUB_WS: ws://host.docker.internal:5080/agent/ws
+          GLIMT_DEV_ENROL_KEY: gp_e2e
+          GLIMT_AGENT_NAME: ubuntu-dev
+      - name: e2e med ekte agent
+        run: npm --workspace e2e test -- real-agent smoke demo
+        env:
+          GLIMT_ENV: e2e
+          # Kestrel må lytte på alle grensesnitt så containeren når huben via host-gateway.
+          GLIMT_HUB_URL: http://0.0.0.0:5080
+          GLIMT_E2E_REAL_AGENT: "1"
+          GLIMT_AGENT_NAME: ubuntu-dev
+      - name: agentens journal
+        if: always()
+        run: docker exec glimt-agent-dev journalctl -u glimt-agent --no-pager -n 100 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: playwright-report-nightly, path: e2e/playwright-report, retention-days: 7 }

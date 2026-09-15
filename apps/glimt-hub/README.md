@@ -84,7 +84,7 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 |---|---|
 | `POST /api/client-errors` | – | `{ message?, stack?, url?, userAgent?, version? }` fra nettleserens globale feilhåndterer (steg 9.5): logges som advarsel (avkortet), lagres ikke, 204. Egen policy `errors` (20/min per adresse) |
 | `GET /healthz` | `{ status, version, env, mongo: "ok" \| "unavailable", agentsConnected, uptimeSec, demoMode, buffer: { servers, points, lastSavedAt } }` (`agentsConnected` teller ekte agenter, ikke demoservere) |
-| `GET /install` | Installasjonsskript for agenten (plassholder til steg 1.11), `text/plain` |
+| `GET /install` | Agentens `install.sh` (bakt inn fra `apps/glimt-agent/install/`) med denne hubens `wss://…/agent/ws` og `GLIMT_AGENT_VERSION` som standard, `text/plain`, cache 1 t. `get.glimtpanel.com` peker hit (steg 11.3) |
 | `WS /agent/ws` | Agentprotokollen v1 (`packages/protocol/agent-hub.schema.json`): første melding må være `hello` innen 10 s, maks 1 MB per ramme, tekstrammer. Se «Sanntid» under |
 | `SignalR /hub/live` | JWT (`access_token` i spørrestrengen eller Bearer). Metoder og klientkall i «Sanntid» under |
 | `GET /api/servers/{id}/snapshot` | Bearer + lesetilgang. Siste `snapshot` flettet med siste `stream` som `Server`-projeksjonen. 404 ukjent server, 204 før noe er mottatt |
@@ -331,6 +331,33 @@ container-vindu, gjenoppretting etter omstart, glem server). `WebPushTests`: RFC
 offentlige nøkkelen, svarkodene og opprydding av døde abonnementer. `AlertChannelTests`: kanalvalg, quiet/info hoppes over,
 webhook-signatur og forsøk, oppsummeringstidspunkt i to tidssoner, maler, `SilenceUntil`. `AlertsTests` (MongoDB): hele
 veien fra demoserverne til listen, kortet, `Alert`-hendelsen og kanalene (falske `IChannel`), og alle endepunktene.
+
+## Herding (steg 11.2)
+
+- **Kropp og dybde.** `RequestLimits`: ingen REST-kropp over 1 MB (413 fra `UseBodyLimit` på deklarert lengde og fra
+  Kestrel for chunked), JSON-dybde 32 i minimal API, SignalR og agentprotokollen (400 ved dypere). Agentens
+  WebSocket-rammer har egen grense (1 MiB) i `AgentSocket`.
+- **CORS** er av i produksjon; nettleseren går same-origin gjennom nginx. Utenom produksjon åpnes bare
+  `GLIMT_WEB_PUBLIC_URL` (ng serve på en annen port). `/agent/ws` og `/install` er ikke CORS-relevante (WebSocket og
+  `curl`).
+- **Tilgang.** Alle endepunkter som navngir en server eller gruppe går gjennom `IAccessService` før noe annet.
+  `AccessArchitectureTests` leser rutetabellen og kaller hvert `/api/servers/{id}…`- og `/api/groups/{id}…`-endepunkt
+  som en fremmed bruker: svaret skal være 403 eller 404, aldri 2xx og aldri en valideringsfeil (som ville avslørt
+  gyldige spørringer før tilgangen er sjekket). Testen fant og rettet `history`, som validerte `metric` først.
+- **Demokontoen** er skrivebeskyttet (`DemoReadOnly`, se «Demo og e2e»).
+- **Keepalive.** Agenten lukker en forbindelse uten innkommende trafikk på 2 minutter. Huben pinger derfor hvert
+  `GLIMT_HEARTBEAT_SECONDS` når *den selv* har vært stille (`_lastSent`), ikke når agenten har vært det – lasttesten i
+  steg 11.4 fant at strømmende agenter ellers koblet opp på nytt hvert 2. minutt.
+  `AgentWebSocketTests.Hub_pings_a_streaming_agent_after_its_own_silence` holder det slik.
+- **Minne.** Workstation GC (`ServerGarbageCollection=false`): 100 agenter og 10 nettlesere gir 340 MB RSS på topp
+  mot 1,2 GB med server-GC.
+- **Hemmeligheter i logg.** Agenttoken, engangsnøkler, oppfriskningstokens og passord logges aldri; loggene nevner
+  server-id, bruker-e-post og feilmeldinger fra MongoDB. `dotnet list package --vulnerable` kjøres i CI (jobben `audit`).
+- **Rotasjon av `GLIMT_JWT_SECRET`.** Tilgangstokenene (15 min) signeres med hemmeligheten; oppfriskningstokenene ligger
+  som hash i `refreshTokens` og er uavhengige av den. Bytt verdien i Dokploy og rull ut huben: alle åpne faner får
+  401 ved neste kall, `ApiService` oppfrisker stille med cookien og brukeren merker ingenting. Agentene er upåvirket
+  (egne tokens). Gjør det samme om hemmeligheten mistenkes lekket; ingen dobbel nøkkel er nødvendig siden vinduet er
+  15 minutter.
 
 ## Struktur
 

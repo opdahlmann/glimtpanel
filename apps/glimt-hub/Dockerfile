@@ -6,6 +6,8 @@ COPY apps/glimt-hub/Directory.Build.props apps/glimt-hub/
 COPY apps/glimt-hub/src/Glimt.Hub/Glimt.Hub.csproj apps/glimt-hub/src/Glimt.Hub/
 RUN dotnet restore apps/glimt-hub/src/Glimt.Hub/Glimt.Hub.csproj
 COPY apps/glimt-hub/src apps/glimt-hub/src
+# install.sh bakes inn i huben og serveres på /install (steg 11.3).
+COPY apps/glimt-agent/install/install.sh apps/glimt-agent/install/install.sh
 RUN dotnet publish apps/glimt-hub/src/Glimt.Hub/Glimt.Hub.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
