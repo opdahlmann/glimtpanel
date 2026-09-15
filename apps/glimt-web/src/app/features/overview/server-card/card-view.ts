@@ -1,7 +1,7 @@
 import { I18nKey } from '@core/i18n.service';
 import { CardDto, ServerStatus } from '@core/live.types';
 import { ChipTone } from '@shared/chip/chip.component';
-import { formatDuration, formatRate } from '@shared/util/format';
+import { DASH, f1, formatDuration, formatRate, GB, gbLabel } from '@shared/util/format';
 
 /** Det kortet trenger fra I18nService (så funksjonene kan testes uten Angular). */
 export interface CardTexts {
@@ -38,21 +38,6 @@ export interface CardView {
   services: string;
   servicesTone: ChipTone;
   ariaLabel: string;
-}
-
-const GB = 1024 ** 3;
-const DASH = '—';
-
-/** Prototypens `f1`: én desimal, alltid. */
-export function f1(n: number): string {
-  return (Math.round(n * 10) / 10).toFixed(1);
-}
-
-/** 8 GB-maskin → "8", 7.8 → "7.8" (ingen ".0"). */
-export function gbLabel(bytes: number | null): string {
-  if (!bytes || bytes <= 0) return DASH;
-  const gb = Math.round((bytes / GB) * 10) / 10;
-  return Number.isInteger(gb) ? String(gb) : gb.toFixed(1);
 }
 
 /** "Ubuntu 24.04.3 LTS" + versionId "24.04" → "Ubuntu 24.04" (som designet); ellers os slik den er. */

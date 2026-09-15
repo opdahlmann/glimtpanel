@@ -1,3 +1,4 @@
+using Glimt.Hub.Features.Auth;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -80,7 +81,7 @@ public sealed class ContainerNodeTests(TestHub hub) : IClassFixture<TestHub>
         // Only the hash is stored; the node is down without a last-seen until the first hello.
         var doc = await hub.Services.GetRequiredService<IServerStore>().FindAsync(id, ct);
         Assert.NotNull(doc);
-        Assert.Equal(AgentTokens.Hash(token), doc.TokenHash);
+        Assert.Equal(Tokens.Hash(token), doc.TokenHash);
         Assert.Equal("container", doc.Kind);
         Assert.Equal("down", doc.Status);
         Assert.Null(doc.LastSeenAt);
@@ -198,13 +199,13 @@ public sealed class ContainerNodeTests(TestHub hub) : IClassFixture<TestHub>
         Assert.InRange(until, DateTimeOffset.UtcNow.AddHours(23.9), DateTimeOffset.UtcNow.AddHours(24.1));
 
         var doc = await hub.Services.GetRequiredService<IServerStore>().FindAsync(id, ct);
-        Assert.Equal(AgentTokens.Hash(newToken), doc!.TokenHash);
-        Assert.Equal(AgentTokens.Hash(oldToken), doc.PreviousTokenHash);
+        Assert.Equal(Tokens.Hash(newToken), doc!.TokenHash);
+        Assert.Equal(Tokens.Hash(oldToken), doc.PreviousTokenHash);
         // The test hub records lifecycle calls instead of running AgentLifecycle: do what it would do with the registry.
         Assert.Contains(hub.Lifecycle.Rotated, r => r.ServerId == id && r.Token == newToken);
         var registry = hub.Services.GetRequiredService<AgentRegistry>();
         Assert.True(registry.TryGet(id, out var session));
-        session.RotateToken(AgentTokens.Hash(newToken), DateTimeOffset.UtcNow, AgentLifecycle.ContainerTokenOverlap);
+        session.RotateToken(Tokens.Hash(newToken), DateTimeOffset.UtcNow, AgentLifecycle.ContainerTokenOverlap);
         Assert.Equal(TimeSpan.FromHours(24), AgentLifecycle.ContainerTokenOverlap);
 
         // Both resume (the registry holds the 24 h grace).

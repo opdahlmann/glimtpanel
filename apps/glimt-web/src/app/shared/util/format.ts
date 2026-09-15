@@ -1,6 +1,18 @@
 /** Tallformatering. Alle tall vises med `.num` (tabular-nums) i malene. */
 
 const KB = 1024;
+export const GB = 1024 ** 3;
+export const DASH = '—';
+
+/** Prototypens `f1`: én desimal, alltid. */
+export const f1 = (n: number): string => (Math.round(n * 10) / 10).toFixed(1);
+
+/** 8 GB → "8", 7.8 GB → "7.8" (ingen ".0"). */
+export function gbLabel(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return DASH;
+  const gb = Math.round((bytes / GB) * 10) / 10;
+  return Number.isInteger(gb) ? String(gb) : gb.toFixed(1);
+}
 
 /** 1536 → "1.5 KB", 0 → "0 B". Én desimal fra KB og opp. */
 export function formatBytes(bytes: number): string {

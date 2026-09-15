@@ -23,11 +23,11 @@ public static partial class Validation
         return normalized.Length <= EmailMaxLength && EmailPattern().IsMatch(normalized) ? normalized : null;
     }
 
-    /// <summary>Trimmed name of 1–80 characters, or null when invalid.</summary>
-    public static string? NormalizeName(string? name)
+    /// <summary>Name of 1–max characters with runs of whitespace collapsed, or null when invalid. Users 80, servers 64, groups 40.</summary>
+    public static string? NormalizeName(string? name, int max = NameMaxLength)
     {
-        var trimmed = name?.Trim();
-        return string.IsNullOrEmpty(trimmed) || trimmed.Length > NameMaxLength ? null : trimmed;
+        var trimmed = string.Join(' ', (name ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return trimmed.Length is 0 || trimmed.Length > max ? null : trimmed;
     }
 
     public static bool IsLanguage(string? language) => language is "en" or "no";

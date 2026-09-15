@@ -62,7 +62,7 @@ public static class GroupsEndpoints
             return readOnly;
         }
 
-        var name = NormalizeName(request.Name);
+        var name = Validation.NormalizeName(request.Name, GroupDocument.NameMaxLength);
         if (name is null)
         {
             return Validation.ValidationProblem("name", $"Name must be 1–{GroupDocument.NameMaxLength} characters.");
@@ -115,7 +115,7 @@ public static class GroupsEndpoints
 
         if (request.Name is not null)
         {
-            var name = NormalizeName(request.Name);
+            var name = Validation.NormalizeName(request.Name, GroupDocument.NameMaxLength);
             if (name is null)
             {
                 return Validation.ValidationProblem("name", $"Name must be 1–{GroupDocument.NameMaxLength} characters.");
@@ -174,12 +174,6 @@ public static class GroupsEndpoints
     }
 
     /// <summary>1–40 characters after trimming, single spaces inside.</summary>
-    public static string? NormalizeName(string? name)
-    {
-        var trimmed = string.Join(' ', (name ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-        return trimmed.Length is 0 or > GroupDocument.NameMaxLength ? null : trimmed;
-    }
-
     /// <summary>Distinct ids, at most 100, each readable by the user (own or granted).</summary>
     private static async Task<(List<string>? Ids, IResult? Error)> ValidateMembersAsync(IEnumerable<string?> memberIds, string userId, IAccessService access, CancellationToken cancellationToken)
     {

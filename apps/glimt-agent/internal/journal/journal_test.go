@@ -358,8 +358,8 @@ func TestCounterRefresh(t *testing.T) {
 	if got.UFWBlocked != 0 || got.SSHFailedDay != 0 {
 		t.Errorf("after failure %+v", got)
 	}
-	if err, at := c.Err(); err == nil || !at.Equal(now) {
-		t.Errorf("Err() = %v %v", err, at)
+	if c.err == nil || !c.at.Equal(now) {
+		t.Errorf("last error = %v %v", c.err, c.at)
 	}
 }
 

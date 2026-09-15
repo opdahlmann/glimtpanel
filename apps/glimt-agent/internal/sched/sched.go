@@ -10,22 +10,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/collect"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/protocol"
 )
 
 // Sink receives outbound messages (the WebSocket send queue).
-type Sink interface {
-	Send(protocol.Message) bool
-}
+type Sink = protocol.Sender
 
-// System is the host collector facade (internal/collect.System).
-type System interface {
-	Host(ctx context.Context) (protocol.Host, error)
-	Processes(ctx context.Context, topN int) ([]protocol.Process, protocol.ProcessTotals, error)
-	Services(ctx context.Context) (*protocol.Services, error)
-	Maintenance(ctx context.Context) (*protocol.Maintenance, error)
-	Security(ctx context.Context) (*protocol.Security, error)
-}
+// System is the host collector facade.
+type System = collect.System
 
 // HealthChecker runs a container node's health URL and TCP checks once per
 // snapshot (internal/health.Checker); nil when not configured.

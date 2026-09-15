@@ -1,3 +1,4 @@
+using Glimt.Hub.Features.Auth;
 using System.Net.WebSockets;
 using Glimt.Hub.Features.Agents;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,7 +74,7 @@ public sealed class AgentWebSocketTests(HubFactory factory) : IClassFixture<HubF
             Assert.True(session.Connected);
             Assert.Equal("up", session.Status);
             Assert.Equal("ubuntu-dev", session.Hostname);
-            Assert.Equal(AgentTokens.Hash(token), session.TokenHash);
+            Assert.Equal(Tokens.Hash(token), session.TokenHash);
         }
 
         await using (var agent = await factory.ConnectAgentAsync(ct))

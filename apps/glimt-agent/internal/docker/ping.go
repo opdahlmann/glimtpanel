@@ -22,9 +22,6 @@ import (
 // DefaultSocket is the local daemon socket.
 const DefaultSocket = "/var/run/docker.sock"
 
-// DefaultProxyURL is where docker-socket-proxy is expected.
-const DefaultProxyURL = "tcp://127.0.0.1:2375"
-
 // MinAPIVersion is the oldest Engine API the agent accepts (one-shot stats
 // and cgroup v2 daemons). Docker 20.10 and newer satisfy it.
 const MinAPIVersion = "1.41"

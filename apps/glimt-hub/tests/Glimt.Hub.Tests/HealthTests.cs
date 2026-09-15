@@ -40,7 +40,7 @@ public sealed class HealthTests(HubFactory factory) : IClassFixture<HubFactory>
         Assert.Contains("version=\"${GLIMT_AGENT_VERSION:-latest}\"", script);
         Assert.Contains("sha256sum -c", script);
         Assert.Equal("public, max-age=3600", response.Headers.CacheControl?.ToString());
-        Assert.Equal("wss://api.glimtpanel.com/agent/ws", InstallEndpoint.AgentWsUrl(new GlimtOptions { Env = GlimtOptions.E2e, MongoUri = HubFactory.UnreachableMongoUri, MongoDb = "t", JwtSecret = "t", HubUrl = "http://localhost:5080", HubPublicUrl = "https://api.glimtpanel.com/" }));
+        Assert.Equal("wss://api.glimtpanel.com/agent/ws", ContainerSnippets.AgentWsUrl(new GlimtOptions { Env = GlimtOptions.E2e, MongoUri = HubFactory.UnreachableMongoUri, MongoDb = "t", JwtSecret = "t", HubUrl = "http://localhost:5080", HubPublicUrl = "https://api.glimtpanel.com/" }));
     }
 
     [Fact]

@@ -2,7 +2,7 @@ import { I18nKey } from '@core/i18n.service';
 import { ContainerInfo, OsInfo, ProcessInfo, ServerDto, ServerListItem, ServerStatus } from '@core/live.types';
 import { BadgeTone } from '@shared/badge/badge.component';
 import { ChipTone } from '@shared/chip/chip.component';
-import { formatDuration, formatRate } from '@shared/util/format';
+import { DASH, f1, formatDuration, formatRate, GB, gbLabel } from '@shared/util/format';
 import { thr } from '@shared/util/thr';
 
 /** Det serversiden trenger fra I18nService (så funksjonene kan testes uten Angular). */
@@ -14,20 +14,8 @@ export interface ServerTexts {
   formatMonthYear(ms: number): string;
 }
 
-export const GB = 1024 ** 3;
 export const MB = 1024 ** 2;
-const DASH = '—';
 const DAY_MS = 86_400_000;
-
-/** Prototypens `f1`: én desimal, alltid. */
-export const f1 = (n: number): string => (Math.round(n * 10) / 10).toFixed(1);
-
-/** 8 GB → "8", 7.8 GB → "7.8" (ingen ".0"). */
-export function gbLabel(bytes: number | null | undefined): string {
-  if (!bytes || bytes <= 0) return DASH;
-  const gb = Math.round((bytes / GB) * 10) / 10;
-  return Number.isInteger(gb) ? String(gb) : gb.toFixed(1);
-}
 
 /** Disk (steg 5.5): GB under 1 000 GB, TB over, én desimal for TB. */
 export function diskSize(bytes: number): string {

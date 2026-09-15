@@ -96,7 +96,7 @@ internal sealed class DevSeeder(GlimtOptions options, MongoContext mongo, MongoI
         }
 
         var servers = mongo.Db.GetCollection<ServerDocument>(ServerDocument.Collection);
-        var hash = AgentTokens.Hash(options.DevContainerToken.Trim());
+        var hash = Auth.Tokens.Hash(options.DevContainerToken.Trim());
         var now = clock.GetUtcNow().UtcDateTime;
         var update = Builders<ServerDocument>.Update
             .Set(s => s.TokenHash, hash)

@@ -7,12 +7,11 @@ import { GrantDto } from '@core/live.types';
 import { ServerListService } from '@core/server-list.service';
 import { TPipe } from '@core/t.pipe';
 import { ButtonComponent } from '@shared/button/button.component';
-import { DataGridComponent } from '@shared/data-grid/data-grid.component';
+import { escapeHtml, DataGridComponent } from '@shared/data-grid/data-grid.component';
 import { GridRowContext } from '@shared/data-grid/grid-renderers';
 import { InputComponent } from '@shared/input/input.component';
 import { SelectComponent, SelectOption } from '@shared/select/select.component';
 import { ToastService } from '@shared/toast/toast.service';
-import { esc } from './grid-cells';
 
 /** En tilgang som rad i gridet. */
 export interface GrantRow {
@@ -78,7 +77,7 @@ export class AccessSettingsComponent {
         headerName: t.t('email'),
         flex: 2,
         minWidth: 200,
-        cellRenderer: (p: { data?: GrantRow }) => (p.data ? `<span class="gp-initials">${esc(p.data.initials)}</span><span class="gp-cell-strong">${esc(p.data.email)}</span> <span class="gp-badge-reader">${esc(t.t('reader'))}</span>` : ''),
+        cellRenderer: (p: { data?: GrantRow }) => (p.data ? `<span class="gp-initials">${escapeHtml(p.data.initials)}</span><span class="gp-cell-strong">${escapeHtml(p.data.email)}</span> <span class="gp-badge-reader">${escapeHtml(t.t('reader'))}</span>` : ''),
       },
       { field: 'scope', colId: 'scope', headerName: t.t('scope'), flex: 1, minWidth: 120, cellStyle: { color: 'var(--w-70)', fontSize: '11px' } },
       {
@@ -86,7 +85,7 @@ export class AccessSettingsComponent {
         colId: 'status',
         headerName: t.t('status'),
         width: 190,
-        cellRenderer: (p: { data?: GrantRow }) => (p.data ? (p.data.pending ? `<span class="gp-cell-warn">${esc(t.t('pendingInvite'))}</span>` : `<span class="gp-cell-ok">${esc(t.t('accepted'))}</span>`) : ''),
+        cellRenderer: (p: { data?: GrantRow }) => (p.data ? (p.data.pending ? `<span class="gp-cell-warn">${escapeHtml(t.t('pendingInvite'))}</span>` : `<span class="gp-cell-ok">${escapeHtml(t.t('accepted'))}</span>`) : ''),
         valueFormatter: (p) => (p.data?.pending ? t.t('pendingInvite') : t.t('accepted')),
       },
       {
@@ -94,7 +93,7 @@ export class AccessSettingsComponent {
         headerName: t.t('actionsCol'),
         width: 150,
         sortable: false,
-        cellRenderer: (p: { data?: GrantRow }) => (p.data ? `<button type="button" class="gp-cell-btn danger" data-action="remove" data-id="${esc(p.data.id)}">${esc(t.t('removeAccess'))}</button>` : ''),
+        cellRenderer: (p: { data?: GrantRow }) => (p.data ? `<button type="button" class="gp-cell-btn danger" data-action="remove" data-id="${escapeHtml(p.data.id)}">${escapeHtml(t.t('removeAccess'))}</button>` : ''),
         valueFormatter: () => '',
       },
     ];

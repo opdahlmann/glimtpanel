@@ -348,22 +348,3 @@ func parseTimeMs(s string) int64 {
 	}
 	return t.UnixMilli()
 }
-
-// Merge copies the rate fields from stats into containers, matched by id.
-func Merge(containers []protocol.Container, stats []protocol.ContainerStats) {
-	byID := make(map[string]protocol.ContainerStats, len(stats))
-	for _, s := range stats {
-		byID[s.ID] = s
-	}
-	for i := range containers {
-		s, ok := byID[containers[i].ID]
-		if !ok {
-			continue
-		}
-		containers[i].CPUPct = s.CPUPct
-		containers[i].MemBytes = s.MemBytes
-		containers[i].MemLimit = s.MemLimit
-		containers[i].RxBps = s.RxBps
-		containers[i].TxBps = s.TxBps
-	}
-}

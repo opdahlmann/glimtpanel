@@ -64,12 +64,6 @@ func New(logger *slog.Logger, run Runner) *Journal {
 	return &Journal{run: run, log: logger, MaxLine: 64 << 10}
 }
 
-// Available reports whether journalctl can be found.
-func Available() bool {
-	_, err := exec.LookPath("journalctl")
-	return err == nil
-}
-
 // Args builds the journalctl argument lists for a request; the firewall
 // source needs two processes (see below), every other source one. The
 // common prefix "-o json --no-pager" is included.

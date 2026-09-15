@@ -1,4 +1,4 @@
-import { toLogLine } from '../server/panels/logs-panel.component';
+import { toLogLine } from '@core/log-stream.service';
 import { demoServer } from '../server/server.fixtures';
 import { findContainer } from './container.page';
 

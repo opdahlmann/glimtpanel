@@ -1,7 +1,8 @@
 import en from '@i18n/en.json';
 import { CardDto } from '@core/live.types';
 import { I18nKey } from '@core/i18n.service';
-import { cardView, CardTexts, f1, gbLabel, osShort, severityColor } from './card-view';
+import { f1, gbLabel } from '@shared/util/format';
+import { cardView, CardTexts, osShort, severityColor } from './card-view';
 import { demoCardByName } from '../overview.fixtures';
 
 const texts: CardTexts = {

@@ -46,7 +46,7 @@ public sealed class AgentAuthenticator(
             var session = registry.GetOrAdd(ServerIds.ForDev(hello.Hostname), out var added);
             session.OwnerId ??= await users.DevUserIdAsync(cancellationToken);
             var token = AgentTokens.Generate();
-            session.RotateToken(AgentTokens.Hash(token), clock.GetUtcNow());
+            session.RotateToken(Auth.Tokens.Hash(token), clock.GetUtcNow());
             return new AuthResult(session, token, null, added);
         }
 
@@ -61,13 +61,13 @@ public sealed class AgentAuthenticator(
         var newSession = registry.GetOrAdd(ServerIds.New());
         newSession.OwnerId = info.OwnerId;
         var newToken = AgentTokens.Generate();
-        newSession.RotateToken(AgentTokens.Hash(newToken), clock.GetUtcNow());
+        newSession.RotateToken(Auth.Tokens.Hash(newToken), clock.GetUtcNow());
         return new AuthResult(newSession, newToken, null, IsNew: true);
     }
 
     private async Task<AuthResult> ResumeAsync(string token, CancellationToken cancellationToken)
     {
-        var hash = AgentTokens.Hash(token);
+        var hash = Auth.Tokens.Hash(token);
         var now = clock.GetUtcNow();
         var session = registry.FindByTokenHash(hash, now);
         if (session is null)

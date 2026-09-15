@@ -118,13 +118,6 @@ func (c *Counter) SecurityCounts(context.Context) collect.SecurityCounts {
 	return out
 }
 
-// Err returns the error of the last Refresh, and when it ran.
-func (c *Counter) Err() (error, time.Time) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.err, c.at
-}
-
 func (c *Counter) each(ctx context.Context, args []string, fn func([]byte)) error {
 	rc, err := c.run(ctx, args)
 	if err != nil {

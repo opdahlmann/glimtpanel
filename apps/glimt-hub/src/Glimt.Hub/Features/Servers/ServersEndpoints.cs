@@ -88,7 +88,7 @@ public static class ServersEndpoints
             return Validation.ValidationProblem("kind", "kind must be container; servers are added with an enrol key.");
         }
 
-        var name = ServerTags.NormalizeName(request.Name);
+        var name = Validation.NormalizeName(request.Name, ServerTags.NameMaxLength);
         if (name is null)
         {
             return Validation.ValidationProblem("name", $"Name must be 1–{ServerTags.NameMaxLength} characters.");
@@ -114,7 +114,7 @@ public static class ServersEndpoints
             Hostname = name,
             Name = name,
             Kind = NodeKinds.Container,
-            TokenHash = AgentTokens.Hash(token),
+            TokenHash = Auth.Tokens.Hash(token),
             Status = ServerStatuses.Down,
             CreatedAt = now.UtcDateTime,
         };
@@ -209,7 +209,7 @@ public static class ServersEndpoints
         string? name = null;
         if (request.Name is not null)
         {
-            name = ServerTags.NormalizeName(request.Name);
+            name = Validation.NormalizeName(request.Name, ServerTags.NameMaxLength);
             if (name is null)
             {
                 errors["name"] = [$"Name must be 1–{ServerTags.NameMaxLength} characters."];
@@ -298,7 +298,7 @@ public static class ServersEndpoints
 
         var isContainer = NodeKinds.Normalize(doc.Kind) == NodeKinds.Container;
         var token = AgentTokens.Generate();
-        var hash = AgentTokens.Hash(token);
+        var hash = Auth.Tokens.Hash(token);
         var validUntil = clock.GetUtcNow().Add(isContainer ? AgentLifecycle.ContainerTokenOverlap : PreviousTokenOverlap);
         if (!await servers.RotateTokenAsync(id, hash, validUntil.UtcDateTime, cancellationToken))
         {

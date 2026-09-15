@@ -513,7 +513,7 @@ public sealed class FakeAgentService(
         }
 
         var now = clock.GetUtcNow();
-        var hash = AgentTokens.Hash(token.Trim());
+        var hash = Auth.Tokens.Hash(token.Trim());
         var session = registry.FindByTokenHash(hash, now);
         if (session is null && await store.FindByTokenHashAsync(hash, cancellationToken) is { } doc)
         {

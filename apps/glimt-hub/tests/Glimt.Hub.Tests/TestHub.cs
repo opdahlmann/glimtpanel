@@ -67,7 +67,7 @@ public sealed class TestHub : IAsyncLifetime
             Hostname = name,
             Name = name,
             Tags = tags?.ToList() ?? [],
-            TokenHash = Features.Agents.AgentTokens.Hash(Features.Agents.AgentTokens.Generate()),
+            TokenHash = Features.Auth.Tokens.Hash(Features.Agents.AgentTokens.Generate()),
             Status = status ?? "down",
             Os = ubuntuVersion is null ? null : new OsDocument { Id = "ubuntu", VersionId = ubuntuVersion, PrettyName = $"Ubuntu {ubuntuVersion} LTS" },
             Arch = "amd64",

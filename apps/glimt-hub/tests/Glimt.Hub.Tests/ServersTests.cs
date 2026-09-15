@@ -1,3 +1,4 @@
+using Glimt.Hub.Features.Auth;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -42,7 +43,7 @@ public sealed class ServersTests(TestHub hub) : IClassFixture<TestHub>
         Assert.Equal("simple", info.DockerMode);
         Assert.Null(await store.TryConsumeAsync(key, Repo.Timeout()));
 
-        var stored = await hub.Collection<EnrolKeyDocument>(EnrolKeyDocument.Collection).Find(k => k.KeyHash == AgentTokens.Hash(key)).FirstAsync();
+        var stored = await hub.Collection<EnrolKeyDocument>(EnrolKeyDocument.Collection).Find(k => k.KeyHash == Tokens.Hash(key)).FirstAsync();
         Assert.NotNull(stored.UsedAt);
     }
 
@@ -53,7 +54,7 @@ public sealed class ServersTests(TestHub hub) : IClassFixture<TestHub>
         var key = MongoEnrolKeyStore.GenerateKey();
         await hub.Collection<EnrolKeyDocument>(EnrolKeyDocument.Collection).InsertOneAsync(new EnrolKeyDocument
         {
-            KeyHash = AgentTokens.Hash(key),
+            KeyHash = Tokens.Hash(key),
             OwnerId = user.Id,
             DockerMode = "proxy",
             ExpiresAt = DateTime.UtcNow.AddMinutes(-1),
@@ -183,7 +184,7 @@ public sealed class ServersTests(TestHub hub) : IClassFixture<TestHub>
 
         var rotated = Assert.Single(hub.Lifecycle.Rotated, r => r.ServerId == server.Id);
         Assert.StartsWith("agt_", rotated.Token);
-        Assert.Equal(AgentTokens.Hash(rotated.Token), rotated.TokenHash);
+        Assert.Equal(Tokens.Hash(rotated.Token), rotated.TokenHash);
 
         var doc = await hub.Collection<ServerDocument>(ServerDocument.Collection).Find(s => s.Id == server.Id).FirstAsync();
         Assert.Equal(rotated.TokenHash, doc.TokenHash);

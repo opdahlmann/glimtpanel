@@ -10,14 +10,13 @@ import { DeleteServerResponse, RotateKeyResponse, ServerListItem, SubscriptionDt
 import { ServerListService } from '@core/server-list.service';
 import { TPipe } from '@core/t.pipe';
 import { ButtonComponent } from '@shared/button/button.component';
-import { DataGridComponent } from '@shared/data-grid/data-grid.component';
+import { escapeHtml, DataGridComponent } from '@shared/data-grid/data-grid.component';
 import { GridRowContext } from '@shared/data-grid/grid-renderers';
 import { InputComponent } from '@shared/input/input.component';
 import { ModalComponent } from '@shared/modal/modal.component';
 import { AutofocusDirective } from '@shared/util/autofocus.directive';
 import { ToastService } from '@shared/toast/toast.service';
 import { MAX_TAGS, normalizeTag } from '../overview/add-server/add-server-dialog.component';
-import { esc } from './grid-cells';
 
 /** En node som rad i gridet. */
 export interface NodeRow {
@@ -100,7 +99,7 @@ export class ServersSettingsComponent {
         headerName: t.t('nodeCol'),
         flex: 2,
         minWidth: 160,
-        cellRenderer: (p: { data?: NodeRow }) => (p.data ? `<span class="gp-dot ${p.data.dot}"></span><span class="gp-cell-strong">${esc(p.data.name)}</span>` : ''),
+        cellRenderer: (p: { data?: NodeRow }) => (p.data ? `<span class="gp-dot ${p.data.dot}"></span><span class="gp-cell-strong">${escapeHtml(p.data.name)}</span>` : ''),
       },
       { field: 'kind', colId: 'kind', headerName: t.t('typeCol'), width: 110, valueFormatter: (p) => (p.data?.kind === 'container' ? t.t('containerLabel') : t.t('serverLabel')), cellStyle: { color: 'var(--w-60)', fontSize: '11px' } },
       {
@@ -109,7 +108,7 @@ export class ServersSettingsComponent {
         headerName: t.t('tagsCol'),
         flex: 1,
         minWidth: 120,
-        cellRenderer: (p: { data?: NodeRow }) => (p.data ? `<button type="button" class="gp-cell-btn" data-action="tags" data-id="${esc(p.data.id)}" aria-label="${esc(t.t('editTags'))} ${esc(p.data.name)}">${esc(p.data.tagText)}</button>` : ''),
+        cellRenderer: (p: { data?: NodeRow }) => (p.data ? `<button type="button" class="gp-cell-btn" data-action="tags" data-id="${escapeHtml(p.data.id)}" aria-label="${escapeHtml(t.t('editTags'))} ${escapeHtml(p.data.name)}">${escapeHtml(p.data.tagText)}</button>` : ''),
       },
       { field: 'statusText', colId: 'status', headerName: t.t('statusCol'), width: 150, cellStyle: { color: 'var(--w-60)', fontSize: '11px' } },
       {
@@ -119,9 +118,9 @@ export class ServersSettingsComponent {
         sortable: false,
         cellRenderer: (p: { data?: NodeRow }) =>
           p.data
-            ? `<button type="button" class="gp-cell-btn" data-action="rotate" data-id="${esc(p.data.id)}">${esc(t.t('rotateKey'))}</button>` +
-              (pause ? `<button type="button" class="gp-cell-btn" data-action="pause" data-id="${esc(p.data.id)}">${esc(t.t('pause'))}</button>` : '') +
-              `<button type="button" class="gp-cell-btn danger" data-action="remove" data-id="${esc(p.data.id)}">${esc(t.t('removeNode'))}</button>`
+            ? `<button type="button" class="gp-cell-btn" data-action="rotate" data-id="${escapeHtml(p.data.id)}">${escapeHtml(t.t('rotateKey'))}</button>` +
+              (pause ? `<button type="button" class="gp-cell-btn" data-action="pause" data-id="${escapeHtml(p.data.id)}">${escapeHtml(t.t('pause'))}</button>` : '') +
+              `<button type="button" class="gp-cell-btn danger" data-action="remove" data-id="${escapeHtml(p.data.id)}">${escapeHtml(t.t('removeNode'))}</button>`
             : '',
         valueFormatter: () => '',
       },

@@ -14,7 +14,7 @@ import { LiveDotComponent } from '@shared/live-dot/live-dot.component';
 import { LogLine, LogViewComponent } from '@shared/log-view/log-view.component';
 import { TitleService } from '../../shell/title.service';
 import { HistoryChartComponent } from '../server/history-chart.component';
-import { toLogLine } from '../server/panels/logs-panel.component';
+import { toLogLine } from '@core/log-stream.service';
 import { containerView } from '../server/server-view';
 
 /** Linjer ved start og maks i visningen (steg 5.13). */

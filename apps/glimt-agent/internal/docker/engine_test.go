@@ -291,10 +291,6 @@ func TestStatsFromCgroupAndProc(t *testing.T) {
 	if n := d.count("/v1.47/containers/" + webID + "/stats"); n != 0 {
 		t.Errorf("stats API used %d times although cgroup and /proc were readable", n)
 	}
-	Merge(cs, second)
-	if cs[0].CPUPct != 25 || cs[0].RxBps != 10_000 || cs[1].CPUPct != 0 {
-		t.Errorf("merge %+v", cs)
-	}
 }
 
 func TestStatsFallsBackToAPIForNetwork(t *testing.T) {

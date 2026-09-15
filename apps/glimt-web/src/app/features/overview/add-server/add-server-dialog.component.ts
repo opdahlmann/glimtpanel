@@ -11,7 +11,8 @@ import { InputComponent } from '@shared/input/input.component';
 import { ModalComponent } from '@shared/modal/modal.component';
 import { AutofocusDirective } from '@shared/util/autofocus.directive';
 import { EnrolPanelComponent } from '../enrol/enrol-panel.component';
-import { gbLabel, osShort } from '../server-card/card-view';
+import { gbLabel } from '@shared/util/format';
+import { osShort } from '../server-card/card-view';
 
 export type AddStep = 0 | 1 | 2;
 

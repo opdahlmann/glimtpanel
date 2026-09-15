@@ -51,7 +51,7 @@ public sealed class MongoEnrolKeyStore(MongoContext mongo, TimeProvider clock, I
         var now = clock.GetUtcNow().UtcDateTime;
         var doc = new EnrolKeyDocument
         {
-            KeyHash = AgentTokens.Hash(key),
+            KeyHash = Auth.Tokens.Hash(key),
             OwnerId = ownerId,
             DockerMode = dockerMode,
             ExpiresAt = now.Add(Lifetime),
@@ -71,7 +71,7 @@ public sealed class MongoEnrolKeyStore(MongoContext mongo, TimeProvider clock, I
         try
         {
             var now = clock.GetUtcNow().UtcDateTime;
-            var hash = AgentTokens.Hash(key.Trim());
+            var hash = Auth.Tokens.Hash(key.Trim());
             var doc = await Keys.FindOneAndUpdateAsync(
                 k => k.KeyHash == hash && k.UsedAt == null && k.ExpiresAt > now,
                 Builders<EnrolKeyDocument>.Update.Set(k => k.UsedAt, now),

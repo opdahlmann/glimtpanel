@@ -41,23 +41,7 @@ public static class InstallEndpoint
         }
 
         return template
-            .Replace(HubLine, "\thub=\"" + AgentWsUrl(options) + "\"\n", StringComparison.Ordinal)
+            .Replace(HubLine, "\thub=\"" + ContainerSnippets.AgentWsUrl(options) + "\"\n", StringComparison.Ordinal)
             .Replace(VersionLine, "\tversion=\"${GLIMT_AGENT_VERSION:-" + (options.AgentVersion ?? "latest") + "}\"\n", StringComparison.Ordinal);
-    }
-
-    /// <summary>https://api.glimtpanel.com → wss://api.glimtpanel.com/agent/ws (http → ws for local hubs).</summary>
-    internal static string AgentWsUrl(GlimtOptions options)
-    {
-        var url = (options.HubPublicUrl ?? options.HubUrl).TrimEnd('/');
-        if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            url = "wss://" + url["https://".Length..];
-        }
-        else if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-        {
-            url = "ws://" + url["http://".Length..];
-        }
-
-        return url + "/agent/ws";
     }
 }

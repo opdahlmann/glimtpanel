@@ -7,6 +7,7 @@ package protocol
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 // Version is the protocol version carried in hello.v.
@@ -73,6 +74,12 @@ type Header struct {
 }
 
 func (h *Header) setType(t string) { h.Type = t }
+
+// Sender is the outbound queue every producer (scheduler, log manager)
+// writes to. Send returns false when the message was not queued.
+type Sender interface {
+	Send(Message) bool
+}
 
 // Message is implemented by pointers to all message structs.
 type Message interface {
@@ -461,39 +468,21 @@ func (*LogStart) MessageType() string    { return TypeLogStart }
 func (*LogStop) MessageType() string     { return TypeLogStop }
 func (*Rotate) MessageType() string      { return TypeRotate }
 
+var constructors = map[string]func() Message{
+	TypeHello: func() Message { return &Hello{} }, TypeSnapshot: func() Message { return &Snapshot{} },
+	TypeStream: func() Message { return &Stream{} }, TypeLog: func() Message { return &Log{} },
+	TypeLogEnd: func() Message { return &LogEnd{} }, TypePong: func() Message { return &Pong{} },
+	TypeBye: func() Message { return &Bye{} }, TypeWelcome: func() Message { return &Welcome{} },
+	TypeAuthFailed: func() Message { return &AuthFailed{} }, TypePing: func() Message { return &Ping{} },
+	TypeSubscribe: func() Message { return &Subscribe{} }, TypeUnsubscribe: func() Message { return &Unsubscribe{} },
+	TypeLogStart: func() Message { return &LogStart{} }, TypeLogStop: func() Message { return &LogStop{} },
+	TypeRotate: func() Message { return &Rotate{} },
+}
+
 // New returns an empty message for a type, or nil for an unknown type.
 func New(typ string) Message {
-	switch typ {
-	case TypeHello:
-		return &Hello{}
-	case TypeSnapshot:
-		return &Snapshot{}
-	case TypeStream:
-		return &Stream{}
-	case TypeLog:
-		return &Log{}
-	case TypeLogEnd:
-		return &LogEnd{}
-	case TypePong:
-		return &Pong{}
-	case TypeBye:
-		return &Bye{}
-	case TypeWelcome:
-		return &Welcome{}
-	case TypeAuthFailed:
-		return &AuthFailed{}
-	case TypePing:
-		return &Ping{}
-	case TypeSubscribe:
-		return &Subscribe{}
-	case TypeUnsubscribe:
-		return &Unsubscribe{}
-	case TypeLogStart:
-		return &LogStart{}
-	case TypeLogStop:
-		return &LogStop{}
-	case TypeRotate:
-		return &Rotate{}
+	if c, ok := constructors[typ]; ok {
+		return c()
 	}
 	return nil
 }
@@ -505,10 +494,8 @@ func (e *UnknownTypeError) Error() string {
 	if e.Type == "" {
 		return "protocol: message without type"
 	}
-	return "protocol: unknown message type " + strconv(e.Type)
+	return "protocol: unknown message type " + strconv.Quote(e.Type)
 }
-
-func strconv(s string) string { return fmt.Sprintf("%q", s) }
 
 // Decode reads "type" and unmarshals the frame into the matching struct.
 // Unknown fields are ignored so newer hubs can add fields freely.

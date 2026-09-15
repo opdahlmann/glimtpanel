@@ -3,18 +3,13 @@ import { Router } from '@angular/router';
 import { ActivityService } from '@core/activity.service';
 import { I18nService } from '@core/i18n.service';
 import { LiveService } from '@core/live.service';
-import { LogLineDto, LogRequest, NodeKind } from '@core/live.types';
+import { LogRequest, NodeKind } from '@core/live.types';
+import { toLogLine } from '@core/log-stream.service';
 import { ButtonComponent } from '@shared/button/button.component';
 import { LogLine, LogViewComponent } from '@shared/log-view/log-view.component';
 
 /** Antall linjer i panelet (steg 5.12). */
 export const LOG_PANEL_TAIL = 10;
-
-/** Hubens `priority` («err», «warn», «info» eller tom) → loggboksens. */
-export function toLogLine(l: LogLineDto): LogLine {
-  const p = l.priority === 'err' || l.priority === 'warn' ? l.priority : 'info';
-  return { ts: l.ts, unit: l.unit ?? undefined, container: l.container ?? undefined, priority: p, message: l.message };
-}
 
 /** Kildene i containernodens loggpanel (steg 12.9): én chip per fil fra GLIMT_LOG_PATHS og «stdout (via host)» når lenket. */
 export const STDOUT_SOURCE = 'stdout';

@@ -21,9 +21,7 @@ import (
 var ErrUnavailable = errors.New("logs: source unavailable")
 
 // Sink receives outbound messages (the WebSocket send queue).
-type Sink interface {
-	Send(protocol.Message) bool
-}
+type Sink = protocol.Sender
 
 // Opener streams lines for a request into out until ctx ends (return
 // ctx.Err()), the source is exhausted (return nil) or it fails.

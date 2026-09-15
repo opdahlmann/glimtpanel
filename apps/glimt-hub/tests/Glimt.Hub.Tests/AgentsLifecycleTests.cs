@@ -1,3 +1,4 @@
+using Glimt.Hub.Features.Auth;
 using System.Net;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
@@ -70,7 +71,7 @@ public sealed class AgentsLifecycleTests : IAsyncLifetime
         var newToken = AgentTokens.Generate();
         var lifecycle = _app.Services.GetRequiredService<IServerLifecycle>();
         Assert.IsType<AgentLifecycle>(lifecycle);
-        await lifecycle.TokenRotatedAsync("dev-rot-host", newToken, AgentTokens.Hash(newToken), ct);
+        await lifecycle.TokenRotatedAsync("dev-rot-host", newToken, Tokens.Hash(newToken), ct);
 
         var rotate = await LiveTestSupport.ExpectAsync(agent, "rotate", ct);
         Assert.NotNull(rotate);

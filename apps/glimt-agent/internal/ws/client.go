@@ -28,13 +28,10 @@ type TokenStore interface {
 	Clear() error
 }
 
-// Sender is the outbound queue handed to the session.
-type Sender interface {
-	// Send queues a message. Stream and log messages are dropped when the
-	// queue is full; everything else (snapshot, logEnd, pong) waits.
-	// Returns false if not queued.
-	Send(protocol.Message) bool
-}
+// Sender is the outbound queue handed to the session. Stream and log
+// messages are dropped when the queue is full; everything else (snapshot,
+// logEnd, pong) waits.
+type Sender = protocol.Sender
 
 // Session is what a connection drives after welcome: the scheduler and the
 // log stream manager. It ends with the context given to NewSession.

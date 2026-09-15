@@ -126,9 +126,4 @@ public static partial class ServerTags
         return result;
     }
 
-    public static string? NormalizeName(string? name)
-    {
-        var trimmed = name?.Trim();
-        return string.IsNullOrEmpty(trimmed) || trimmed.Length > NameMaxLength ? null : trimmed;
-    }
 }

@@ -1,7 +1,7 @@
 import { CardDto, ServerStatus } from '@core/live.types';
 import { ChipTone } from '@shared/chip/chip.component';
-import { formatDuration, formatRate } from '@shared/util/format';
-import { CardTexts, f1, gbLabel, severityColor } from '../server-card/card-view';
+import { DASH, f1, formatDuration, formatRate, GB, gbLabel } from '@shared/util/format';
+import { CardTexts, severityColor } from '../server-card/card-view';
 
 /** Det containerkortet tegner (steg 12.8, skjerm 20). Rene avledninger av `CardDto` med `kind: container`. */
 export interface ContainerCardView {
@@ -33,8 +33,6 @@ export interface ContainerCardView {
   ariaLabel: string;
 }
 
-const GB = 1024 ** 3;
-const DASH = '—';
 /** «Restarts» blir oransje over dette antallet siste 24 t (CI 8). */
 export const RESTARTS_WARN_OVER = 3;
 

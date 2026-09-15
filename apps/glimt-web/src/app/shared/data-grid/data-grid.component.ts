@@ -193,6 +193,7 @@ export class DataGridComponent<T> {
   }
 }
 
-function escapeHtml(s: string): string {
+/** HTML-renderere (innstillingsgridene, steg 8.3–8.4) bygger streng-HTML; alt fra data escapes. */
+export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c);
 }

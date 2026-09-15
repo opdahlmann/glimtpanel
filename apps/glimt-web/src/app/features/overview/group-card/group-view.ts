@@ -1,5 +1,6 @@
 import { CardDto, GroupDto, NodeKind, ServerStatus } from '@core/live.types';
-import { CardTexts, f1, gbLabel } from '../server-card/card-view';
+import { DASH, f1, GB, gbLabel } from '@shared/util/format';
+import { CardTexts } from '../server-card/card-view';
 
 /** Én kompakt medlemsrad på gruppekortet (steg 13.2): prikk, navn, type, CPU %, Mem %. */
 export interface MemberRow {
@@ -34,8 +35,6 @@ export interface GroupView {
   ariaLabel: string;
 }
 
-const GB = 1024 ** 3;
-const DASH = '—';
 const STATUS_RANK: Record<ServerStatus, number> = { down: 0, sleeping: 1, paused: 2, up: 3 };
 
 /** Verste status i gruppen: nede > sover > pauset > oppe. */
