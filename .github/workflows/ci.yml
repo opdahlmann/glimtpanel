@@ -93,19 +93,19 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - name: hub
         uses: docker/build-push-action@v6
-        with: { context: ., file: infra/glimt-hub/Dockerfile, push: false, load: true, tags: "glimt-hub:local", cache-from: type=gha, cache-to: type=gha,mode=max }
+        with: { context: ., file: infra/glimt-hub/Dockerfile, push: false, load: true, tags: "glimt-hub:local", cache-from: type=gha, cache-to: "type=gha,mode=max" }
       - name: web
         uses: docker/build-push-action@v6
-        with: { context: ., file: infra/glimt-web/Dockerfile, push: false, load: true, tags: "glimt-web:local", cache-from: type=gha, cache-to: type=gha,mode=max }
+        with: { context: ., file: infra/glimt-web/Dockerfile, push: false, load: true, tags: "glimt-web:local", cache-from: type=gha, cache-to: "type=gha,mode=max" }
       - name: site
         uses: docker/build-push-action@v6
-        with: { context: ., file: infra/glimt-site/Dockerfile, push: false, load: true, tags: "glimt-site:local", cache-from: type=gha, cache-to: type=gha,mode=max }
+        with: { context: ., file: infra/glimt-site/Dockerfile, push: false, load: true, tags: "glimt-site:local", cache-from: type=gha, cache-to: "type=gha,mode=max" }
       - name: agent (systemd-container bygger)
         uses: docker/build-push-action@v6
-        with: { context: ., file: apps/glimt-agent/Dockerfile.dev, push: false, cache-from: type=gha, cache-to: type=gha,mode=max }
+        with: { context: ., file: apps/glimt-agent/Dockerfile.dev, push: false, cache-from: type=gha, cache-to: "type=gha,mode=max" }
       - name: agent sidecar (bygger, starter og svarer på version)
         uses: docker/build-push-action@v6
-        with: { context: ., file: apps/glimt-agent/Dockerfile.sidecar, push: false, load: true, tags: glimt-agent-sidecar:ci, cache-from: type=gha, cache-to: type=gha,mode=max }
+        with: { context: ., file: apps/glimt-agent/Dockerfile.sidecar, push: false, load: true, tags: glimt-agent-sidecar:ci, cache-from: type=gha, cache-to: "type=gha,mode=max" }
       - run: docker run --rm --entrypoint /glimt-agent glimt-agent-sidecar:ci version
       - name: sidecar under 15 MB
         run: |

@@ -76,7 +76,8 @@ describe('agenten i imagene', () => {
       assert.match(logs(c), /msg="container profile" cgroup=true/, `${app}: agenten fikk ikke containerens cgroup`);
       assert.equal(exec(c, 'cat /proc/1/comm').out, pid1, `${app}: appen er ikke lenger PID 1`);
       assert.ok(processes(c).includes('glimt-agent'));
-      assert.equal((await http(`${c.url}/${app === 'hub' ? 'healthz' : ''}`)).status, 200, `${app} svarer ikke med agenten ved siden av`);
+      // Agenten melder seg ofte før nginx eller Kestrel lytter, så appen får tid til å starte.
+      await waitFor(`${app} svarer med agenten ved siden av`, async () => (await http(`${c.url}/${app === 'hub' ? 'healthz' : ''}`)).status === 200);
     }
 
     for (const { c } of Object.values(nodes)) {
