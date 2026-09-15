@@ -6,7 +6,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi } from '../helpers/auth';
 import { forceLang } from '../helpers/e2e-api';
 
-const SCREENS = ['/', '/servers/demo-web-02', '/servers/demo-acme-backend', '/servers/demo-web-02/containers/', '/logs?server=demo-web-02', '/alerts', '/settings/account', '/settings/alerts', '/settings/servers', '/settings/access', '/settings/subscription', '/settings/data', '/welcome'];
+const SCREENS = ['/', '/servers/demo-web-02', '/servers/demo-acme-backend', '/servers/demo-web-02/containers/', '/logs?server=demo-web-02', '/alerts', '/settings/account', '/settings/alerts', '/settings/servers', '/settings/access', '/settings/subscription', '/settings/data', '/welcome', '/demo', '/demo/servers/demo-web-02', '/demo/settings'];
 
 async function axe(page: Page, url: string): Promise<string[]> {
   await page.goto(url);

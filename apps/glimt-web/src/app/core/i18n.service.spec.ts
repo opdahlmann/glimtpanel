@@ -31,11 +31,11 @@ describe('ordboken', () => {
 });
 
 describe('I18nService', () => {
-  let session: { isAuthenticated: ReturnType<typeof vi.fn>; updateAccount: ReturnType<typeof vi.fn> };
+  let session: { isAuthenticated: ReturnType<typeof vi.fn>; demoMode: ReturnType<typeof vi.fn>; updateAccount: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     clearStorage();
-    session = { isAuthenticated: vi.fn().mockReturnValue(false), updateAccount: vi.fn().mockResolvedValue(undefined) };
+    session = { isAuthenticated: vi.fn().mockReturnValue(false), demoMode: vi.fn().mockReturnValue(false), updateAccount: vi.fn().mockResolvedValue(undefined) };
     TestBed.configureTestingModule({ providers: [{ provide: SessionService, useValue: session }] });
   });
 
@@ -63,6 +63,16 @@ describe('I18nService', () => {
     i18n.setLang('no');
     await Promise.resolve();
     expect(session.updateAccount).toHaveBeenCalledWith({ language: 'no' });
+  });
+
+  it('lagrer ikke språket i profilen i demoen (steg 10.1)', async () => {
+    session.isAuthenticated.mockReturnValue(true);
+    session.demoMode.mockReturnValue(true);
+    const i18n = TestBed.inject(I18nService);
+    i18n.setLang('no');
+    await Promise.resolve();
+    expect(i18n.lang()).toBe('no');
+    expect(session.updateAccount).not.toHaveBeenCalled();
   });
 
   it('lagret valg > profil > standard', () => {

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Glimt.Hub.Features.Demo;
 using Glimt.Hub.Features.Groups;
+using Glimt.Hub.Features.Servers;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 
@@ -157,5 +158,14 @@ public sealed class GroupsTests(TestHub hub) : IClassFixture<TestHub>
         Assert.Equal("Acme", stored.Name);
         Assert.Equal(demo.OwnerId, stored.OwnerId);
         Assert.Contains("demo-acme-backend", stored.MemberIds);
+
+        // /demo (step 10.1): the demo account reads the 16 servers and 3 nodes as a reader and has its own copy of the two groups.
+        var visible = await client.GetFromJsonAsync<JsonElement>("/api/servers", Repo.Timeout());
+        var demoNodes = visible.EnumerateArray().Where(s => s.GetProperty("id").GetString()!.StartsWith(DemoData.ServerIdPrefix, StringComparison.Ordinal)).ToList();
+        Assert.Equal(DemoData.Definitions.Length + DemoData.Nodes.Length, demoNodes.Count);
+        Assert.All(demoNodes, s => Assert.Equal(ServerRoles.Reader, s.GetProperty("role").GetString()));
+        var demoGroups = await client.GetFromJsonAsync<JsonElement>("/api/groups", Repo.Timeout());
+        Assert.Equal(["Acme", "Edge"], demoGroups.EnumerateArray().Select(g => g.GetProperty("name").GetString()!).ToArray());
+        Assert.All(demoGroups.EnumerateArray(), g => Assert.EndsWith(DemoData.GroupIdSuffixDemo, g.GetProperty("id").GetString()));
     }
 }

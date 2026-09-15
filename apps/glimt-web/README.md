@@ -523,6 +523,32 @@ kontekst, 403 fra huben, ugyldig akseptlenke), `settings-data.spec.ts` (skjerm 1
   omgangen (krever produksjonsbygg bak proxy); målene i planen (Performance ≥ 85, Accessibility ≥ 95,
   Best practices ≥ 95) står som åpne.
 
+## Demomodus (fase 10)
+
+`/demo/**` (steg 10.1, FB 15.1) er hele dashbordet uten innlogging. `DemoShell` (`features/demo/`) venter på oppstartens
+oppfriskning, kaller `SessionService.startDemo()` (`POST /api/demo/session`, ingen token) og viser så samme skall som
+innlogget (sidepanel/topplinje, frakoblet-banner, bunnlinje, toast) med et smalt banner «Demo · fake servers · Create
+a free account →» øverst. Barna er oversikten, serversiden, containersiden, loggene, `settings` og en 404-side.
+Demotokenet ligger i `SessionService._demo` ved siden av en eventuell ekte sesjon: `user`, `accessToken` og
+`isAuthenticated` peker på demoen mens den varer, `ownsAnyServer`/`isOwnerOf` er alltid false (i produksjon eier
+demokontoen serverne, men huben avviser uansett all skriving med 403 «The demo account is read-only»), `refresh()`
+henter et nytt demotoken (1 t levetid), og `endDemo()` gir den ekte sesjonen tilbake urørt. `LiveService` åpner
+forbindelsen på nytt og tømmer `LiveStore` når bruker-id-en bytter (inn i eller ut av demoen).
+
+Sidene navigerer med absolutte stier (`/servers/:id`, `/logs`); i demoen sender `authGuard` dem til `/demo…`
+(`demoUrl()`), så skallet blir stående. `NavService` gir Servers, Logs og Settings under `/demo` (ingen Alerts, ingen
+Containers-flagg), sidepanelet viser «Demo» som rolle og utloggingsknappen heter «Exit demo» og går til `/login`;
+`guestGuard` avslutter demoen, så «Create a free account» lander på registreringen. Skjult i demoen: «Add»-knappen
+(`isReader`), «shared by», «Alert settings» og «Share» (`isOwner`), gruppeendringer (`GroupsStore.readOnly`), og
+språkvalget lagres ikke i profilen. Innstillinger viser bare kontofanen i visningsmodus (`AccountSettingsComponent.readOnly`:
+navn, e-post og språk, ingen lagring, passord eller sletting). Kjører huben uten demomodus svarer `/api/demo/session`
+404 og skallet viser «The demo is not available on this hub» med vei til innloggingen.
+
+Vitest: `session.service.spec.ts` (startDemo/endDemo/refresh/logout i demoen), `guards.spec.ts` (`demoUrl`, guestGuard),
+`nav.service.spec.ts` (`stripBase`, demoelementene), `i18n.service.spec.ts`. Playwright: `demo.spec.ts` i tre prosjekter
+(oversikt med 19 noder og to grupper, serverside, containerside, logger, innstillinger, «Create a free account», 403 fra
+huben) og `/demo`-skjermene i `a11y.spec.ts`.
+
 ## Dockerfile
 
 Bygg-kontekst er repo-roten, slik Dokploy og `npm run build:images` gjør det:

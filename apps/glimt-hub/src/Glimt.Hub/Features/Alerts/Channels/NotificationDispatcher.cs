@@ -1,4 +1,5 @@
 using Glimt.Hub.Features.Auth;
+using Glimt.Hub.Features.Demo;
 using Glimt.Hub.Infrastructure.Access;
 
 namespace Glimt.Hub.Features.Alerts.Channels;
@@ -32,6 +33,12 @@ public sealed class NotificationDispatcher(
 
         foreach (var user in await users.FindByIdsAsync(userIds, cancellationToken))
         {
+            if (string.Equals(user.Email, DemoData.DemoUserEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                // The demo account (step 10.1) sees its alerts in the browser but is never notified.
+                continue;
+            }
+
             var settings = await store.GetSettingsAsync(user.Id, cancellationToken) ?? AlertSettingsDocument.Defaults(user.Id);
             var notification = new AlertNotification(alertEvent, user, settings, user.Id == alertEvent.OwnerId);
             foreach (var channel in _channels)

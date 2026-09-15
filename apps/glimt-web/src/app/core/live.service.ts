@@ -36,6 +36,8 @@ export class LiveService {
   private readonly activity = inject(ActivityService);
 
   private connection: HubConnection | null = null;
+  /** Brukeren forbindelsen ble åpnet for. */
+  private connectedAs: string | null = null;
   private stopped = true;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -70,6 +72,13 @@ export class LiveService {
       const authed = this.session.isAuthenticated();
       untracked(() => {
         if (!authed && this.connection) void this.stop();
+      });
+    });
+    // Ny identitet mens forbindelsen står (inn i eller ut av demoen, steg 10.1): huben kjenner bare den gamle, så alt startes på nytt.
+    effect(() => {
+      const userId = this.session.user()?.id ?? null;
+      untracked(() => {
+        if (this.connection && userId && this.connectedAs && userId !== this.connectedAs) void this.restartForNewUser();
       });
     });
   }
@@ -158,6 +167,13 @@ export class LiveService {
     this.start();
   }
 
+  /** Ny bruker (demo inn/ut): alt fra den forrige identiteten glemmes før forbindelsen åpnes igjen. */
+  private async restartForNewUser(): Promise<void> {
+    await this.stop();
+    this.store.clear();
+    this.start();
+  }
+
   /** Kobler fra, avslutter loggstrømmer og glemmer hva huben har fått. Refcountene beholdes. */
   async stop(): Promise<void> {
     this.stopped = true;
@@ -182,6 +198,7 @@ export class LiveService {
   start(): void {
     if (this.connection || !this.session.isAuthenticated()) return;
     this.stopped = false;
+    this.connectedAs = this.session.user()?.id ?? null;
     const connection = new HubConnectionBuilder()
       .withUrl(this.configService.config().hubUrl, { accessTokenFactory: () => this.session.accessToken() ?? '' })
       .withAutomaticReconnect(RECONNECT_DELAYS_MS)

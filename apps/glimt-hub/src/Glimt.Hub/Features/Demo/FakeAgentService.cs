@@ -1,3 +1,4 @@
+using Glimt.Hub.Features.Access;
 using Glimt.Hub.Features.Agents;
 using Glimt.Hub.Features.Agents.Protocol;
 using Glimt.Hub.Features.Buffer;
@@ -20,6 +21,7 @@ public sealed class FakeAgentService(
     IServerStore store,
     IEnrolKeyStore enrolKeys,
     GroupStore groups,
+    AccessGrantStore grants,
     MongoContext mongo,
     GlimtOptions options,
     TimeProvider clock,
@@ -121,7 +123,8 @@ public sealed class FakeAgentService(
                 await StartNodeAsync(node, ownerId, now, stoppingToken);
             }
 
-            await SeedGroupsAsync(ownerId, now, stoppingToken);
+            await SeedGroupsAsync(ownerId, DemoData.GroupIdSuffixOwner, now, stoppingToken);
+            await SeedDemoReaderAsync(ownerId, now, stoppingToken);
             logger.LogInformation("demo mode: {Count} fake servers and {Nodes} container nodes started (owner {OwnerId}, seed {Seed})", _servers.Count, _nodes.Count, ownerId, options.Env == GlimtOptions.E2e ? E2eSeed : "random");
             _ready.TrySetResult();
             await LoopAsync(stoppingToken);
@@ -203,13 +206,38 @@ public sealed class FakeAgentService(
     }
 
     /// <summary>The two demo groups (step 13.3): «Acme» across two hosts and a container, «Edge» with a container and a server. Fixed ids, so restarts refresh rather than duplicate them.</summary>
-    private async Task SeedGroupsAsync(string ownerId, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task SeedGroupsAsync(string ownerId, string idSuffix, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var at = now.UtcDateTime;
         foreach (var (id, name, order, members) in DemoData.Groups)
         {
-            await groups.UpsertSeedAsync(new GroupDocument { Id = id, OwnerId = ownerId, Name = name, Order = order, MemberIds = members.Select(m => DemoData.ServerIdPrefix + m).ToList(), CreatedAt = at, UpdatedAt = at }, cancellationToken);
+            await groups.UpsertSeedAsync(new GroupDocument { Id = id + idSuffix, OwnerId = ownerId, Name = name, Order = order, MemberIds = members.Select(m => DemoData.ServerIdPrefix + m).ToList(), CreatedAt = at, UpdatedAt = at }, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// In e2e the dev user owns the demo servers, so the demo account (what /demo shows, step 10.1) gets an accepted
+    /// reader grant from the owner and its own copy of the two groups. In production the demo account is the owner
+    /// and already sees everything.
+    /// </summary>
+    private async Task SeedDemoReaderAsync(string ownerId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (ownerId == DemoUserId || DemoUserId == FallbackDemoUserId)
+        {
+            return;
+        }
+
+        await grants.TryInsertAsync(new AccessGrantDocument
+        {
+            OwnerId = ownerId,
+            Email = DemoData.DemoUserEmail,
+            UserId = DemoUserId,
+            Scope = GrantScopes.All,
+            Status = GrantStatuses.Accepted,
+            CreatedAt = now.UtcDateTime,
+            AcceptedAt = now.UtcDateTime,
+        }, cancellationToken);
+        await SeedGroupsAsync(DemoUserId, DemoData.GroupIdSuffixDemo, now, cancellationToken);
     }
 
     /// <summary>A demo container node: session with the node's tags, 24 h of history, hello with kind container, first snapshot. Sleeping nodes start asleep.</summary>

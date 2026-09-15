@@ -18,7 +18,8 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
 /**
  * Innstillingsskallet (steg 8.1, skjerm 9–13): fanesegmentet som ruller, og fanens innhold i grid (`auto-fit minmax(300px, 1fr)`,
  * én kolonne på mobil, `pdIn` ved fanebytte). Servers, Access og Subscription krever eier av minst én node; lesere
- * får en forklaring i stedet. `?server=` på Alerts gir per-server-visningen.
+ * får en forklaring i stedet. `?server=` på Alerts gir per-server-visningen. I demoen (steg 10.1) finnes bare
+ * kontofanen, i visningsmodus.
  */
 @Component({
   selector: 'gp-settings-page',
@@ -26,7 +27,9 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
   template: `
     <div class="page">
       <h1 class="title">{{ 'settings' | t }}</h1>
-      <gp-segment [options]="tabOptions()" [value]="current()" (valueChange)="goTab($event)" [scroll]="true" [label]="'settings' | t" />
+      @if (!demo()) {
+        <gp-segment [options]="tabOptions()" [value]="current()" (valueChange)="goTab($event)" [scroll]="true" [label]="'settings' | t" />
+      }
       @switch (current()) {
         @case ('account') {
           <gp-account-settings />
@@ -82,8 +85,9 @@ export class SettingsPage {
   /** Servers, Access og Subscription: eier av minst én node, eller en konto uten noder (som skal legge til sin første). */
   readonly ownerTabs = computed(() => this.session.ownsAnyServer() || !(this.session.user()?.readerOf ?? 0));
 
-  /** Ukjent fane → Account. Fanenavnene er også ordboksnøkler. */
-  readonly current = computed<SettingsTab>(() => ((SETTINGS_TABS as readonly string[]).includes(this.tab()) ? (this.tab() as SettingsTab) : 'account'));
+  readonly demo = this.session.demoMode;
+  /** Ukjent fane → Account. Fanenavnene er også ordboksnøkler. Demoen har bare Account. */
+  readonly current = computed<SettingsTab>(() => (!this.demo() && (SETTINGS_TABS as readonly string[]).includes(this.tab()) ? (this.tab() as SettingsTab) : 'account'));
   readonly tabOptions = computed<SegmentOption<SettingsTab>[]>(() => {
     this.i18n.lang();
     return SETTINGS_TABS.map((t) => ({ value: t, label: this.i18n.t(t) }));

@@ -109,6 +109,37 @@ public sealed class DemoModeTests(HubFactory factory) : IClassFixture<HubFactory
     }
 
     [Fact]
+    public async Task Demo_account_is_read_only_under_api()
+    {
+        // Step 10.1: every write with a demo token is 403 before it reaches an endpoint (no MongoDB needed here); reads and other users pass.
+        var ct = Repo.Timeout(20);
+        using var anonymous = factory.CreateClient();
+        var session = await anonymous.PostAsync("/api/demo/session", null, ct);
+        var token = (await session.Content.ReadFromJsonAsync<JsonElement>(ct)).GetProperty("accessToken").GetString()!;
+        using var demo = LiveTestSupport.Bearer(factory, token);
+
+        foreach (var write in new Func<Task<HttpResponseMessage>>[]
+        {
+            () => demo.PatchAsJsonAsync("/api/account", new { name = "Hacked" }, ct),
+            () => demo.PostAsJsonAsync("/api/access", new { email = "someone@example.com" }, ct),
+            () => demo.PutAsJsonAsync("/api/alert-settings", new { channels = new { email = true } }, ct),
+            () => demo.PostAsJsonAsync("/api/servers", new { kind = "container", name = "nope" }, ct),
+            () => demo.PostAsJsonAsync("/api/servers/enrol-key", new { }, ct),
+            () => demo.DeleteAsync("/api/account", ct),
+        })
+        {
+            var response = await write();
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            var problem = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
+            Assert.Equal(DemoReadOnly.Title, problem.GetProperty("title").GetString());
+        }
+
+        Assert.NotEqual(HttpStatusCode.Forbidden, (await demo.GetAsync("/api/servers/demo-web-01/snapshot", ct)).StatusCode);
+        using var dev = LiveTestSupport.Bearer(factory, LiveTestSupport.Token(factory));
+        Assert.NotEqual(HttpStatusCode.Forbidden, (await dev.PatchAsJsonAsync("/api/account", new { name = "Dev" }, ct)).StatusCode);
+    }
+
+    [Fact]
     public async Task E2e_disconnect_and_advance_bring_a_server_down()
     {
         // Own hub: advance shifts this hub's clock, which would make tokens issued afterwards "not yet valid".

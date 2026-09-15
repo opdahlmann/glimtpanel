@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, convertToParamMap, Route, Router, RouterStateSnapshot, UrlSegment, UrlTree } from '@angular/router';
 import { ConfigService, DEFAULT_CONFIG } from './config.service';
-import { authGuard, authShellMatch, devGuard, guestGuard, ownerGuard, safeNext } from './guards';
+import { authGuard, authShellMatch, demoUrl, devGuard, guestGuard, ownerGuard, safeNext } from './guards';
 import { SessionService } from './session.service';
 
 function snapshot(params: Record<string, string> = {}, query: Record<string, string> = {}): ActivatedRouteSnapshot {
@@ -21,6 +21,7 @@ describe('guards', () => {
     isOwnerOf: ReturnType<typeof vi.fn>;
     ownsAnyServer: ReturnType<typeof signal<boolean>>;
     demoMode: ReturnType<typeof signal<boolean>>;
+    endDemo: ReturnType<typeof vi.fn>;
   };
   let config: { config: ReturnType<typeof signal<typeof DEFAULT_CONFIG>> };
   let router: Router;
@@ -33,6 +34,7 @@ describe('guards', () => {
       isOwnerOf: vi.fn().mockReturnValue(false),
       ownsAnyServer: signal(false),
       demoMode: signal(false),
+      endDemo: vi.fn(),
     };
     config = { config: signal({ ...DEFAULT_CONFIG }) };
     TestBed.configureTestingModule({
@@ -58,6 +60,24 @@ describe('guards', () => {
     expect(router.serializeUrl(tree)).toBe('/login');
     session.isAuthenticated.set(true);
     expect(await run(() => authGuard(snapshot(), state('/')))).toBe(true);
+  });
+
+  it('authGuard i demoen (steg 10.1) sender absolutte lenker under /demo', async () => {
+    session.isAuthenticated.set(true);
+    session.demoMode.set(true);
+    const tree = (await run(() => authGuard(snapshot(), state('/servers/demo-web-02?tab=cpu')))) as UrlTree;
+    expect(router.serializeUrl(tree)).toBe('/demo/servers/demo-web-02?tab=cpu');
+    expect(router.serializeUrl((await run(() => authGuard(snapshot(), state('/')))) as UrlTree)).toBe('/demo');
+    expect(demoUrl('/demo/logs')).toBe('/demo/logs');
+    expect(demoUrl('/demo')).toBe('/demo');
+    expect(demoUrl('')).toBe('/demo');
+    expect(demoUrl('/logs?server=x')).toBe('/demo/logs?server=x');
+  });
+
+  it('guestGuard avslutter demoen («Create a free account»)', async () => {
+    session.demoMode.set(true);
+    expect(await run(() => guestGuard(snapshot(), state('/register')))).toBe(true);
+    expect(session.endDemo).toHaveBeenCalled();
   });
 
   it('guestGuard slipper gjennom uinnloggede og sender innloggede til / eller next', async () => {

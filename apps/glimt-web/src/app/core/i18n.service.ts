@@ -65,7 +65,7 @@ export class I18nService {
   private async persistToProfile(lang: Lang): Promise<void> {
     // Lazy oppslag: SessionService avhenger av I18nService, så den hentes først når den trengs.
     const session = this.injector.get(SessionService);
-    if (!session.isAuthenticated()) return;
+    if (!session.isAuthenticated() || session.demoMode()) return;
     try {
       await session.updateAccount({ language: lang });
     } catch (err) {

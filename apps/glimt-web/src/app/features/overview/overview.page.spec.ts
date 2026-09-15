@@ -30,6 +30,7 @@ class SessionStub {
   readonly user = signal<UserDto | null>({ id: 'u1', email: 'dev@glimtpanel.local', name: 'Dev', timezone: 'Europe/Oslo', language: 'en', plan: 'beta', earlyAdopter: true, emailConfirmed: true, ownsServers: true, readerOf: 0 });
   readonly ownsAnyServer = signal(true);
   readonly isAuthenticated = signal(true);
+  readonly demoMode = signal(false);
   setServerRoles = vi.fn();
 }
 

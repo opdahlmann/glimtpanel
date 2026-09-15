@@ -4,7 +4,8 @@ import { provideRouter, Router } from '@angular/router';
 import { AlertStore } from '@core/alert.store';
 import { ConfigService, DEFAULT_CONFIG } from '@core/config.service';
 import { I18nService } from '@core/i18n.service';
-import { isServersActive, NavService } from './nav.service';
+import { SessionService } from '@core/session.service';
+import { isServersActive, NavService, stripBase } from './nav.service';
 import { initials } from './initials';
 
 /** jsdom uten opprinnelse har ikke alltid localStorage; PrefsService tåler det, og testene skal ikke lekke valg. */
@@ -18,12 +19,14 @@ function clearStorage(): void {
 
 describe('NavService', () => {
   let config: { config: ReturnType<typeof signal<typeof DEFAULT_CONFIG>> };
+  let session: { demoMode: ReturnType<typeof signal<boolean>>; isAuthenticated: ReturnType<typeof signal<boolean>> };
 
   beforeEach(() => {
     clearStorage();
     config = { config: signal({ ...DEFAULT_CONFIG }) };
+    session = { demoMode: signal(false), isAuthenticated: signal(false) };
     TestBed.configureTestingModule({
-      providers: [provideRouter([{ path: '**', children: [] }]), { provide: ConfigService, useValue: config }],
+      providers: [provideRouter([{ path: '**', children: [] }]), { provide: ConfigService, useValue: config }, { provide: SessionService, useValue: session }],
     });
   });
 
@@ -53,6 +56,28 @@ describe('NavService', () => {
     expect(nav.items().find((i) => i.key === 'alerts')?.badge).toBe(3);
     TestBed.inject(I18nService).setLang('no');
     expect(nav.items().map((i) => i.label)).toEqual(['Servere', 'Logger', 'Varsler', 'Innstillinger']);
+  });
+
+  it('demoen (steg 10.1): Servers, Logs og Settings under /demo, uten Alerts og Containers', async () => {
+    const nav = TestBed.inject(NavService);
+    const router = TestBed.inject(Router);
+    config.config.set({ ...DEFAULT_CONFIG, featureFlags: ['containersPage'] });
+    session.demoMode.set(true);
+    expect(nav.items().map((i) => [i.key, i.path])).toEqual([
+      ['servers', '/demo'],
+      ['logs', '/demo/logs'],
+      ['settings', '/demo/settings'],
+    ]);
+    expect(nav.count()).toBe(3);
+    await router.navigateByUrl('/demo/servers/demo-web-02');
+    expect(nav.items().find((i) => i.key === 'servers')?.active).toBe(true);
+    await router.navigateByUrl('/demo/logs?server=demo-web-02');
+    expect(nav.items().find((i) => i.key === 'logs')?.active).toBe(true);
+    expect(nav.items().find((i) => i.key === 'servers')?.active).toBe(false);
+    expect(stripBase('/demo', '/demo')).toBe('/');
+    expect(stripBase('/demo?group=x', '/demo')).toBe('/?group=x');
+    expect(stripBase('/demo/logs', '/demo')).toBe('/logs');
+    expect(stripBase('/demonstration', '/demo')).toBe('/demonstration');
   });
 
   it('isServersActive og initials', () => {

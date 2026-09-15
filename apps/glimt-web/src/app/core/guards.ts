@@ -14,9 +14,13 @@ export const AUTH_PATHS = ['login', 'register', 'forgot', 'reset', 'confirm'];
  */
 export const authShellMatch: CanMatchFn = (_route, segments: UrlSegment[]) => AUTH_PATHS.includes(segments[0]?.path ?? '');
 
+/** Demoens rot (steg 10.1). Sidene navigerer med absolutte stier (`/servers/:id`), som i demoen sendes hit. */
+export const DEMO_BASE = '/demo';
+
 /**
  * Venter på første oppfriskningsforsøk, og sender uinnloggede til `/login?next=<url>`. Første gang appen åpnes på mobil
  * etter innlogging går `/` til `/welcome` (skjerm 14), én gang per nettleser (`gp.welcomeSeen`, steg 7.5).
+ * I demoen (steg 10.1) havner alle absolutte lenker under `/demo`, så demoskallet blir stående.
  */
 export const authGuard: CanActivateFn = async (_route, state: RouterStateSnapshot) => {
   const session = inject(SessionService);
@@ -25,8 +29,9 @@ export const authGuard: CanActivateFn = async (_route, state: RouterStateSnapsho
   const prefs = inject(PrefsService);
   const breakpoint = inject(BreakpointService);
   await session.whenReady();
+  if (session.demoMode()) return router.parseUrl(demoUrl(state.url));
   if (session.isAuthenticated()) {
-    if ((state.url === '/' || state.url === '') && breakpoint.isMobile() && !prefs.welcomeSeen.value() && !session.demoMode()) {
+    if ((state.url === '/' || state.url === '') && breakpoint.isMobile() && !prefs.welcomeSeen.value()) {
       prefs.welcomeSeen.set(true);
       return router.createUrlTree(['/welcome']);
     }
@@ -36,11 +41,12 @@ export const authGuard: CanActivateFn = async (_route, state: RouterStateSnapsho
   return router.createUrlTree(['/login'], { queryParams: next ? { next } : {} });
 };
 
-/** Auth-sidene: innloggede sendes til `/` (eller `next`). */
+/** Auth-sidene: innloggede sendes til `/` (eller `next`). «Create a free account» fra demoen avslutter demoen først. */
 export const guestGuard: CanActivateFn = async (route: ActivatedRouteSnapshot) => {
   const session = inject(SessionService);
   const router = inject(Router);
   await session.whenReady();
+  session.endDemo();
   if (!session.isAuthenticated()) return true;
   return router.parseUrl(safeNext(route.queryParamMap.get('next')));
 };
@@ -60,6 +66,13 @@ export const devGuard: CanActivateFn = () => {
   const env = inject(ConfigService).config().env;
   return env === 'development' || env === 'e2e' ? true : inject(Router).createUrlTree(['/']);
 };
+
+/** `/servers/x?tab=cpu` → `/demo/servers/x?tab=cpu`; roten → `/demo`. Alt som allerede ligger under /demo er uendret. */
+export function demoUrl(url: string): string {
+  if (url === DEMO_BASE || url.startsWith(`${DEMO_BASE}/`) || url.startsWith(`${DEMO_BASE}?`)) return url;
+  const path = url === '' || url === '/' ? '' : url.startsWith('/') ? url : `/${url}`;
+  return `${DEMO_BASE}${path}`;
+}
 
 /** Kun interne stier (ingen `//host` eller absolutte URL-er) slipper gjennom som `next`. */
 export function safeNext(next: string | null | undefined): string {

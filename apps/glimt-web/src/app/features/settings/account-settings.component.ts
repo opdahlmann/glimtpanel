@@ -66,6 +66,8 @@ export class AccountSettingsComponent {
   readonly flags = inject(FeatureFlags);
 
   readonly user = this.session.user;
+  /** Demoen (steg 10.1): profilen vises, ingenting kan lagres. Språket er et lokalt valg og virker fortsatt. */
+  readonly readOnly = this.session.demoMode;
   readonly name = signal(this.user()?.name ?? '');
   readonly timezone = signal(this.user()?.timezone ?? 'UTC');
   readonly timezoneOptions = computed(() => timeZoneOptions(this.user()?.timezone ?? null));

@@ -65,6 +65,10 @@ public static class DemoData
     ];
 
     /// <summary>The demo groups (step 13.3): id, name, order, member names (prefixed with <see cref="ServerIdPrefix"/>).</summary>
+    /// <summary>Group ids are fixed; the demo account's own copy in e2e (where the dev user owns the servers) gets a suffix.</summary>
+    public const string GroupIdSuffixOwner = "";
+    public const string GroupIdSuffixDemo = "-demo";
+
     public static readonly (string Id, string Name, int Order, string[] Members)[] Groups =
     [
         ("demo-acme", "Acme", 0, ["web-02", "acme-backend", "acme-frontend", "db-prod"]),

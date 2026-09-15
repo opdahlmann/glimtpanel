@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { SessionService } from '@core/session.service';
 import { TPipe } from '@core/t.pipe';
 import { LogoComponent } from '@shared/logo/logo.component';
@@ -10,6 +10,7 @@ import { initials } from './initials';
 /**
  * Sidepanelet på desktop (6.2): 220 px sticky, `--color-ink-2`, hårlinje til høyre, logo 28 + «Glimtpanel»/«by Kodetank»,
  * 44 px knapper med radius 10 (aktiv `--s-9` + hvit), rød varsel-badge, nederst språk, avatar med initialer og rolle.
+ * I demoen (steg 10.1) står «Demo» som rolle og utloggingsknappen forlater demoen.
  */
 @Component({
   selector: 'gp-sidebar',
@@ -44,7 +45,7 @@ import { initials } from './initials';
         <div class="uname">{{ session.user()?.name || session.user()?.email }}</div>
         <div class="role">{{ roleKey() | t }}</div>
       </div>
-      <button type="button" class="out" (click)="signOut()" [attr.aria-label]="'signOut' | t" [title]="'signOut' | t">
+      <button type="button" class="out" (click)="signOut()" [attr.aria-label]="outKey() | t" [title]="outKey() | t">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" /></svg>
       </button>
     </div>
@@ -83,11 +84,18 @@ import { initials } from './initials';
 export class SidebarComponent {
   readonly nav = inject(NavService);
   readonly session = inject(SessionService);
+  private readonly router = inject(Router);
 
   readonly initials = computed(() => initials(this.session.user()?.name, this.session.user()?.email));
-  readonly roleKey = computed<'owner' | 'reader'>(() => (this.session.ownsAnyServer() || !this.session.user()?.readerOf ? 'owner' : 'reader'));
+  readonly roleKey = computed<'owner' | 'reader' | 'demo'>(() => (this.session.demoMode() ? 'demo' : this.session.ownsAnyServer() || !this.session.user()?.readerOf ? 'owner' : 'reader'));
+  readonly outKey = computed<'signOut' | 'exitDemo'>(() => (this.session.demoMode() ? 'exitDemo' : 'signOut'));
 
+  /** Innlogget: `POST /api/auth/logout`. I demoen: til innloggingen (guestGuard avslutter demoen). */
   signOut(): void {
+    if (this.session.demoMode()) {
+      void this.router.navigateByUrl('/login');
+      return;
+    }
     void this.session.logout();
   }
 }

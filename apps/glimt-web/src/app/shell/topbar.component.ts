@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { ConnectionService } from '@core/connection.service';
 import { SessionService } from '@core/session.service';
 import { TPipe } from '@core/t.pipe';
@@ -22,7 +23,7 @@ import { TitleService } from './title.service';
         <span>{{ (conn.offline() ? 'offline' : 'liveLabel') | t }}</span>
         <gp-live-dot [state]="dot()" />
       </span>
-      <button type="button" class="out" (click)="signOut()" [attr.aria-label]="'signOut' | t">
+      <button type="button" class="out" (click)="signOut()" [attr.aria-label]="outKey() | t">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" /></svg>
       </button>
     </div>
@@ -45,10 +46,16 @@ export class TopbarComponent {
   readonly title = inject(TitleService);
   readonly conn = inject(ConnectionService);
   private readonly session = inject(SessionService);
+  private readonly router = inject(Router);
 
   readonly dot = computed(() => (this.conn.offline() ? 'down' : this.conn.state() === 'connected' ? 'up' : 'connecting'));
+  readonly outKey = computed<'signOut' | 'exitDemo'>(() => (this.session.demoMode() ? 'exitDemo' : 'signOut'));
 
   signOut(): void {
+    if (this.session.demoMode()) {
+      void this.router.navigateByUrl('/login');
+      return;
+    }
     void this.session.logout();
   }
 }

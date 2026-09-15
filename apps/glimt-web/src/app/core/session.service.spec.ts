@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { I18nService } from './i18n.service';
 import { LoginResponse } from './live.types';
 import { PrefsService } from './prefs.service';
+import { ApiError } from './api.service';
 import { SessionService } from './session.service';
 
 const user = { id: 'u1', email: 'dev@glimtpanel.local', name: 'Developer', timezone: 'Europe/Oslo', language: 'no', plan: 'beta', earlyAdopter: true, emailConfirmed: true };
@@ -138,6 +139,54 @@ describe('SessionService', () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(refreshes).toBe(2);
     expect(session.accessToken()).toBe('tok-2');
+  });
+
+  it('demo (steg 10.1): startDemo henter demotoken uten å røre den ekte sesjonen, rollen er leser, endDemo gir den tilbake', async () => {
+    const demoUser = { ...user, id: 'demo', email: 'demo@glimtpanel.com', name: 'Demo' };
+    let demoTokens = 0;
+    const session = setup({
+      'POST /auth/refresh': () => json(200, login()),
+      'GET /auth/me': () => json(200, { ...user, ownsServers: true }),
+      'POST /demo/session': (init) => {
+        expect((init.headers as Record<string, string>)['authorization']).toBeUndefined();
+        demoTokens++;
+        return json(200, login({ accessToken: `demo-${demoTokens}`, expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(), user: demoUser }));
+      },
+    });
+    session.start();
+    await session.whenReady();
+    await vi.waitFor(() => expect(session.user()?.ownsServers).toBe(true));
+    session.setServerRoles([['a', 'owner']]);
+
+    await session.startDemo();
+    expect(session.demoMode()).toBe(true);
+    expect(session.accessToken()).toBe('demo-1');
+    expect(session.user()?.email).toBe('demo@glimtpanel.com');
+    expect(session.isAuthenticated()).toBe(true);
+    expect(session.ownsAnyServer()).toBe(false);
+    session.setServerRoles([['a', 'owner']]);
+    expect(session.isOwnerOf('a')).toBe(false);
+    expect(await session.loadMe()).toBeNull();
+    // Oppfriskning i demoen henter et nytt demotoken, ikke /auth/refresh.
+    expect(await session.refresh()).toBe(true);
+    expect(session.accessToken()).toBe('demo-2');
+    // logout i demoen er endDemo: den ekte sesjonen står som før.
+    await session.logout();
+    expect(session.demoMode()).toBe(false);
+    expect(session.accessToken()).toBe('tok');
+    expect(session.user()?.email).toBe('dev@glimtpanel.local');
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/auth/logout'))).toHaveLength(0);
+    expect(TestBed.inject(PrefsService).hasSession.value()).toBe(true);
+  });
+
+  it('demo uten ekte sesjon: uinnlogget etter endDemo, og 404 fra huben kaster', async () => {
+    const session = setup({ 'POST /demo/session': () => json(404, { title: 'Not found' }) }, false);
+    await session.whenReady();
+    await expect(session.startDemo()).rejects.toBeInstanceOf(ApiError);
+    expect(session.demoMode()).toBe(false);
+    expect(session.isAuthenticated()).toBe(false);
+    session.endDemo();
+    expect(TestBed.inject(PrefsService).hasSession.value()).toBe(false);
   });
 
   it('isOwnerOf leser rollekartet', async () => {

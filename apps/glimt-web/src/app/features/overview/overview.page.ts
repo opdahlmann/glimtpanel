@@ -136,7 +136,8 @@ export class OverviewPage {
   readonly addContainerStep = signal<AddContainerStep>(0);
 
   /** Leser uten egne servere: ingen «Add server», og en annen tom-tilstand. */
-  readonly isReader = computed(() => !this.session.ownsAnyServer() && (this.session.user()?.readerOf ?? 0) > 0);
+  /** Lesere (og demoen, steg 10.1) kan ikke legge til noder. */
+  readonly isReader = computed(() => this.session.demoMode() || (!this.session.ownsAnyServer() && (this.session.user()?.readerOf ?? 0) > 0));
   readonly canAdd = computed(() => !this.isReader());
   readonly listLoaded = this.serverList.loaded;
   /** Ingen servere ifølge GET /api/servers. Kortene sjekkes ikke her: ServerAdded legger kortet i lageret før siden får beskjed. */

@@ -26,6 +26,7 @@ class SessionStub {
   readonly user = signal<UserDto | null>(null);
   readonly isAuthenticated = signal(true);
   readonly ownsAnyServer = signal(true);
+  readonly demoMode = signal(false);
   roles = new Map<string, 'owner' | 'reader'>([['demo-web-02', 'owner']]);
   isOwnerOf(id: string): boolean {
     return this.roles.get(id) === 'owner';

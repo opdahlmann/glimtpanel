@@ -66,6 +66,7 @@ if (dotEnv.LoadedFiles.Count > 0)
 
 app.UseLiveCors(options);
 app.UseAuthentication();
+app.UseDemoReadOnly(options);
 app.UseAuthorization();
 app.UseRateLimiter();
 app.MapHealthFeature();

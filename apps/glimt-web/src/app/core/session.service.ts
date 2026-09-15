@@ -13,6 +13,10 @@ export const REFRESH_MARGIN_MS = 60_000;
  * så `prefs.hasSession` husker om denne nettleseren har hatt en sesjon: uten den hoppes oppfriskningen over
  * (ingen 401 i konsollen for førstegangsbesøkende).
  * `isOwnerOf(id)` leser rollekartet som ServerListService fyller fra `GET /api/servers`.
+ *
+ * Demomodus (steg 10.1): `/demo` kaller `startDemo()`, som henter et demotoken fra `POST /api/demo/session` og legger det
+ * i `_demo` ved siden av en eventuell ekte sesjon. `user`/`accessToken` peker på demoen så lenge den er aktiv, rollen
+ * er alltid leser, oppfriskning henter et nytt demotoken, og `endDemo()` gir den ekte sesjonen tilbake urørt.
  */
 @Injectable({ providedIn: 'root' })
 export class SessionService {
@@ -23,22 +27,28 @@ export class SessionService {
   private readonly _user = signal<UserDto | null>(null);
   private readonly _token = signal<string | null>(null);
   private readonly _expiresAt = signal<number | null>(null);
+  private readonly _demo = signal<LoginResponse | null>(null);
   private readonly _ready = signal(false);
   private readonly _roles = signal<ReadonlyMap<string, ServerRole>>(new Map());
   private readyPromise: Promise<void> | null = null;
   private resolveReady: (() => void) | null = null;
   private expiryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  readonly user = this._user.asReadonly();
-  readonly accessToken = this._token.asReadonly();
-  readonly expiresAt = this._expiresAt.asReadonly();
-  readonly isAuthenticated = computed(() => this._user() !== null && this._token() !== null);
+  /** Demomodus (steg 10.1): `/demo` har hentet et demotoken; alt annet leser demoen i stedet for den ekte sesjonen. */
+  readonly demoMode = computed(() => this._demo() !== null);
+  readonly user = computed(() => this._demo()?.user ?? this._user());
+  readonly accessToken = computed(() => this._demo()?.accessToken ?? this._token());
+  readonly expiresAt = computed(() => {
+    const demo = this._demo();
+    return demo ? Date.parse(demo.expiresAt) : this._expiresAt();
+  });
+  readonly isAuthenticated = computed(() => this.user() !== null && this.accessToken() !== null);
   /** true etter første oppfriskningsforsøk (eller etter `start()` uten cookie). */
   readonly ready = this._ready.asReadonly();
-  /** Satt av /demo (fase 10): demotoken fra POST /api/demo/session, ingen oppfriskning. */
-  readonly demoMode = signal(false);
   readonly serverRoles = this._roles.asReadonly();
+  /** Demoen er alltid leser, uansett hva huben svarer (i produksjon eier demokontoen serverne). */
   readonly ownsAnyServer = computed(() => {
+    if (this.demoMode()) return false;
     const u = this._user();
     if (u?.ownsServers) return true;
     for (const role of this._roles().values()) if (role === 'owner') return true;
@@ -118,9 +128,39 @@ export class SessionService {
     this.armExpiryTimer();
   }
 
-  /** `POST /api/auth/refresh` med cookien. true når vi fikk nytt token; false ved 401 (ingen sesjon). */
+  /**
+   * `POST /api/demo/session` (steg 10.1): demotoken uten innlogging. Den ekte sesjonen (om noen) beholdes bak demoen.
+   * Kaster `ApiError` når huben ikke kjører i demomodus (404).
+   */
+  async startDemo(): Promise<UserDto> {
+    const res = await this.api.post<LoginResponse>('/demo/session', undefined, { anonymous: true });
+    this._demo.set(res);
+    this._roles.set(new Map());
+    this.armExpiryTimer();
+    if (!this._ready()) this.markReady();
+    return res.user;
+  }
+
+  /** Ut av demoen: den ekte sesjonen, om noen, er som før. */
+  endDemo(): void {
+    if (!this._demo()) return;
+    this._demo.set(null);
+    this._roles.set(new Map());
+    this.armExpiryTimer();
+  }
+
+  /** `POST /api/auth/refresh` med cookien. true når vi fikk nytt token; false ved 401 (ingen sesjon). I demoen: nytt demotoken. */
   async refresh(): Promise<boolean> {
-    if (this.demoMode()) return false;
+    if (this.demoMode()) {
+      try {
+        await this.startDemo();
+        return true;
+      } catch (err) {
+        console.warn('[session] demo refresh failed', err);
+        this.armExpiryTimer(REFRESH_MARGIN_MS / 2);
+        return false;
+      }
+    }
     try {
       const res = await this.api.post<LoginResponse>('/auth/refresh', undefined, { anonymous: true });
       this.apply(res);
@@ -136,9 +176,9 @@ export class SessionService {
     }
   }
 
-  /** `GET /api/auth/me`: brukeren pluss ownsServers/readerOf. */
+  /** `GET /api/auth/me`: brukeren pluss ownsServers/readerOf. Ikke i demoen (svaret fra /demo/session er alt vi trenger). */
   async loadMe(): Promise<UserDto | null> {
-    if (!this._token()) return null;
+    if (!this._token() || this.demoMode()) return null;
     const me = await this.api.get<UserDto>('/auth/me');
     this._user.set(me);
     this.i18n.applyProfile(me);
@@ -154,13 +194,16 @@ export class SessionService {
   }
 
   async logout(): Promise<void> {
+    if (this.demoMode()) {
+      this.endDemo();
+      return;
+    }
     try {
-      if (!this.demoMode()) await this.api.post<void>('/auth/logout', undefined, { anonymous: true });
+      await this.api.post<void>('/auth/logout', undefined, { anonymous: true });
     } catch (err) {
       console.warn('[session] logout request failed', err);
     } finally {
       this.clear();
-      this.demoMode.set(false);
     }
   }
 
@@ -170,7 +213,7 @@ export class SessionService {
   }
 
   isOwnerOf(serverId: string): boolean {
-    return this._roles().get(serverId) === 'owner';
+    return !this.demoMode() && this._roles().get(serverId) === 'owner';
   }
 
   private clear(): void {
@@ -185,10 +228,9 @@ export class SessionService {
 
   private armExpiryTimer(inMs?: number): void {
     this.clearTimer();
-    if (this.demoMode()) return;
-    const at = this._expiresAt();
+    const at = this.expiresAt();
     const delay = inMs ?? (at === null ? null : Math.max(1000, at - Date.now() - REFRESH_MARGIN_MS));
-    if (delay === null || !this._token()) return;
+    if (delay === null || !this.accessToken()) return;
     this.expiryTimer = setTimeout(() => {
       this.expiryTimer = null;
       void this.refresh();

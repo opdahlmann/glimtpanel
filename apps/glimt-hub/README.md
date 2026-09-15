@@ -224,7 +224,11 @@ fra designets `glimtData.js` (navn, tagger, kjerner, RAM, Ubuntu-versjon, monter
 høy CPU, `db-prod` omstart kreves, `worker-01` feilet `cron-sync.service`, `acme-app` med `acme-worker` i omstartsløkke,
 `nordic-db` nede siden 03:12 lokal tid, `backup` på 20.04; `media` er «pauset» i designet men holdes oppe til pause finnes)
 som `demo-<navn>`, eid av `demo@glimtpanel.com` (opprettes i `users` uten passord når MongoDB er der; i e2e eier
-dev-brukeren dem når den finnes). De skriver `stream` hvert sekund og `snapshot` hvert 30. sekund rett inn i `AgentIngest`
+dev-brukeren dem når den finnes, og demokontoen får da en godtatt lesetilgang (`all`) og sin egen kopi av de to gruppene
+med id-suffiks `-demo`, så `/demo` viser det samme). Demokontoen er skrivebeskyttet (steg 10.1): `DemoReadOnly` er en
+middleware som svarer 403 «The demo account is read-only» på alt annet enn GET under `/api` når tokenets e-post er
+demokontoens, og `NotificationDispatcher` hopper over den (ingen push, e-post eller webhook). I produksjon må
+`GLIMT_DEMO_MODE=true` for at `/demo` i web skal virke. De skriver `stream` hvert sekund og `snapshot` hvert 30. sekund rett inn i `AgentIngest`
 uten WebSocket, fyller bufferen med 24 timers syntetisk historikk ved start, og loggstrømmer svarer med linjer fra
 `LOGT`/`CLOGT`-tabellene (ca. én per sekund). I e2e er tallene seedet (samme hver kjøring), klokken er en
 `ShiftableTimeProvider` (`POST /api/e2e/advance { seconds }` flytter den og kjører `DownDetector.SweepAsync`), og

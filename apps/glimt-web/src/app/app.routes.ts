@@ -4,7 +4,7 @@ import { authGuard, authShellMatch, devGuard, guestGuard } from '@core/guards';
 /**
  * Ruter fra IMPLEMENTERINGSPLAN 3.1. Alt er lazy. Auth-sidene ligger under AuthShellComponent (sentrert, uten
  * navigasjon), innloggede sider under ShellComponent (sidepanel/bunnlinje). `/welcome` bruker hovedskallet uten
- * bunnlinje (`data.bottomNav`). /demo har eget skall (fase 10).
+ * bunnlinje (`data.bottomNav`). /demo har eget skall uten innlogging (steg 10.1).
  */
 export const routes: Routes = [
   {
@@ -20,6 +20,7 @@ export const routes: Routes = [
     ],
   },
   {
+    // Demoen (steg 10.1): samme sider som innlogget, uten guard; DemoShell henter demotokenet. Varsler og deling finnes ikke her.
     path: 'demo',
     loadComponent: () => import('@features/demo/demo-shell.component').then((m) => m.DemoShell),
     children: [
@@ -27,6 +28,9 @@ export const routes: Routes = [
       { path: 'servers/:id', loadComponent: () => import('@features/server/server.page').then((m) => m.ServerPage) },
       { path: 'servers/:id/containers/:cid', loadComponent: () => import('@features/container/container.page').then((m) => m.ContainerPage) },
       { path: 'logs', loadComponent: () => import('@features/logs/logs.page').then((m) => m.LogsPage) },
+      { path: 'settings', loadComponent: () => import('@features/settings/settings.page').then((m) => m.SettingsPage) },
+      { path: 'settings/:tab', loadComponent: () => import('@features/settings/settings.page').then((m) => m.SettingsPage) },
+      { path: '**', loadComponent: () => import('./shell/not-found.page').then((m) => m.NotFoundPage) },
     ],
   },
   { path: 'dev/components', canActivate: [devGuard], loadComponent: () => import('./dev/components.page').then((m) => m.ComponentsPage) },

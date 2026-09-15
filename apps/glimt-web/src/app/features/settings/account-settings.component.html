@@ -1,4 +1,22 @@
 <div class="grid">
+  @if (readOnly()) {
+    <section class="card" aria-labelledby="profile-title" data-testid="profile-card">
+      <h2 id="profile-title" class="section">{{ 'profile' | t }}</h2>
+      <p class="note" data-testid="demo-view-only">{{ 'demoViewOnly' | t }} · {{ 'demoSettingsHint' | t }}</p>
+      <div class="field">
+        <span class="label">{{ 'name' | t }}</span>
+        <span class="num">{{ user()?.name }}</span>
+      </div>
+      <div class="field">
+        <span class="label">{{ 'email' | t }}</span>
+        <span class="num" data-testid="email">{{ user()?.email }}</span>
+      </div>
+      <div class="field">
+        <span class="label">{{ 'language' | t }}</span>
+        <gp-segment [options]="langOptions()" [value]="lang()" (valueChange)="setLang($event)" [label]="'language' | t" />
+      </div>
+    </section>
+  } @else {
   <section class="card" aria-labelledby="profile-title" data-testid="profile-card">
     <h2 id="profile-title" class="section">{{ 'profile' | t }}</h2>
     <gp-input [label]="'name' | t" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" autocomplete="name" />
@@ -48,6 +66,7 @@
       <gp-button variant="danger" size="lg" (click)="deleteOpen.set(true)">{{ 'deleteAcc' | t }}</gp-button>
     </div>
   </section>
+  }
 </div>
 
 <gp-modal [(open)]="emailOpen" [title]="'newEmail' | t" [maxWidth]="440" [closeLabel]="'close' | t">

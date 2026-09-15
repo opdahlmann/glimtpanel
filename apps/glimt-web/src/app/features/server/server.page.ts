@@ -113,6 +113,8 @@ export class ServerPage {
   readonly hourChart = computed(() => this.store.hourChart(this.id())());
   readonly notFound = signal(false);
   readonly isOwner = computed(() => this.session.isOwnerOf(this.id()));
+  /** «shared by» for lesere (steg 8.4), ikke i demoen (steg 10.1). */
+  readonly sharedBy = computed(() => (this.session.demoMode() ? null : (this.item()?.ownerEmail ?? null)));
   readonly textMode = signal(false);
   readonly showAllServices = signal(false);
   readonly flagText = this.flags.textMode;
