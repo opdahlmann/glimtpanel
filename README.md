@@ -142,6 +142,7 @@ containernoden `sidecar-dev` på dev-kontoen via `GLIMT_DEV_CONTAINER_TOKEN`).
 | `npm run dev:stop` | Stopper agent-containeren og løpende prosesser |
 | `npm test` | Unit-tester for web (Vitest), hub (xUnit) og agent (`go test` i Docker) |
 | `npm run test:e2e` | Playwright (`GLIMT_E2E_BUILT=1` for bygget hub og web som i CI) |
+| `npm run test:infra` | Containertestene i `infra/tests`: bygger imagene og kjører dem i Docker (se «Utrulling») |
 | `npm run lint` | ESLint og `dotnet format` |
 | `npm run build` | Bygger web, hub (Release) og site |
 | `npm run build:images` | Bygger Docker-imagene slik Dokploy gjør det |
@@ -151,7 +152,7 @@ containernoden `sidecar-dev` på dev-kontoen via `GLIMT_DEV_CONTAINER_TOKEN`).
 | `node scripts/loadtest/run.mjs` | Lasttest: 100 falske agenter + 10 nettlesere, måler huben |
 
 CI (`.github/workflows/ci.yml`): lint, kontrakt, unit-tester, `npm audit`/`dotnet list package --vulnerable`/
-`govulncheck`, Docker-imagene, hele e2e-suiten mot bygget hub og web (uten skjermbildesammenligning, snapshotene er fra macOS), og agentutgivelse (binærer, `SHA256SUMS` og
+`govulncheck`, Docker-imagene med containertestene, hele e2e-suiten mot bygget hub og web (uten skjermbildesammenligning, snapshotene er fra macOS), og agentutgivelse (binærer, `SHA256SUMS` og
 sidecar-image til ghcr.io) ved tag `agent/v*`. `nightly.yml` kjører skjerm 4, 5 og 7 mot den ekte agenten i
 Ubuntu-containeren.
 
@@ -185,6 +186,11 @@ imagene har agentbinæren innebygd, så appene selv vises i dashbordet når `GLI
 - **Røyktest etter deploy:** `/readyz` → 200, innlogging i appen (beviser `/api`-proxyen), en agent som kobler til
   (beviser WebSocket gjennom Traefik), `docker service ls` → alle `1/1`.
 - Baseimagene hentes fra MCR og ECR Public, ikke Docker Hub, så byggene ikke stopper på Docker Hubs pull-grense.
+- **Containertestene** (`npm run test:infra`, også i CI) bygger imagene og verifiserer dette i Docker: hub, web og site
+  for begge miljøene med env-filene (de ekte når de finnes lokalt), `/api` og `/hub` gjennom web, sikkerhetshoder,
+  Secure-kaken og klient-IP bak en proxy, ubegrensede kontoer, helsesjekkene, rene stopp, at env-filer aldri kommer
+  inn i et image, agenten innebygd i imagene med og uten token, og agentinstallasjonen på en ren Ubuntu-server fra
+  nedlasting til avinstallasjon.
 
 ## Miljøfiler og git
 

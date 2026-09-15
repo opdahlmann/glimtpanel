@@ -19,6 +19,7 @@
     "test:hub": "dotnet test apps/glimt-hub/Glimt.Hub.slnx",
     "test:agent": "node scripts/agent-container.mjs --test",
     "test:e2e": "npm --workspace e2e test",
+    "test:infra": "node --test --test-concurrency=1 'infra/tests/*.test.mjs'",
     "lint": "npm --workspace apps/glimt-web run lint && dotnet format apps/glimt-hub/Glimt.Hub.slnx --verify-no-changes",
     "build": "npm --workspace apps/glimt-web run build && dotnet build apps/glimt-hub/Glimt.Hub.slnx -c Release && npm --workspace apps/glimt-site run build",
     "build:images": "node scripts/build-images.mjs",

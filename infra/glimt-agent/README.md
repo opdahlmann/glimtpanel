@@ -16,10 +16,11 @@ Versjonsnummeret kommer fra taggen og bakes inn i binæren; `glimt-agent version
 
 ## Slik publiserer du
 
-1. Kjør agenttestene lokalt og merge endringen til `main`. Vent til CI er grønn.
+1. Kjør agenttestene og containertestene lokalt og merge endringen til `main`. Vent til CI er grønn.
 
    ```sh
    npm run test:agent
+   npm run test:infra   # blant annet installasjon på en ren Ubuntu-server og agenten innebygd i imagene
    ```
 
 2. Sett taggen på commiten i `main` og push den.

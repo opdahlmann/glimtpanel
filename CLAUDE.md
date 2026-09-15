@@ -33,6 +33,7 @@ npm run dev:hub | dev:web | dev:agent | dev:site
 npm run dev:stop                # stopper container og løpende prosesser
 npm test                        # test:web + test:hub + test:agent
 npm run lint                    # angular-eslint + dotnet format --verify-no-changes
+npm run test:infra              # containertestene i infra/tests (node:test + Docker): imagene, agenten i imagene, installasjon
 npm run build:images            # Docker-imagene slik Dokploy bygger dem (kontekst = repo-rot)
 ```
 
