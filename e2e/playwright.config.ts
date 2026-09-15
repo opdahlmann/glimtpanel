@@ -45,7 +45,9 @@ export default defineConfig({
   // Skjermbildene i tests/*-snapshots er tatt på macOS (-darwin.png); Linux-runneren i CI har ingen og tegner fonter
   // annerledes, så CI sjekker atferd, ikke piksler. ponytail: egne -linux-snapshots om CI skal fange designavvik.
   ignoreSnapshots: !!process.env.CI,
-  use: { baseURL, trace: 'on-first-retry', screenshot: 'only-on-failure' },
+  // serviceWorkers: 'block' fordi ngsw i Linux-WebKit (CI) lar lazy chunks og POST-kall henge uten svar; ingen test
+  // dekker service workeren.
+  use: { baseURL, trace: 'on-first-retry', screenshot: 'only-on-failure', serviceWorkers: 'block' },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'mobile-webkit', use: { ...devices['iPhone 14'] } },

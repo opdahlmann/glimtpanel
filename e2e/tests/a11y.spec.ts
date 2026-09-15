@@ -19,6 +19,7 @@ test.describe('tilgjengelighet', () => {
   test.skip(({ isMobile }) => !!isMobile, 'axe kjøres på desktop');
 
   test('axe finner ingen alvorlige feil på skjermene', async ({ page }) => {
+    test.slow(); // 15 skjermer med axe tar over 30 s på CI-runneren
     await forceLang(page, 'en');
     await loginViaApi(page);
     const findings: string[] = [];
