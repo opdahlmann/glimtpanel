@@ -45,7 +45,8 @@ CMD ["node", "server.js"]        # appens egen startkommando, f.eks. ["dotnet", 
 `CMD` er kommandoen imaget startet med fra før; `ENTRYPOINT` starter agenten i bakgrunnen og kjører deretter `CMD`
 som PID 1 via `exec`, så appen oppfører seg som før og agenten dør med containeren. Har imaget allerede en
 `ENTRYPOINT`, sett den inn som `CMD` i stedet. `GLIMT_TOKEN` settes som hemmelighet ved kjøring, ikke i imaget.
-Noden vises i dashbordet med navnet fra `GLIMT_NODE_NAME`, og kommandoen dukker opp i prosesslisten.
+Noden vises med navnet du ga i «Add container»; `GLIMT_NODE_NAME` blir vertsnavnet. Stoppes containeren, får ikke agenten
+noe signal (appen er PID 1), så noden vises som *down* etter kort tid i stedet for *sleeping*.
 
 **Sidecar i Compose.** Appimaget røres ikke. Med Dockers standard ser sidecaren bare sin egen cgroup og summerer
 prosesser (`approx`); legg `cgroup: host` på sidecaren for ekte tall.
