@@ -127,6 +127,9 @@ main() {
 		echo "GLIMT_HUB=$hub"
 		echo "GLIMT_AGENT_KEY=$key"
 		echo "GLIMT_AGENT_DOCKER=$docker_mode"
+		# The installer sets up a server. Without this, auto-detection picks the container profile on hosts whose
+		# pid 1 sits in a Docker cgroup (systemd in Docker) and the agent refuses to start without GLIMT_TOKEN.
+		echo "GLIMT_KIND=server"
 	} >"$env_tmp"
 	chmod 0600 "$env_tmp"
 	mv -f "$env_tmp" "$env_file"
@@ -183,6 +186,7 @@ SystemCallErrorNumber=EPERM
 MemoryMax=192M
 Restart=always
 RestartSec=5
+RestartPreventExitStatus=2
 
 [Install]
 WantedBy=multi-user.target

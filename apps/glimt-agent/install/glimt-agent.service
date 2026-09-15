@@ -40,6 +40,7 @@ SystemCallErrorNumber=EPERM
 MemoryMax=192M
 Restart=always
 RestartSec=5
+RestartPreventExitStatus=2
 
 [Install]
 WantedBy=multi-user.target

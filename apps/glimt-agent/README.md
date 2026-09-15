@@ -280,7 +280,8 @@ curl -fsSL https://get.glimtpanel.com/install | sudo sh -s -- --key gp_xxx
 `install/install.sh` er POSIX `sh`, ligger i sin helhet i `main()` som kalles på siste linje (avkuttet nedlasting
 kjører ingenting), krever root (kjører seg selv med `sudo` når det er en fil), finner `amd64`/`arm64`, laster
 `glimt-agent-linux-<arch>` og `SHA256SUMS` fra GitHub Release `agent/vX.Y.Z` i `opdahlmann/glimtpanel`, verifiserer
-med `sha256sum -c`, legger binæren i `/usr/local/bin/glimt-agent`, skriver `/etc/glimt-agent/env` (0600) og enheten,
+med `sha256sum -c`, legger binæren i `/usr/local/bin/glimt-agent`, skriver `/etc/glimt-agent/env` (0600, med `GLIMT_KIND=server` så auto-deteksjonen aldri velger containerprofilen
+for en installert server) og enheten,
 `systemctl daemon-reload` + `enable` + `restart`. Skriptet er idempotent; reinstallasjon uten `--key` beholder forrige
 nøkkel eller det lagrede tokenet.
 
@@ -302,8 +303,8 @@ and logs. It cannot change anything on this server.*
 `Type=notify`, `User=glimt-agent` (fast systembruker), `StateDirectory=glimt-agent` (gir `STATE_DIRECTORY=/var/lib/glimt-agent`),
 `SupplementaryGroups=systemd-journal adm`, `ProtectSystem=strict`, `ProtectHome=yes`, `NoNewPrivileges=yes`,
 `PrivateTmp=yes`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK`, `CapabilityBoundingSet=CAP_SYS_PTRACE`
-og `AmbientCapabilities=CAP_SYS_PTRACE` (for å se hvilken prosess som eier en port), `MemoryMax=64M`, `Restart=always`,
-`RestartSec=5`, pluss `UMask`, `ProtectKernel*`, `ProtectClock`, `ProtectHostname`, `PrivateDevices`,
+og `AmbientCapabilities=CAP_SYS_PTRACE` (for å se hvilken prosess som eier en port), `MemoryMax=192M`, `Restart=always`,
+`RestartSec=5`, `RestartPreventExitStatus=2` (en konfigurasjonsfeil gir `failed` i stedet for omstart hvert 5. s), pluss `UMask`, `ProtectKernel*`, `ProtectClock`, `ProtectHostname`, `PrivateDevices`,
 `RestrictNamespaces`, `RestrictRealtime`, `RestrictSUIDSGID`, `LockPersonality` og `SystemCallArchitectures=native`.
 Steg 11.2 la til `RemoveIPC`, `ProtectControlGroups=yes` (`/sys/fs/cgroup` skrivebeskyttet; agenten leser bare),
 `MemoryDenyWriteExecute`, `SystemCallFilter=@system-service` minus `@privileged @resources @obsolete @mount @swap
