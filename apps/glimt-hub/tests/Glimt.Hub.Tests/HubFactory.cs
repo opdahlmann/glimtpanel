@@ -38,6 +38,7 @@ public class HubFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("GLIMT_DEV_USER_EMAIL", "dev@glimtpanel.local");
         Environment.SetEnvironmentVariable("GLIMT_DEV_USER_PASSWORD", "test-password");
         Environment.SetEnvironmentVariable("GLIMT_WEB_PUBLIC_URL", "http://localhost:4200");
+        Environment.SetEnvironmentVariable("GLIMT_UNLIMITED_EMAILS", " Owner@glimtpanel.local , Unlimited@glimtpanel.local");
     }
 
     /// <summary>A factory backed by the shared Testcontainers MongoDB, with its own database name.</summary>

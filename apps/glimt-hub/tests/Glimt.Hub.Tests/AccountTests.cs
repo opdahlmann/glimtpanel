@@ -73,6 +73,27 @@ public sealed class AccountTests(TestHub hub) : IClassFixture<TestHub>
     }
 
     [Fact]
+    public async Task Unlimited_emails_never_count_slots_or_cost()
+    {
+        // GLIMT_UNLIMITED_EMAILS (HubFactory): matched case-insensitively, plan shown as unlimited, nothing to pay.
+        using var user = await TestUsers.RegisterAndConfirmAsync(hub, "unlimited@glimtpanel.local");
+        for (var i = 0; i < 5; i++)
+        {
+            await hub.AddServerAsync(user.Id, $"unl-{i}");
+        }
+
+        var dto = await user.Client.GetFromJsonAsync<SubscriptionDto>("/api/subscription", Repo.Timeout());
+        Assert.NotNull(dto);
+        Assert.Equal(Subscription.UnlimitedPlan, dto.Plan);
+        Assert.Equal(5, dto.SlotsUsed);
+        Assert.Equal(0, dto.SlotsBeta);
+        Assert.Equal(0, dto.WouldCostUsd);
+
+        var me = await user.Client.GetFromJsonAsync<JsonElement>("/api/auth/me", Repo.Timeout());
+        Assert.Equal(Subscription.UnlimitedPlan, me.GetProperty("plan").GetString());
+    }
+
+    [Fact]
     public async Task Export_contains_every_section_and_no_secrets()
     {
         using var owner = await TestUsers.RegisterAndConfirmAsync(hub);

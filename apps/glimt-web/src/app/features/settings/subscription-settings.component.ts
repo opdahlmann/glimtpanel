@@ -17,8 +17,8 @@ import { ChipComponent } from '@shared/chip/chip.component';
     @if (sub(); as s) {
       <div class="grid">
         <section class="card ok" aria-labelledby="beta-title" data-testid="beta-card">
-          <h2 id="beta-title" class="section">{{ 'beta' | t }}</h2>
-          <p class="note">{{ 'betaSub' | t }}</p>
+          <h2 id="beta-title" class="section">{{ (unlimited() ? 'unlimited' : 'beta') | t }}</h2>
+          <p class="note">{{ (unlimited() ? 'unlimitedSub' : 'betaSub') | t }}</p>
           <div class="chips">
             <gp-chip [label]="('slots' | t) + ' ' + ('slotsUsed' | t)" [value]="s.slotsUsed" />
             <gp-chip [label]="'slotsFree' | t" [value]="s.slotsFree" />
@@ -26,6 +26,7 @@ import { ChipComponent } from '@shared/chip/chip.component';
           </div>
           <p class="note num">{{ s.slotsUsed }} {{ 'slots' | t }} {{ 'slotsUsed' | t }} · {{ s.slotsFree }} {{ 'slotsFree' | t }} · {{ s.slotsBeta }} {{ 'slotsBeta' | t }} · {{ 'perNode' | t }}</p>
         </section>
+        @if (!unlimited()) {
         <section class="card" aria-labelledby="cost-title" data-testid="cost-card">
           <h2 id="cost-title" class="section">{{ 'whatItWouldCost' | t }}</h2>
           <div class="row">
@@ -41,6 +42,7 @@ import { ChipComponent } from '@shared/chip/chip.component';
           <p class="note num">{{ s.slotsBeta }} × {{ s.plannedPricePerSlotUsd }} USD · {{ s.noticeDays }} {{ 'noticeDays' | t }}</p>
           <p class="note faint">{{ 'paymentLater' | t }}</p>
         </section>
+        }
       </div>
     } @else if (error()) {
       <p class="muted">{{ 'errorGeneric' | t }}</p>
@@ -59,6 +61,8 @@ export class SubscriptionSettingsComponent {
   readonly sub = signal<SubscriptionDto | null>(null);
   readonly error = signal(false);
   readonly earlyAdopter = computed(() => this.session.user()?.earlyAdopter ?? false);
+  /** Kontoer i GLIMT_UNLIMITED_EMAILS: ingen plasser telles, ingen pris, kostnadskortet skjules. */
+  readonly unlimited = computed(() => this.sub()?.plan === 'unlimited');
 
   constructor() {
     void this.api

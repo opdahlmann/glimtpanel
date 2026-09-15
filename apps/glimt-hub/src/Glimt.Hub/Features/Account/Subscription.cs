@@ -14,6 +14,8 @@ public sealed record SubscriptionDto(
 
 public static class Subscription
 {
+    /// <summary>Plan for the e-mails in GLIMT_UNLIMITED_EMAILS: no slot count, no cost, applied when the user is read (UserStore).</summary>
+    public const string UnlimitedPlan = "unlimited";
     public const int FreeSlots = 2;
     public const int PlannedPricePerSlotUsd = 12;
     public const int EarlyAdopterDiscountPct = 50;
@@ -21,7 +23,7 @@ public static class Subscription
 
     public static SubscriptionDto Compute(int slotsUsed, bool earlyAdopter, string plan)
     {
-        var beta = Math.Max(0, slotsUsed - FreeSlots);
+        var beta = plan == UnlimitedPlan ? 0 : Math.Max(0, slotsUsed - FreeSlots);
         var discount = earlyAdopter ? EarlyAdopterDiscountPct : 0;
         var wouldCost = beta * PlannedPricePerSlotUsd;
         return new SubscriptionDto(

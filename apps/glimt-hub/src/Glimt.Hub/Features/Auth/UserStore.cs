@@ -11,18 +11,33 @@ public interface IUserLookup
 }
 
 /// <summary>Persistence for `users` and the `counters` sequence. Callers guard with <see cref="RequireDatabase"/>.</summary>
-public sealed class UserStore(MongoContext mongo) : IUserLookup
+public sealed class UserStore(MongoContext mongo, GlimtOptions options) : IUserLookup
 {
     public const int EarlyAdopterLimit = 100;
 
     private IMongoCollection<UserDocument> Users => mongo.Db.GetCollection<UserDocument>(UserDocument.Collection);
     private IMongoCollection<CounterDocument> Counters => mongo.Db.GetCollection<CounterDocument>(CounterDocument.Collection);
 
-    public Task<UserDocument?> FindByIdAsync(string id, CancellationToken cancellationToken) =>
-        Users.Find(u => u.Id == id).FirstOrDefaultAsync(cancellationToken)!;
+    public async Task<UserDocument?> FindByIdAsync(string id, CancellationToken cancellationToken) =>
+        WithPlan(await Users.Find(u => u.Id == id).FirstOrDefaultAsync(cancellationToken));
 
-    public Task<UserDocument?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
-        Users.Find(u => u.Email == email).FirstOrDefaultAsync(cancellationToken)!;
+    public async Task<UserDocument?> FindByEmailAsync(string email, CancellationToken cancellationToken) =>
+        WithPlan(await Users.Find(u => u.Email == email).FirstOrDefaultAsync(cancellationToken));
+
+    /// <summary>
+    /// GLIMT_UNLIMITED_EMAILS wins over the stored plan, on every read and never persisted: removing an address from the
+    /// variable takes the plan away again at the next restart. Writes below update named fields only, so the overlay
+    /// never reaches the database.
+    /// </summary>
+    private UserDocument? WithPlan(UserDocument? user)
+    {
+        if (user is not null && options.IsUnlimited(user.Email))
+        {
+            user.Plan = Account.Subscription.UnlimitedPlan;
+        }
+
+        return user;
+    }
 
     public async Task<IReadOnlyList<UserDocument>> FindByIdsAsync(IEnumerable<string> ids, CancellationToken cancellationToken)
     {
@@ -32,7 +47,9 @@ public sealed class UserStore(MongoContext mongo) : IUserLookup
             return [];
         }
 
-        return await Users.Find(Builders<UserDocument>.Filter.In(u => u.Id, list)).ToListAsync(cancellationToken);
+        var users = await Users.Find(Builders<UserDocument>.Filter.In(u => u.Id, list)).ToListAsync(cancellationToken);
+        users.ForEach(u => WithPlan(u));
+        return users;
     }
 
     /// <summary>Every user (id, e-mail, name, zone, language); the digest walks this once a minute.</summary>

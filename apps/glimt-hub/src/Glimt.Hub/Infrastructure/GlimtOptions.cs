@@ -41,6 +41,11 @@ public sealed class GlimtOptions
     public string? VapidPrivate { get; init; }
     public string? VapidSubject { get; init; }
 
+    /// <summary>GLIMT_UNLIMITED_EMAILS: accounts that are always on the unlimited plan (owner and whoever they add). Case-insensitive.</summary>
+    public IReadOnlySet<string> UnlimitedEmails { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    public bool IsUnlimited(string email) => UnlimitedEmails.Contains(email.Trim());
+
     public bool IsProduction => Env == Production;
 
     /// <summary>development or e2e: dev enrol key accepted, dev user seeded, CORS for the web app.</summary>
@@ -152,6 +157,7 @@ public sealed class GlimtOptions
             VapidPublic = Optional("VAPID_PUBLIC"),
             VapidPrivate = Optional("VAPID_PRIVATE"),
             VapidSubject = Optional("VAPID_SUBJECT"),
+            UnlimitedEmails = (Optional("UNLIMITED_EMAILS") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.OrdinalIgnoreCase),
         };
 
         if (missing.Count > 0)

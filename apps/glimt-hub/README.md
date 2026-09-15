@@ -72,6 +72,7 @@ Alle har prefiks `GLIMT_` og er beskrevet i `example.env`. Huben bruker:
 | `GLIMT_AGENT_IMAGE` | | `ghcr.io/opdahlmann/glimt-agent:latest` | Sidecar-imaget i snuttene fra `POST /api/servers` |
 | `GLIMT_DEV_CONTAINER_TOKEN` | | – | Utenom produksjon: containernoden `sidecar-dev` på dev-kontoen får hashen av dette tokenet (`npm run dev -- --sidecar`) |
 | `GLIMT_BUFFER_PATH` | | – | Mappe for `buffer.bin` (24-timersbufferen). Tom = ingen lagring, bufferen lever bare i minnet |
+| `GLIMT_UNLIMITED_EMAILS` | | – | Kommaseparerte e-postadresser som alltid har planen `unlimited`: ingen plasser telles og ingen pris i `GET /api/subscription`. Legges på ved lesing i `UserStore`, lagres aldri; fjernes adressen, er kontoen tilbake på lagret plan ved neste omstart |
 | `GLIMT_DEMO_MODE` | | `false` | Demomodus: 16 falske servere på demokontoen og `POST /api/demo/session`. Alltid på når `GLIMT_ENV=e2e` |
 | `GLIMT_APPMAIL_URL`, `GLIMT_APPMAIL_API_KEY`, `GLIMT_MAIL_FROM` | | – | E-post via appmail. Tom URL = `ConsoleEmailSender` (e-posten med lenken logges) |
 | `GLIMT_VAPID_PUBLIC`, `GLIMT_VAPID_PRIVATE`, `GLIMT_VAPID_SUBJECT` | | – | Web Push (steg 7.2): P-256-paret fra `vapid-keys` (base64url, rå 65-byte punkt og 32-byte skalar) og `mailto:`-adressen i VAPID-tokenet. Tomme = push av, med en advarsel ved oppstart; alt annet virker |
