@@ -84,7 +84,7 @@ gjenglemt hub på 5080 uten MongoDB stopper kjøringen med melding; `npm run dev
   seedede tall, flyttbar klokke og `/api/e2e/*`.
 - Web leser **aldri** miljø ved byggetid. `scripts/web-config.mjs` skriver `apps/glimt-web/public/config.json`
   (git-ignorert) som `ConfigService` henter ved oppstart; i containeren gjør `nginx/40-glimt-config.sh` det samme.
-- Huben starter og svarer på `/healthz` selv uten MongoDB (servere lever da bare i minnet).
+- Huben starter og svarer på `/healthz` selv uten MongoDB (servere lever da bare i minnet); `/readyz` gir 503 uten.
 
 ## Arkitektur
 

@@ -1,6 +1,6 @@
 # glimt-web: Angular-appen bygd med Node, servert av nginx. Bygg-kontekst = repo-rot (IMPLEMENTERINGSPLAN 5.5).
 #   docker build -f apps/glimt-web/Dockerfile -t glimt-web:local .
-FROM node:26-alpine AS build
+FROM public.ecr.aws/docker/library/node:26-alpine AS build
 WORKDIR /repo
 # Kun manifestene først, slik at npm ci caches til en avhengighet endres.
 COPY package.json package-lock.json ./
@@ -16,7 +16,7 @@ COPY apps/glimt-web apps/glimt-web
 RUN rm -f apps/glimt-web/public/config.json \
  && npm --workspace apps/glimt-web run build -- --configuration production
 
-FROM nginx:1.27-alpine
+FROM public.ecr.aws/nginx/nginx:1.27-alpine
 # NGINX_ENVSUBST_FILTER: kun GLIMT_*-variabler byttes ut i malen, så nginx-variabler som $uri står urørt.
 # GLIMT_DNS_RESOLVER settes av 10-glimt-resolver.envsh fra /etc/resolv.conf hvis den ikke gis eksplisitt.
 ENV GLIMT_HUB_INTERNAL_URL=http://glimt-hub:8080 \

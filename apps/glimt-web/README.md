@@ -579,6 +579,7 @@ docker run --rm -p 8080:80 -e GLIMT_HUB_INTERNAL_URL=http://host.docker.internal
 nginx: `/api/` og `/hub/` proxyes til `GLIMT_HUB_INTERNAL_URL` (standard `http://glimt-hub:8080`, uten skråstrek
 på slutten) med WebSocket-oppgradering og 1 times timeout; SPA-fallback til `index.html`; gzip; `immutable`-cache
 for hashede filer; `no-store` for `config.json`; `X-Content-Type-Options` og `Referrer-Policy` på alle svar.
+`X-Forwarded-Proto` fra Traefik sendes videre uendret (ellers hadde huben sett `http` og satt kaken uten Secure).
 Hub-navnet slås opp ved kjøretid (nginx `resolver`), slik at web starter selv om huben ikke er oppe ennå og følger
 med når hub-containeren får ny IP etter en utrulling. Resolveren hentes fra containerens `/etc/resolv.conf`
 (`127.0.0.11` på brukerdefinerte Docker-nettverk som i Dokploy) og kan overstyres med `GLIMT_DNS_RESOLVER`.

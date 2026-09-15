@@ -162,6 +162,31 @@ CI (`.github/workflows/ci.yml`): lint, kontrakt, unit-tester, `npm audit`/`dotne
 sidecar-image til ghcr.io) ved tag `agent/v*`. `nightly.yml` kjører skjerm 4, 5 og 7 mot den ekte agenten i
 Ubuntu-containeren.
 
+## Utrulling (Dokploy)
+
+Tre applikasjoner i ett Dokploy-prosjekt, alle med Build Type **Dockerfile**, Build Context `.` (repo-roten) og tomt
+felt for Build-time Arguments. Ingenting bakes inn i imagene: alt leses fra fanen **Environment** når containeren
+starter, så «Redeploy» holder etter en endring. Nøklene er de i `example.env`; `.env.prod` er det som limes inn.
+
+| App | Dockerfile Path | Port | Domene | Environment |
+|---|---|---|---|---|
+| glimt-hub | `apps/glimt-hub/Dockerfile` | 8080 | `api.<domene>` | «Hub», «E-post» og «Web Push» fra `example.env`, `GLIMT_ENV=production`, `GLIMT_DEMO_MODE=true`. Volum på `/data` for 24-timersbufferen. |
+| glimt-web | `apps/glimt-web/Dockerfile` | 80 | `app.<domene>` | `GLIMT_HUB_INTERNAL_URL=http://<hubens tjenestenavn>:8080` og det web viser: `GLIMT_ENV`, `GLIMT_HUB_PUBLIC_URL`, `GLIMT_INSTALL_URL`, `GLIMT_VAPID_PUBLIC`, `GLIMT_DEFAULT_LANG`, `GLIMT_FEATURE_FLAGS`. |
+| glimt-site | `apps/glimt-site/Dockerfile` | 80 | apex og `www` | ingen |
+
+- **Hubens tjenestenavn** står i hubens Logs-fane som `<tjenestenavn>.1.<id>`. Alle apper ligger på `dokploy-network`;
+  nginx slår navnet opp per forespørsel, så web starter selv om huben er nede og følger med når den får ny IP.
+- **TLS termineres i Traefik.** Containerne snakker ren HTTP. nginx sender Traefiks `X-Forwarded-Proto` videre, og huben
+  leser `X-Forwarded-*` (Secure på oppfriskningskaken, hastighetsbegrensning per klient, riktig IP i loggen).
+- **DNS først.** Alle domener må peke på verten før første deploy, ellers feiler Let's Encrypt. `get.glimtpanel.com`
+  peker på hubens `/install`.
+- **Helsesjekk:** `/readyz` gir 200 med database og 503 uten, og passer som helsesjekk for automatisk tilbakerulling.
+  `/healthz` svarer alltid og viser versjon, database og tilkoblede agenter.
+- **Røyktest etter deploy:** `/readyz` → 200, innlogging i appen (beviser `/api`-proxyen), en agent som kobler til
+  (beviser WebSocket gjennom Traefik), `docker service ls` → alle `1/1`.
+- Baseimagene hentes fra MCR og ECR Public, ikke Docker Hub, så byggene ikke stopper på Docker Hubs pull-grense.
+  Dokploy lagrer Environment i klartekst; roter `GLIMT_JWT_SECRET` og API-nøkler som har ligget der ved behov.
+
 ## Miljøfiler og git
 
 - Alle nøkler har prefiks `GLIMT_` og er dokumentert i `example.env`, den eneste env-filen som sjekkes inn. `.env` gjelder

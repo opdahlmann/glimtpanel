@@ -83,6 +83,7 @@ Mangler en påkrevd nøkkel, stopper huben med en melding som lister dem, før n
 | Sti | Hva |
 |---|---|
 | `POST /api/client-errors` | – | `{ message?, stack?, url?, userAgent?, version? }` fra nettleserens globale feilhåndterer (steg 9.5): logges som advarsel (avkortet), lagres ikke, 204. Egen policy `errors` (20/min per adresse) |
+| `GET /readyz` | `ready` (200) med database, 503 uten. Helsesjekk for Dokploy/swarm. |
 | `GET /healthz` | `{ status, version, env, mongo: "ok" \| "unavailable", agentsConnected, uptimeSec, demoMode, buffer: { servers, points, lastSavedAt } }` (`agentsConnected` teller ekte agenter, ikke demoservere) |
 | `GET /install` | Agentens `install.sh` (bakt inn fra `apps/glimt-agent/install/`) med denne hubens `wss://…/agent/ws` og `GLIMT_AGENT_VERSION` som standard, `text/plain`, cache 1 t. `get.glimtpanel.com` peker hit (steg 11.3) |
 | `WS /agent/ws` | Agentprotokollen v1 (`packages/protocol/agent-hub.schema.json`): første melding må være `hello` innen 10 s, maks 1 MB per ramme, tekstrammer. Se «Sanntid» under |
@@ -345,6 +346,9 @@ veien fra demoserverne til listen, kortet, `Alert`-hendelsen og kanalene (falske
   som en fremmed bruker: svaret skal være 403 eller 404, aldri 2xx og aldri en valideringsfeil (som ville avslørt
   gyldige spørringer før tilgangen er sjekket). Testen fant og rettet `history`, som validerte `metric` først.
 - **Demokontoen** er skrivebeskyttet (`DemoReadOnly`, se «Demo og e2e»).
+- **Bak proxy.** `UseForwardedHeaders` først i kjeden: `X-Forwarded-Proto` gir `IsHttps` (Secure på oppfriskningskaken)
+  og `X-Forwarded-For` gir klientens adresse (hastighetsbegrensning, logg). Alle proxyer stoles på og hele kjeden
+  leses, siden porten aldri publiseres direkte; Traefik fjerner selv X-Forwarded-hoder fra klienter.
 - **Keepalive.** Agenten lukker en forbindelse uten innkommende trafikk på 2 minutter. Huben pinger derfor hvert
   `GLIMT_HEARTBEAT_SECONDS` når *den selv* har vært stille (`_lastSent`), ikke når agenten har vært det – lasttesten i
   steg 11.4 fant at strømmende agenter ellers koblet opp på nytt hvert 2. minutt.

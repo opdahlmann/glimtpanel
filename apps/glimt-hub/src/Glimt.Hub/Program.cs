@@ -11,6 +11,7 @@ using Glimt.Hub.Features.Live;
 using Glimt.Hub.Features.Servers;
 using Glimt.Hub.Infrastructure;
 using Glimt.Hub.Infrastructure.Email;
+using Microsoft.AspNetCore.HttpOverrides;
 
 if (VapidKeys.TryRun(args, Console.Out))
 {
@@ -66,6 +67,13 @@ if (dotEnv.LoadedFiles.Count > 0)
     log.LogInformation("loaded {Count} variables from {Files}", dotEnv.AppliedKeys, string.Join(", ", dotEnv.LoadedFiles));
 }
 
+// Bak Traefik og nginx (Dokploy): IsHttps og RemoteIpAddress fra X-Forwarded-Proto/-For, ellers får oppfriskningskaken
+// ikke Secure og hastighetsbegrensningen ser nginx sin adresse for alle. Alle proxyer stoles på (porten er ikke
+// publisert), og hele kjeden client, traefik leses (ForwardLimit = null).
+var forwarded = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto, ForwardLimit = null };
+forwarded.KnownIPNetworks.Clear();
+forwarded.KnownProxies.Clear();
+app.UseForwardedHeaders(forwarded);
 app.UseBodyLimit();
 app.UseLiveCors(options);
 app.UseAuthentication();

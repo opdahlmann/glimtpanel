@@ -128,6 +128,22 @@ public sealed class AuthTests(TestHub hub) : IClassFixture<TestHub>
     }
 
     [Fact]
+    public async Task Refresh_cookie_is_secure_behind_a_tls_proxy()
+    {
+        // Dokploy: TLS ends in Traefik; nginx and the hub speak plain HTTP, so X-Forwarded-Proto decides Secure.
+        using var user = await TestUsers.RegisterAndConfirmAsync(hub);
+        using var client = hub.CreateClient(handleCookies: false);
+        var plain = await client.PostAsJsonAsync("/api/auth/login", new { email = user.Email, password = user.Password }, Repo.Timeout());
+        Assert.DoesNotContain("secure", plain.Headers.GetValues("Set-Cookie").Single(h => h.StartsWith("glimt_refresh=", StringComparison.Ordinal)), StringComparison.OrdinalIgnoreCase);
+
+        client.DefaultRequestHeaders.Add("X-Forwarded-Proto", "https");
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", "203.0.113.9, 10.0.0.2");
+        var tls = await client.PostAsJsonAsync("/api/auth/login", new { email = user.Email, password = user.Password }, Repo.Timeout());
+        Assert.Equal(HttpStatusCode.OK, tls.StatusCode);
+        Assert.Contains("secure", tls.Headers.GetValues("Set-Cookie").Single(h => h.StartsWith("glimt_refresh=", StringComparison.Ordinal)), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Refresh_rotates_and_detects_reuse()
     {
         using var user = await TestUsers.RegisterAndConfirmAsync(hub);

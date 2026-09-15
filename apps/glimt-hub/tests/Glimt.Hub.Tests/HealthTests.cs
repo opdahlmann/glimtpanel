@@ -25,6 +25,15 @@ public sealed class HealthTests(HubFactory factory) : IClassFixture<HubFactory>
     }
 
     [Fact]
+    public async Task Readyz_is_503_without_mongo()
+    {
+        using var client = factory.CreateClient();
+        var response = await client.GetAsync("/readyz", Repo.Timeout());
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Install_returns_a_shell_script()
     {
         using var client = factory.CreateClient();

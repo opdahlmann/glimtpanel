@@ -14,6 +14,7 @@ public sealed record HealthResponse(string Status, string Version, string Env, s
 public static class HealthFeature
 {
     public const string Path = "/healthz";
+    public const string ReadyPath = "/readyz";
 
     public static readonly string Version =
         typeof(HealthFeature).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
@@ -31,6 +32,8 @@ public static class HealthFeature
             (long)(DateTime.UtcNow - StartedAt).TotalSeconds,
             DemoFeature.IsDemoMode(options),
             new BufferHealth(buffers.ServerCount, buffers.TotalPoints, buffers.LastSavedAt?.UtcDateTime.ToString("o")))));
+        // Readiness for Dokploy/swarm: 503 uten database, så en utrulling som ikke når Mongo rulles tilbake.
+        app.MapGet(ReadyPath, (MongoContext mongo) => mongo.IsAvailable ? Results.Text("ready") : Results.Problem(mongo.UnavailableReason ?? "MongoDB unavailable", statusCode: StatusCodes.Status503ServiceUnavailable));
         app.MapClientErrors();
         return app;
     }
