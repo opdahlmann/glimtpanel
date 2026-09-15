@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/journal"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/protocol"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/state"
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/sysinfo"
@@ -239,10 +240,13 @@ func TestLogsCommand(t *testing.T) {
 		t.Errorf("container without docker: code=%d err=%q", code, errb.String())
 	}
 	errb.Reset()
-	if code := run([]string{"logs", "--source", "web", "--docker", "none"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "unavailable") {
-		t.Errorf("web without files: code=%d err=%q", code, errb.String())
+	// Without a readable web server log the web source is unavailable (GitHub's runners ship Apache, so only then).
+	if len(journal.ReadablePaths(journal.WebLogPaths)) == 0 {
+		if code := run([]string{"logs", "--source", "web", "--docker", "none"}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "unavailable") {
+			t.Errorf("web without files: code=%d err=%q", code, errb.String())
+		}
+		errb.Reset()
 	}
-	errb.Reset()
 	// Without journalctl the journal sources are unavailable; with it the tail prints and exits 0.
 	code := run([]string{"logs", "--source", "auth", "--tail", "3", "--docker", "none"}, &out, &errb)
 	if _, err := exec.LookPath("journalctl"); err != nil {
