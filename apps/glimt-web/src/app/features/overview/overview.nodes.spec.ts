@@ -1,5 +1,5 @@
 import { CardDto } from '@core/live.types';
-import { clearFilters, countByStatus, filterCards, isAllActive, sortCards, toggleKind } from './overview.model';
+import { clearFilters, countByStatus, filterCards, isAllActive, sortCards, toggleFilter } from './overview.model';
 import { DEMO_CARDS } from './overview.fixtures';
 
 function node(name: string, status: CardDto['status'] = 'up'): CardDto {
@@ -21,10 +21,10 @@ describe('overview.model med noder', () => {
   });
 
   it('filtrerer på type og på sovende', () => {
-    const f = toggleKind(clearFilters(), 'container');
+    const f = toggleFilter(clearFilters(), 'kind', 'container');
     expect(f.kind).toBe('container');
     expect(filterCards(cards, '', f).map((c) => c.name)).toEqual(['acme-backend', 'edge-worker']);
-    expect(toggleKind(f, 'container').kind).toBe('');
+    expect(toggleFilter(f, 'kind', 'container').kind).toBe('');
     expect(isAllActive(f)).toBe(false);
     expect(filterCards(cards, '', { ...clearFilters(), status: 'sleeping' }).map((c) => c.name)).toEqual(['edge-worker']);
     expect(filterCards(cards, '', { ...clearFilters(), kind: 'server' })).toHaveLength(16);

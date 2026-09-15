@@ -47,17 +47,17 @@
         <button type="button" class="chip on" data-testid="group-chip" (click)="clearGroupFilter()" [attr.aria-label]="('remove' | t) + ' ' + g.name">{{ 'groupLabel' | t }}: {{ g.name }} <span aria-hidden="true">×</span></button>
       }
       @for (tag of tags(); track tag) {
-        <button type="button" class="chip" [class.on]="filters().tag === tag" [attr.aria-pressed]="filters().tag === tag" (click)="toggleTag(tag)">{{ tag }}</button>
+        <button type="button" class="chip" [class.on]="filters().tag === tag" [attr.aria-pressed]="filters().tag === tag" (click)="toggle('tag', tag)">{{ tag }}</button>
       }
-      <button type="button" class="chip" [class.on]="filters().status === 'up'" [attr.aria-pressed]="filters().status === 'up'" (click)="toggleStatus('up')"><span class="dot dot--up" aria-hidden="true"></span>{{ 'up' | t }}</button>
-      <button type="button" class="chip" [class.on]="filters().status === 'down'" [attr.aria-pressed]="filters().status === 'down'" (click)="toggleStatus('down')"><span class="dot dot--down" aria-hidden="true"></span>{{ 'down' | t }}</button>
-      <button type="button" class="chip" [class.on]="filters().status === 'paused'" [attr.aria-pressed]="filters().status === 'paused'" (click)="toggleStatus('paused')"><span class="dot dot--paused" aria-hidden="true"></span>{{ 'paused' | t }}</button>
+      <button type="button" class="chip" [class.on]="filters().status === 'up'" [attr.aria-pressed]="filters().status === 'up'" (click)="toggle('status', 'up')"><span class="dot dot--up" aria-hidden="true"></span>{{ 'up' | t }}</button>
+      <button type="button" class="chip" [class.on]="filters().status === 'down'" [attr.aria-pressed]="filters().status === 'down'" (click)="toggle('status', 'down')"><span class="dot dot--down" aria-hidden="true"></span>{{ 'down' | t }}</button>
+      <button type="button" class="chip" [class.on]="filters().status === 'paused'" [attr.aria-pressed]="filters().status === 'paused'" (click)="toggle('status', 'paused')"><span class="dot dot--paused" aria-hidden="true"></span>{{ 'paused' | t }}</button>
       @if (hasNodes()) {
-        <button type="button" class="chip" [class.on]="filters().status === 'sleeping'" [attr.aria-pressed]="filters().status === 'sleeping'" (click)="toggleStatus('sleeping')"><span class="dot dot--paused" aria-hidden="true"></span>{{ 'sleeping' | t }}</button>
-        <button type="button" class="chip" [class.on]="filters().kind === 'server'" [attr.aria-pressed]="filters().kind === 'server'" (click)="toggleKind('server')">{{ 'servers' | t }}</button>
-        <button type="button" class="chip" [class.on]="filters().kind === 'container'" [attr.aria-pressed]="filters().kind === 'container'" (click)="toggleKind('container')">{{ 'containers' | t }}</button>
+        <button type="button" class="chip" [class.on]="filters().status === 'sleeping'" [attr.aria-pressed]="filters().status === 'sleeping'" (click)="toggle('status', 'sleeping')"><span class="dot dot--paused" aria-hidden="true"></span>{{ 'sleeping' | t }}</button>
+        <button type="button" class="chip" [class.on]="filters().kind === 'server'" [attr.aria-pressed]="filters().kind === 'server'" (click)="toggle('kind', 'server')">{{ 'servers' | t }}</button>
+        <button type="button" class="chip" [class.on]="filters().kind === 'container'" [attr.aria-pressed]="filters().kind === 'container'" (click)="toggle('kind', 'container')">{{ 'containers' | t }}</button>
       }
-      <button type="button" class="chip" [class.on]="filters().alert" [attr.aria-pressed]="filters().alert" (click)="toggleAlert()"><span class="dot dot--warn" aria-hidden="true"></span>{{ 'hasAlert' | t }}</button>
+      <button type="button" class="chip" [class.on]="filters().alert" [attr.aria-pressed]="filters().alert" (click)="toggle('alert', true)"><span class="dot dot--warn" aria-hidden="true"></span>{{ 'hasAlert' | t }}</button>
     </div>
     @if (groupsView()) {
       @if (groups().length === 0) {

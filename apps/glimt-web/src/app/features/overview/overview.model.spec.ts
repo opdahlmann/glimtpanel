@@ -1,4 +1,4 @@
-import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, matchesSearch, sortCards, toggleAlert, toggleStatus, toggleTag } from './overview.model';
+import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, matchesSearch, sortCards, toggleFilter } from './overview.model';
 import { DEMO_CARDS, demoCardByName } from './overview.fixtures';
 
 const names = (cards: { name: string }[]) => cards.map((c) => c.name);
@@ -63,17 +63,17 @@ describe('overview.model (16 demoservere)', () => {
   it('chips slår av og på som prototypen', () => {
     let f = clearFilters();
     expect(isAllActive(f)).toBe(true);
-    f = toggleTag(f, 'prod');
+    f = toggleFilter(f, 'tag', 'prod');
     expect(f.tag).toBe('prod');
     expect(isAllActive(f)).toBe(false);
-    f = toggleTag(f, 'prod');
+    f = toggleFilter(f, 'tag', 'prod');
     expect(f.tag).toBe('');
-    f = toggleStatus(f, 'down');
-    f = toggleStatus(f, 'up');
+    f = toggleFilter(f, 'status', 'down');
+    f = toggleFilter(f, 'status', 'up');
     expect(f.status).toBe('up');
-    f = toggleStatus(f, 'up');
+    f = toggleFilter(f, 'status', 'up');
     expect(f.status).toBe('');
-    f = toggleAlert(toggleAlert(f));
+    f = toggleFilter(toggleFilter(f, 'alert', true), 'alert', true);
     expect(f.alert).toBe(false);
   });
 

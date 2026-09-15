@@ -1,4 +1,4 @@
-import { CardDto, NodeKind, ServerStatus } from '@core/live.types';
+import { CardDto, ServerStatus } from '@core/live.types';
 import { OverviewFilters, SortKey } from '@core/prefs.service';
 
 /**
@@ -81,22 +81,9 @@ export function countByStatus(cards: readonly Pick<CardDto, 'status' | 'kind'>[]
   return counts;
 }
 
-/** Klikk på «servers»/«containers»: samme type igjen slår den av. */
-export function toggleKind(filters: OverviewFilters, kind: NodeKind): OverviewFilters {
-  return { ...filters, kind: filters.kind === kind ? '' : kind };
-}
-
-/** Klikk på en filterchip: samme tagg/status igjen slår den av (prototypen). */
-export function toggleTag(filters: OverviewFilters, tag: string): OverviewFilters {
-  return { ...filters, tag: filters.tag === tag ? '' : tag };
-}
-
-export function toggleStatus(filters: OverviewFilters, status: Exclude<OverviewFilters['status'], ''>): OverviewFilters {
-  return { ...filters, status: filters.status === status ? '' : status };
-}
-
-export function toggleAlert(filters: OverviewFilters): OverviewFilters {
-  return { ...filters, alert: !filters.alert };
+/** Klikk på en filterchip: samme tagg/status/type igjen slår den av (prototypen); «Has alert» veksler mot true. */
+export function toggleFilter<K extends keyof OverviewFilters>(filters: OverviewFilters, key: K, value: OverviewFilters[K]): OverviewFilters {
+  return { ...filters, [key]: filters[key] === value ? clearFilters()[key] : value };
 }
 
 export function clearFilters(): OverviewFilters {

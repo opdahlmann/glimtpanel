@@ -24,7 +24,7 @@ import { AddServerDialogComponent, AddStep } from './add-server/add-server-dialo
 import { ContainerCardComponent } from './container-card/container-card.component';
 import { EnrolPanelComponent } from './enrol/enrol-panel.component';
 import { GroupCardComponent } from './group-card/group-card.component';
-import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, sortCards, toggleAlert, toggleKind, toggleStatus, toggleTag } from './overview.model';
+import { clearFilters, collectTags, countByStatus, filterCards, isAllActive, sortCards, toggleFilter } from './overview.model';
 import { ServerCardComponent } from './server-card/server-card.component';
 
 /** Søket venter så lenge før listen filtreres (steg 4.1). */
@@ -213,20 +213,8 @@ export class OverviewPage {
     void this.groupsStore.move(id, dir).catch((err: unknown) => console.warn('[overview] could not move the group', err));
   }
 
-  toggleTag(tag: string): void {
-    this.prefs.filters.update((f) => toggleTag(f, tag));
-  }
-
-  toggleStatus(status: Exclude<OverviewFilters['status'], ''>): void {
-    this.prefs.filters.update((f) => toggleStatus(f, status));
-  }
-
-  toggleAlert(): void {
-    this.prefs.filters.update(toggleAlert);
-  }
-
-  toggleKind(kind: 'server' | 'container'): void {
-    this.prefs.filters.update((f) => toggleKind(f, kind));
+  toggle<K extends keyof OverviewFilters>(key: K, value: OverviewFilters[K]): void {
+    this.prefs.filters.update((f) => toggleFilter(f, key, value));
   }
 
   // ---- legg til server / container -----------------------------------------------------------------
