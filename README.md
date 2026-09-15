@@ -6,14 +6,6 @@ oppdateringer, sikkerhet og logger, live hvert sekund, med varsler på telefonen
 
 ![Oversikten i 1440 og 390 px](docs/overview.png)
 
-## Utviklingsbrukere i GlimtpanelDev
-
-Kontoer i utviklingsdatabasen `GlimtpanelDev`. Passordene gjelder kun der. Tabellen ryddes av eier før beta.
-
-| E-post | Passord | Rolle | Merknad |
-|---|---|---|---|
-| dev@glimtpanel.local | GlimtDev-2026! | eier | Seedes av huben når `GLIMT_ENV=development` (`GLIMT_DEV_USER_*` i `.env`) |
-
 ## Legg til en server
 
 Registrer deg, trykk «Add» i oversikten og lim inn kommandoen du får på serveren (Ubuntu 20.04–26.04, amd64/arm64):
@@ -139,7 +131,8 @@ npm run dev                           # hub (dotnet watch) + Ubuntu-container me
 ```
 
 Dashbordet svarer på http://localhost:4200 og huben på http://localhost:5080. Agent-containeren `glimt-agent-dev`
-kobler seg til huben med `GLIMT_DEV_ENROL_KEY`. Flagg til `npm run dev`: `--no-agent`, `--no-web`, `--no-hub`, `--site`,
+kobler seg til huben med `GLIMT_DEV_ENROL_KEY`. Logg inn med `GLIMT_DEV_USER_EMAIL` og `GLIMT_DEV_USER_PASSWORD` fra `.env`;
+huben oppretter kontoen ved oppstart når `GLIMT_ENV=development`. Flagg til `npm run dev`: `--no-agent`, `--no-web`, `--no-hub`, `--site`,
 `--plain-agent` og `--sidecar` (starter i tillegg nginx-containeren `glimt-app-dev` med agenten som sidecar, synlig som
 containernoden `sidecar-dev` på dev-kontoen via `GLIMT_DEV_CONTAINER_TOKEN`).
 
@@ -196,5 +189,4 @@ starter, så «Redeploy» holder etter en endring. Nøklene er de i `example.env
 
 ## Lisens
 
-Avklares av eier før første publisering (anbefalt: MIT for agenten, AGPL-3.0 for hub og web). Ingen LICENSE-fil er lagt
-inn ennå; til det er gjort er all rett forbeholdt.
+Ingen lisens er valgt ennå. Til en LICENSE-fil er lagt inn, er all rett forbeholdt.
