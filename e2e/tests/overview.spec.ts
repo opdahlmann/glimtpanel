@@ -243,6 +243,7 @@ test.describe('containernoder i oversikten (fase 12)', () => {
 
 test.describe('grupper (fase 13)', () => {
   test('skjerm 23: to demogrupper med summer og medlemmer; ny gruppe fra kortet, nytt navn, vis som kort, slett', async ({ page }, testInfo) => {
+    test.slow(); // 17 klikk; Linux-WebKit i CI bruker 4–5 s per klikk
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await forceLang(page, 'en');
