@@ -2,6 +2,8 @@
 // Sjekker ordboken (IMPLEMENTERINGSPLAN 6.5 / steg 3.2): en.json og no.json har identisk nøkkelsett, ingen tomme
 // tekster, og hver `t('key')`, `'key' | t`, `setKey('key')` i src/app/**/*.{ts,html} finnes i ordboken.
 // Kjøres med `npm --workspace apps/glimt-web run i18n:check` (og i CI). Avslutter med kode 1 ved feil.
+// Ubrukte nøkler er også feil: en nøkkel må stå i anførselstegn et sted i src/app (typede literaler som
+// `labelKey: 'servers'` teller), unntatt `d_*`/`r_*` som alerts.model.ts bygger dynamisk.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,8 +43,10 @@ function* walk(dir) {
 
 let used = 0;
 const unknown = new Map();
+let all = '';
 for (const file of walk(path.join(root, 'src/app'))) {
   const text = fs.readFileSync(file, 'utf8');
+  all += text;
   for (const re of patterns) {
     re.lastIndex = 0;
     let m;
@@ -59,6 +63,10 @@ for (const file of walk(path.join(root, 'src/app'))) {
   }
 }
 for (const [key, where] of unknown) problems.push(`ukjent nøkkel "${key}" i ${where.join(', ')}`);
+for (const key of enKeys) {
+  if (/^(d|r)_/.test(key)) continue;
+  if (!new RegExp(`['"\`]${key}['"\`]`).test(all)) problems.push(`ubrukt nøkkel "${key}" (fjern den fra en.json og no.json)`);
+}
 
 if (problems.length) {
   console.error(`i18n-check: ${problems.length} problem(er)`);
