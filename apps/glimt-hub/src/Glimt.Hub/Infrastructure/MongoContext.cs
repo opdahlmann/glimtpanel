@@ -77,7 +77,7 @@ public sealed class MongoContext : IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             IsAvailable = false;
-            UnavailableReason = Describe(ex);
+            UnavailableReason = ex.GetBaseException().Message;
             if (_failures++ == 0)
             {
                 _logger.LogWarning("MongoDB {Database} unavailable: {Reason}. The hub keeps running without persistence.", DatabaseName, UnavailableReason);
@@ -96,79 +96,6 @@ public sealed class MongoContext : IDisposable
     {
         _ready.TrySetResult(false);
         Client.Dispose();
-    }
-
-    /// <summary>
-    /// The driver reports a failed server selection as one very long line with the whole cluster
-    /// description. Keep the headline and the innermost cause, e.g. "... selecting a server (Connection refused)".
-    /// </summary>
-    internal static string Describe(Exception ex)
-    {
-        var message = ex.Message;
-        var cause = InnermostCause(message);
-
-        var cut = message.IndexOf(" selecting a server using ", StringComparison.Ordinal);
-        if (cut > 0)
-        {
-            message = message[..cut] + " selecting a server";
-        }
-
-        cut = message.IndexOf(". Client view of cluster state", StringComparison.Ordinal);
-        if (cut > 0)
-        {
-            message = message[..cut];
-        }
-
-        cut = message.IndexOf('\n');
-        if (cut > 0)
-        {
-            message = message[..cut];
-        }
-
-        message = message.TrimEnd('.', ' ');
-        if (cause is null && ex.InnerException is { } inner && inner.Message != message)
-        {
-            cause = inner.Message;
-        }
-
-        return cause is null || cause == message ? message : $"{message} ({cause})";
-    }
-
-    private static string? InnermostCause(string message)
-    {
-        const string marker = "---> ";
-        var start = message.LastIndexOf(marker, StringComparison.Ordinal);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        var cause = message[(start + marker.Length)..];
-        var end = cause.IndexOfAny(['\n', '\r', '"']);
-        if (end >= 0)
-        {
-            cause = cause[..end];
-        }
-
-        var atFrame = cause.IndexOf(" at ", StringComparison.Ordinal);
-        if (atFrame > 0)
-        {
-            cause = cause[..atFrame];
-        }
-
-        // "System.Net.Sockets.SocketException (61): Connection refused" -> "Connection refused"
-        var colon = cause.IndexOf(": ", StringComparison.Ordinal);
-        if (colon > 0 && !cause[..colon].Contains(' '))
-        {
-            cause = cause[(colon + 2)..];
-        }
-        else if (colon > 0 && cause[..colon].Contains(" ("))
-        {
-            cause = cause[(colon + 2)..];
-        }
-
-        cause = cause.Trim().TrimEnd('.');
-        return cause.Length == 0 ? null : cause;
     }
 
     private static void RegisterConventions()

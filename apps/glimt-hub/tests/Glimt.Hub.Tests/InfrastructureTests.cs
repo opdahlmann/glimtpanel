@@ -86,31 +86,6 @@ public sealed class GlimtOptionsTests
     }
 }
 
-public sealed class MongoContextTests
-{
-    [Fact]
-    public void Describe_keeps_the_headline_and_the_innermost_cause()
-    {
-        var driverMessage = "A timeout occurred after 499ms selecting a server using CompositeServerSelector{ Selectors = X }. "
-            + "Client view of cluster state is { ClusterId : \"1\", Servers : [{ EndPoint: \"127.0.0.1:1\", HeartbeatException: "
-            + "\"MongoDB.Driver.MongoConnectionException: An exception occurred while opening a connection to the server. "
-            + "---> System.Net.Sockets.SocketException (61): Connection refused\n   at System.Net.Sockets.Socket.Connect()\" }] }.";
-
-        var described = MongoContext.Describe(new TimeoutException(driverMessage));
-
-        Assert.Equal("A timeout occurred after 499ms selecting a server (Connection refused)", described);
-    }
-
-    [Fact]
-    public void Describe_falls_back_to_inner_exception_message()
-    {
-        var described = MongoContext.Describe(new InvalidOperationException("outer", new IOException("disk gone")));
-
-        Assert.Equal("outer (disk gone)", described);
-        Assert.Equal("plain", MongoContext.Describe(new InvalidOperationException("plain.")));
-    }
-}
-
 public sealed class VapidKeysTests
 {
     [Fact]
