@@ -3,9 +3,9 @@
 import { execSync } from 'node:child_process';
 import { repoRoot } from './env.mjs';
 const targets = [
-  ['glimt-hub', 'apps/glimt-hub/Dockerfile'],
-  ['glimt-web', 'apps/glimt-web/Dockerfile'],
-  ['glimt-site', 'apps/glimt-site/Dockerfile'],
+  ['glimt-hub', 'infra/glimt-hub/Dockerfile'],
+  ['glimt-web', 'infra/glimt-web/Dockerfile'],
+  ['glimt-site', 'infra/glimt-site/Dockerfile'],
 ];
 const only = process.argv.slice(2);
 for (const [name, file] of targets) {

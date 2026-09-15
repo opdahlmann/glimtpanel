@@ -1,5 +1,6 @@
-# glimt-web: Angular-appen bygd med Node, servert av nginx. Bygg-kontekst = repo-rot (IMPLEMENTERINGSPLAN 5.5).
-#   docker build -f apps/glimt-web/Dockerfile -t glimt-web:local .
+# glimt-web: Angular-appen bygd med Node, servert av nginx. Dokploy: Dockerfile Path infra/glimt-web/Dockerfile, Build Context .
+#   docker build -f infra/glimt-web/Dockerfile -t glimt-web:local .
+# Ingen build args: samme image for dev og prod; config.json skrives fra GLIMT_*-variabler når containeren starter.
 FROM public.ecr.aws/docker/library/node:26-alpine AS build
 WORKDIR /repo
 # Kun manifestene først, slik at npm ci caches til en avhengighet endres.
@@ -22,10 +23,10 @@ FROM public.ecr.aws/nginx/nginx:1.27-alpine
 ENV GLIMT_HUB_INTERNAL_URL=http://glimt-hub:8080 \
     GLIMT_ENV=production \
     NGINX_ENVSUBST_FILTER=GLIMT_
-COPY apps/glimt-web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
-COPY apps/glimt-web/nginx/security-headers.conf /etc/nginx/glimt/security-headers.conf
-COPY --chmod=755 apps/glimt-web/nginx/10-glimt-resolver.envsh /docker-entrypoint.d/10-glimt-resolver.envsh
-COPY --chmod=755 apps/glimt-web/nginx/40-glimt-config.sh /docker-entrypoint.d/40-glimt-config.sh
+COPY infra/glimt-web/nginx.conf /etc/nginx/templates/default.conf.template
+COPY infra/glimt-web/security-headers.conf /etc/nginx/glimt/security-headers.conf
+COPY --chmod=755 infra/glimt-web/10-glimt-resolver.envsh /docker-entrypoint.d/10-glimt-resolver.envsh
+COPY --chmod=755 infra/glimt-web/40-glimt-config.sh /docker-entrypoint.d/40-glimt-config.sh
 COPY --from=build /repo/apps/glimt-web/dist/glimt-web/browser /usr/share/nginx/html
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 EXPOSE 80

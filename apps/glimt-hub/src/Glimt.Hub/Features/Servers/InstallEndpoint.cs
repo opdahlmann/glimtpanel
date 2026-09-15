@@ -5,7 +5,7 @@ namespace Glimt.Hub.Features.Servers;
 
 /// <summary>
 /// GET /install: the agent installation script (apps/glimt-agent/install/install.sh, embedded at build time) with
-/// this hub's WebSocket URL and GLIMT_AGENT_VERSION as defaults, so `curl -fsSL https://get.glimtpanel.com | sh -s -- --key gp_…`
+/// this hub's WebSocket URL and GLIMT_AGENT_VERSION as defaults, so `curl -fsSL https://get.glimtpanel.com/install | sh -s -- --key gp_…`
 /// needs nothing else (steps 1.11 and 11.3). Cached for an hour; the script itself verifies the binary's SHA-256.
 /// </summary>
 public static class InstallEndpoint

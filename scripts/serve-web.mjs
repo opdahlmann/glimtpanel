@@ -2,7 +2,7 @@
 // Serverer den bygde web-appen (apps/glimt-web/dist/glimt-web/browser) slik nginx gjør det i containeren, for e2e mot
 // bygget web (IMPLEMENTERINGSPLAN steg 11.1): SPA-fallback, /config.json fra miljøet, /api og /hub (inkl. WebSocket)
 // proxyet til GLIMT_HUB_INTERNAL_URL, samme cache-regler og de samme sikkerhetshodene som nginx
-// (apps/glimt-web/nginx/security-headers.conf leses her, så én CSP gjelder begge steder).
+// (infra/glimt-web/security-headers.conf leses her, så én CSP gjelder begge steder).
 // Bruk: node scripts/serve-web.mjs [--port 4200] [--dist <mappe>]
 import fs from 'node:fs';
 import http from 'node:http';
@@ -36,7 +36,7 @@ export function parseSecurityHeaders(file) {
   }
   return out;
 }
-const securityHeaders = parseSecurityHeaders(path.join(repoRoot, 'apps/glimt-web/nginx/security-headers.conf'));
+const securityHeaders = parseSecurityHeaders(path.join(repoRoot, 'infra/glimt-web/security-headers.conf'));
 
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.woff': 'font/woff', '.txt': 'text/plain; charset=utf-8', '.map': 'application/json' };
 

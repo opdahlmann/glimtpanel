@@ -15,6 +15,7 @@ Glimtpanel: ett nettleservindu som viser hva alle Ubuntu-serverne dine gjør akk
 | packages/protocol | JSON Schema for agent ↔ hub (v1) + eksempler. Kontrakten begge sider testes mot. |
 | packages/design-tokens | `tokens.css` og Inter-fonter, delt av web og site. |
 | e2e | Playwright i tre prosjekter: `desktop-chromium`, `mobile-webkit`, `mobile-chromium`. |
+| infra | `infra/<app>/` | Dockerfile og nginx-filer for Dokploy (hub, web, site), git-ignorerte `.env.dev`/`.env.prod` med verdiene per miljø, og `infra/glimt-agent/README.md` om agentutgivelser. |
 
 Dokumentasjonen (`IMPLEMENTERINGSPLAN.md`, `FUNKSJONSBESKRIVELSE.md`, `DESIGN.md`, `VURDERING.md`, `MARKEDSANALYSE.md`, `design/`)
 ligger **lokalt og er git-ignorert**. `IMPLEMENTERINGSPLAN.md` er fasit for faser og steg; kode og READMEs refererer til den
@@ -76,14 +77,15 @@ gjenglemt hub på 5080 uten MongoDB stopper kjøringen med melding; `npm run dev
 
 - Alle nøkler har prefiks `GLIMT_` og er dokumentert i `example.env` (eneste env-fil som sjekkes inn).
 - `.env` = Docker-containere lokalt, `.env.dev` = hub og web direkte på maskinen (her ligger ekte `GLIMT_MONGO_URI`,
-  db `GlimtpanelDev`), `.env.prod` = limes inn i Dokploy. `scripts/env.mjs` laster `.env` og deretter `.env.<profil>`;
+  db `GlimtpanelDev`). Dokploy-verdiene ligger i `infra/<app>/.env.dev` (branch `opd`, `dev-*.glimtpanel.com`) og
+  `infra/<app>/.env.prod` (branch `main`, `*.glimtpanel.com`); begge kjører `GLIMT_ENV=production`. `scripts/env.mjs` laster `.env` og deretter `.env.<profil>`;
   variabler som allerede finnes i miljøet vinner. Huben gjør det samme selv (`DotEnv.LoadIfNeeded`) utenom produksjon,
   så `dotnet run`/`dotnet test` virker fra et hvilket som helst skall.
 - `GLIMT_ENV` er `development` | `e2e` | `production`. Utenom produksjon: dev-nøkkel `GLIMT_DEV_ENROL_KEY` godtas evig,
   dev-bruker seedes, `/api/dev/*` finnes, lesbar logg. `e2e` slår i tillegg på demomodus (16 falske servere),
   seedede tall, flyttbar klokke og `/api/e2e/*`.
 - Web leser **aldri** miljø ved byggetid. `scripts/web-config.mjs` skriver `apps/glimt-web/public/config.json`
-  (git-ignorert) som `ConfigService` henter ved oppstart; i containeren gjør `nginx/40-glimt-config.sh` det samme.
+  (git-ignorert) som `ConfigService` henter ved oppstart; i containeren gjør `infra/glimt-web/40-glimt-config.sh` det samme.
 - Huben starter og svarer på `/healthz` selv uten MongoDB (servere lever da bare i minnet); `/readyz` gir 503 uten.
 
 ## Arkitektur

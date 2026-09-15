@@ -5,4 +5,4 @@ Kun én blank forside «Velkommen til Glimtpanel». Landingsside, demo, dokument
 utvikles av eier på et senere tidspunkt.
 
 - `npm run dev:site` fra rot (port 4321), `npm --workspace apps/glimt-site run build` bygger til `dist/`.
-- `apps/glimt-site/Dockerfile` bygger et nginx-image; Dokploy-appen opprettes først når nettsiden utvikles.
+- `infra/glimt-site/Dockerfile` bygger et nginx-image (med `infra/glimt-site/nginx.conf`); se `infra/` for Dokploy-oppsettet.

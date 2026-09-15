@@ -61,11 +61,7 @@ apps/glimt-web/
 ├── scripts/icons.mjs                        # `npm run icons`: PWA-ikonene i public/icons fra favicon.svg (Playwrights Chromium)
 ├── ngsw-config.json                         # service worker: app-shell prefetch, config.json som freshness, /api og /hub aldri
 ├── public/                                  # favicon.svg, manifest.webmanifest, icons/; config.json genereres hit (git-ignorert)
-├── nginx/default.conf.template              # nginx i containeren, ${GLIMT_HUB_INTERNAL_URL} fylles inn ved start
-├── nginx/10-glimt-resolver.envsh            # entrypoint: DNS-resolver for hub-oppslag fra /etc/resolv.conf
-├── nginx/40-glimt-config.sh                 # entrypoint-skript som skriver config.json fra GLIMT_*-env
 ├── proxy.conf.mjs                           # dev-proxy for ng serve
-├── Dockerfile                               # bygg-kontekst = repo-rot
 └── angular.json, tsconfig*.json, eslint.config.js
 ```
 
@@ -138,7 +134,7 @@ Web leser aldri miljøvariabler ved byggetid. Ved oppstart henter `provideAppIni
 
 - Lokalt: `node scripts/web-config.mjs` (kjøres av `npm run dev` og `npm run dev:web`) skriver `public/config.json`
   fra `.env` / `.env.dev`. Filen er git-ignorert.
-- I containeren: `nginx/40-glimt-config.sh` skriver samme fil til `/usr/share/nginx/html/config.json` fra
+- I containeren: `infra/glimt-web/40-glimt-config.sh` skriver samme fil til `/usr/share/nginx/html/config.json` fra
   `GLIMT_ENV`, `GLIMT_HUB_PUBLIC_URL`, `GLIMT_INSTALL_URL`, `GLIMT_DOCS_URL`, `GLIMT_VAPID_PUBLIC`,
   `GLIMT_DEFAULT_LANG` og `GLIMT_FEATURE_FLAGS` (kommaseparert → array).
 - Mangler filen (f.eks. `ng build` uten generert fil), brukes `DEFAULT_CONFIG` med en `console.warn`. Appen starter uansett.
@@ -551,7 +547,7 @@ huben) og `/demo`-skjermene i `a11y.spec.ts`.
 
 ## Sikkerhetshoder (steg 11.2)
 
-`nginx/security-headers.conf` er én fil med CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy` og
+`infra/glimt-web/security-headers.conf` er én fil med CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy` og
 `Permissions-Policy`, inkludert i hver `location` i `default.conf.template` (nginx nullstiller `add_header` i en
 location som setter sine egne). CSP: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'`
 (Angular setter komponentstiler som inline `<style>`; ingen inline script), `img-src 'self' data: blob:`,
@@ -562,16 +558,17 @@ regel som knekker appen.
 
 ## Dockerfile
 
-Bygg-kontekst er repo-roten, slik Dokploy og `npm run build:images` gjør det:
+Dockerfile og nginx-filene ligger i `infra/glimt-web/` (se `infra/` for Dokploy). Bygg-kontekst er repo-roten, slik
+Dokploy og `npm run build:images` gjør det:
 
 ```
-docker build -f apps/glimt-web/Dockerfile -t glimt-web:local .
+docker build -f infra/glimt-web/Dockerfile -t glimt-web:local .
 docker run --rm -p 8080:80 -e GLIMT_HUB_INTERNAL_URL=http://host.docker.internal:5080 glimt-web:local
 ```
 
 1. `node:26-alpine`: kopierer workspace-manifestene, `npm ci --workspace apps/glimt-web`, kopierer
    `packages/design-tokens` og `apps/glimt-web`, `ng build --configuration production`.
-2. `nginx:1.27-alpine`: statiske filer i `/usr/share/nginx/html`, `default.conf.template` i `/etc/nginx/templates`
+2. `nginx:1.27-alpine`: statiske filer i `/usr/share/nginx/html`, `infra/glimt-web/nginx.conf` som `default.conf.template` i `/etc/nginx/templates`
    (nginx-imaget kjører `envsubst` på den ved oppstart; `NGINX_ENVSUBST_FILTER=GLIMT_` gjør at kun `GLIMT_*`
    byttes ut), `10-glimt-resolver.envsh` og `40-glimt-config.sh` i `/docker-entrypoint.d`, `HEALTHCHECK` mot `/`,
    port 80.

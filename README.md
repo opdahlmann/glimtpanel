@@ -11,7 +11,7 @@ oppdateringer, sikkerhet og logger, live hvert sekund, med varsler på telefonen
 Registrer deg, trykk «Add» i oversikten og lim inn kommandoen du får på serveren (Ubuntu 20.04–26.04, amd64/arm64):
 
 ```sh
-curl -fsSL https://get.glimtpanel.com | sh -s -- --key gp_…
+curl -fsSL https://get.glimtpanel.com/install | sh -s -- --key gp_…
 ```
 
 Skriptet laster ned binæren fra GitHub-utgivelsen, verifiserer SHA-256, legger den i `/usr/local/bin/glimt-agent`,
@@ -157,33 +157,39 @@ Ubuntu-containeren.
 
 ## Utrulling (Dokploy)
 
-Tre applikasjoner i ett Dokploy-prosjekt, alle med Build Type **Dockerfile**, Build Context `.` (repo-roten) og tomt
-felt for Build-time Arguments. Ingenting bakes inn i imagene: alt leses fra fanen **Environment** når containeren
-starter, så «Redeploy» holder etter en endring. Nøklene er de i `example.env`; `.env.prod` er det som limes inn.
+Alt som trengs for å publisere ligger i `infra/`, én mappe per app. Hver app rulles ut to ganger: produksjon fra `main`
+og dev fra `opd`. Alle seks Dokploy-appene har Build Type **Dockerfile**, Build Context `.` (repo-roten) og tomme
+Build-time Arguments. Konfigurasjonen leses fra fanen **Environment** når containeren starter, så «Redeploy» holder
+etter en endring.
 
-| App | Dockerfile Path | Port | Domene | Environment |
+| App | Dockerfile Path | Port | Produksjon | Dev |
 |---|---|---|---|---|
-| glimt-hub | `apps/glimt-hub/Dockerfile` | 8080 | `api.<domene>` | «Hub», «E-post» og «Web Push» fra `example.env`, `GLIMT_ENV=production`, `GLIMT_DEMO_MODE=true`. Volum på `/data` for 24-timersbufferen. |
-| glimt-web | `apps/glimt-web/Dockerfile` | 80 | `app.<domene>` | `GLIMT_HUB_INTERNAL_URL=http://<hubens tjenestenavn>:8080` og det web viser: `GLIMT_ENV`, `GLIMT_HUB_PUBLIC_URL`, `GLIMT_INSTALL_URL`, `GLIMT_VAPID_PUBLIC`, `GLIMT_DEFAULT_LANG`, `GLIMT_FEATURE_FLAGS`. |
-| glimt-site | `apps/glimt-site/Dockerfile` | 80 | apex og `www` | ingen |
+| glimt-hub | `infra/glimt-hub/Dockerfile` | 8080 | `api.glimtpanel.com`, `get.glimtpanel.com` | `dev-api.glimtpanel.com` |
+| glimt-web | `infra/glimt-web/Dockerfile` | 80 | `app.glimtpanel.com` | `dev-app.glimtpanel.com` |
+| glimt-site | `infra/glimt-site/Dockerfile` | 80 | `glimtpanel.com`, `www.glimtpanel.com` | `dev.glimtpanel.com` |
 
-- **Hubens tjenestenavn** står i hubens Logs-fane som `<tjenestenavn>.1.<id>`. Alle apper ligger på `dokploy-network`;
-  nginx slår navnet opp per forespørsel, så web starter selv om huben er nede og følger med når den får ny IP.
+Agenten rulles ikke ut med Dokploy; `infra/glimt-agent/README.md` beskriver hvordan en ny versjon publiseres.
+
+- **Variabler.** Nøklene er dokumentert i `example.env`. Verdiene per app og miljø ligger i `infra/<app>/.env.dev` og
+  `.env.prod`, som er git-ignorert. Begge miljøene kjører med `GLIMT_ENV=production`: `development` slår på
+  `/api/dev/*`, som ikke skal være åpent på nett. Dev og prod har hver sin database, JWT-hemmelighet og VAPID-nøkler.
+- **Web finner huben** gjennom `GLIMT_HUB_INTERNAL_URL=http://<hubens tjenestenavn>:8080`. Tjenestenavnet står i hubens
+  Logs-fane som `<tjenestenavn>.1.<id>`. nginx slår det opp per forespørsel, så web starter selv om huben er nede.
 - **TLS termineres i Traefik.** Containerne snakker ren HTTP. nginx sender Traefiks `X-Forwarded-Proto` videre, og huben
   leser `X-Forwarded-*` (Secure på oppfriskningskaken, hastighetsbegrensning per klient, riktig IP i loggen).
-- **DNS først.** Alle domener må peke på verten før første deploy, ellers feiler Let's Encrypt. `get.glimtpanel.com`
-  peker på hubens `/install`.
-- **Helsesjekk:** `/readyz` gir 200 med database og 503 uten, og passer som helsesjekk for automatisk tilbakerulling.
+- **Hubens volum** på `/data` holder 24-timersbufferen over en utrulling. Ellers er containerne tilstandsløse.
+- **DNS først.** Alle domener må peke på verten før første deploy, ellers feiler Let's Encrypt.
+- **Helsesjekk:** `/readyz` gir 200 med database og 503 uten, og passer til automatisk tilbakerulling.
   `/healthz` svarer alltid og viser versjon, database og tilkoblede agenter.
 - **Røyktest etter deploy:** `/readyz` → 200, innlogging i appen (beviser `/api`-proxyen), en agent som kobler til
   (beviser WebSocket gjennom Traefik), `docker service ls` → alle `1/1`.
 - Baseimagene hentes fra MCR og ECR Public, ikke Docker Hub, så byggene ikke stopper på Docker Hubs pull-grense.
-  Dokploy lagrer Environment i klartekst; roter `GLIMT_JWT_SECRET` og API-nøkler som har ligget der ved behov.
 
 ## Miljøfiler og git
 
 - Alle nøkler har prefiks `GLIMT_` og er dokumentert i `example.env`, den eneste env-filen som sjekkes inn. `.env` gjelder
-  Docker-containere lokalt, `.env.dev` overstyrer når hub og web kjører direkte på maskinen, `.env.prod` limes inn i Dokploy.
+  Docker-containere lokalt, `.env.dev` overstyrer når hub og web kjører direkte på maskinen, og `infra/<app>/.env.dev` og
+  `.env.prod` limes inn i Dokploy.
 - Av markdown-filer sjekkes kun `README.md` og `CLAUDE.md` (instruksjoner til Claude Code) inn. `.githooks/pre-commit`
   håndhever begge reglene.
 

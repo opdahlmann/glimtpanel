@@ -14,7 +14,7 @@ Playwright-tester for Glimtpanel i tre prosjekter: `desktop-chromium` (1440×900
 `GLIMT_E2E_BUILT=1 npm --workspace e2e test` (slik CI kjører) starter huben fra `dotnet publish`
 (`apps/glimt-hub/publish/`) og den bygde web-appen gjennom `scripts/serve-web.mjs` (statiske filer med SPA-fallback,
 `/config.json` fra miljøet, proxy for `/api` og `/hub` inkludert WebSocket, og nginx-hodene fra
-`apps/glimt-web/nginx/security-headers.conf`, CSP medregnet). Uten variabelen brukes `dotnet run` og `ng serve` som
+`infra/glimt-web/security-headers.conf`, CSP medregnet). Uten variabelen brukes `dotnet run` og `ng serve` som
 før. Hele suiten (tre prosjekter, ca. 180 tester) tar under ett minutt lokalt og går med fire arbeidere i CI
 (`timeout-minutes: 20` på jobben; planens mål er 15 min).
 

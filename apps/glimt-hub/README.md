@@ -34,7 +34,7 @@ er `unavailable`, dev-brukeren seedes ikke og servere lagres bare i minnet. Tilk
 dotnet test apps/glimt-hub/Glimt.Hub.slnx                          # xUnit; Auth/Account/Servers/Access-testene trenger Docker (Testcontainers)
 dotnet build apps/glimt-hub/Glimt.Hub.slnx -warnaserror
 dotnet format apps/glimt-hub/Glimt.Hub.slnx --verify-no-changes    # kjøres i CI (lint)
-docker build -f apps/glimt-hub/Dockerfile -t glimt-hub:local .     # fra repo-rot
+docker build -f infra/glimt-hub/Dockerfile -t glimt-hub:local .     # fra repo-rot
 ```
 
 Testene starter huben i prosessen med `WebApplicationFactory`. De uten database bruker en uoppnåelig Mongo-adresse
@@ -50,7 +50,7 @@ demotoken, `/api/e2e/*`), at alle eksemplene i `packages/protocol/examples/` des
 (`MongoTestServer`, `mongo:8`) med egen database per testklasse (`TestHub`); e-postsenderen og `IServerLifecycle`
 er byttet ut med opptakere, og `TestUsers.RegisterAndConfirmAsync` registrerer og bekrefter brukere gjennom endepunktene.
 
-Docker-imaget kjører som bruker `app` på port 8080 med `GLIMT_HUB_URL=http://0.0.0.0:8080`, volum `/data`
+Docker-imaget (`infra/glimt-hub/Dockerfile`) kjører som bruker `app` på port 8080 med `GLIMT_HUB_URL=http://0.0.0.0:8080`, volum `/data`
 (buffer i `/data/buffer`) og `HEALTHCHECK` mot `/healthz`.
 
 ## Miljøvariabler
@@ -366,7 +366,7 @@ veien fra demoserverne til listen, kortet, `Alert`-hendelsen og kanalene (falske
 ## Struktur
 
 ```
-Glimt.Hub.slnx, Directory.Build.props, Dockerfile
+Glimt.Hub.slnx, Directory.Build.props   (Dockerfile: infra/glimt-hub/Dockerfile)
 src/Glimt.Hub/
   Program.cs                 # liten: options, logging, features
   Infrastructure/            # GlimtOptions, DotEnv, MongoContext, RequireDatabase (503-filter), UbuntuSupport, LoggingSetup, PasswordHasher, RateLimiting, VapidKeys

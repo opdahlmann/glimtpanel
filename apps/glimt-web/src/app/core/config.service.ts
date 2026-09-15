@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-/** Kjøretidskonfigurasjon. Samme form som scripts/web-config.mjs og nginx/40-glimt-config.sh skriver. */
+/** Kjøretidskonfigurasjon. Samme form som scripts/web-config.mjs og infra/glimt-web/40-glimt-config.sh skriver. */
 export interface AppConfig {
   env: string;
   apiUrl: string;

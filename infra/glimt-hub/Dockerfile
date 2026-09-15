@@ -1,4 +1,6 @@
-# glimt-hub: .NET 10 hub. Bygg-kontekst = repo-rot (IMPLEMENTERINGSPLAN 5.5).
+# glimt-hub: .NET 10 hub. Dokploy: Build Type Dockerfile, Dockerfile Path infra/glimt-hub/Dockerfile, Build Context .
+#   docker build -f infra/glimt-hub/Dockerfile -t glimt-hub:local .
+# Ingen build args; all konfigurasjon er GLIMT_*-variabler ved kjøring (infra/glimt-hub/.env.dev og .env.prod).
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /repo
 # Prosjektfiler først, så restore-laget caches til en pakke endres.
