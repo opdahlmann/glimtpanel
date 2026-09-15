@@ -69,7 +69,8 @@ npm --workspace e2e run report
 
 E2E gjenbruker kjørende servere fra `npm run dev`. Uten dem starter Playwright hub (`GLIMT_ENV=e2e`) og web selv og
 spinner opp en `mongo:8`-container med tilfeldig port (se `e2e/playwright.config.ts` og `e2e/mongo.ts`). Er port 4200
-opptatt av noe annet (`lsof -nP -iTCP:4200`), kjør med `GLIMT_WEB_PORT=4210`, ellers treffer testene feil server.
+opptatt av noe annet (`lsof -nP -iTCP:4200`), kjør med `GLIMT_WEB_PORT=4210`, ellers treffer testene feil server. En
+gjenglemt hub på 5080 uten MongoDB stopper kjøringen med melding; `npm run dev:stop` rydder den.
 
 ## Miljø
 

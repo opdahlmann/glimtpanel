@@ -20,14 +20,31 @@ function dockerAvailable(): boolean {
   }
 }
 
-/** true når en hub allerede svarer (npm run dev): da trenger vi ingen egen Mongo. */
+/**
+ * true når en hub allerede svarer (npm run dev): da trenger vi ingen egen Mongo. En hub som svarer men har mistet
+ * databasen (typisk en gjenglemt Playwright-hub etter at mongo-containeren ble ryddet) stopper kjøringen med én
+ * tydelig melding i stedet for 190 tester som feiler med 503.
+ */
 function hubAlreadyRunning(hubUrl: string): boolean {
+  let body: string;
   try {
-    sh(`curl -sf --max-time 2 ${hubUrl}/healthz`, 5_000);
-    return true;
+    body = sh(`curl -sf --max-time 2 ${hubUrl}/healthz`, 5_000);
   } catch {
     return false;
   }
+  let health: { mongo?: string; env?: string } = {};
+  try {
+    health = JSON.parse(body) as { mongo?: string; env?: string };
+  } catch {
+    // ikke JSON: behandles som kjørende
+  }
+  if (health.mongo && health.mongo !== 'ok') {
+    throw new Error(
+      `e2e: en hub svarer allerede på ${hubUrl} (env ${health.env ?? '?'}) men uten MongoDB (mongo: ${health.mongo}). ` +
+        'Det er som regel en gjenglemt hub fra en tidligere kjøring: stopp den med `npm run dev:stop` (eller `pkill -f Glimt.Hub/bin`) og kjør igjen.',
+    );
+  }
+  return true;
 }
 
 /**

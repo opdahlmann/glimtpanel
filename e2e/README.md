@@ -35,7 +35,9 @@ Innlogging trenger MongoDB (dev-brukeren `dev@glimtpanel.local` / `GlimtDev-2026
 (fordi `webServer.env` er statisk og `globalSetup` kjører etter at serverne er startet):
 
 1. `GLIMT_MONGO_URI` satt i miljøet → brukes som den er.
-2. En hub svarer allerede på `GLIMT_HUB_URL/healthz` (`npm run dev`) → ingen Mongo startes.
+2. En hub svarer allerede på `GLIMT_HUB_URL/healthz` (`npm run dev`) → ingen Mongo startes. Svarer den med
+   `mongo: unavailable` (en gjenglemt hub fra en avbrutt kjøring, etter at mongo-containeren ble ryddet), stopper
+   config-en med en melding om å kjøre `npm run dev:stop` – ellers ville hver innlogging gitt 503.
 3. Ellers, når `docker` finnes: `docker run -d --rm --name glimt-e2e-mongo -p 127.0.0.1:0:27017 mongo:8` med tilfeldig
    port. Config-filen venter på `ping` (huben seeder bare hvis Mongo er oppe ved oppstart) og setter
    `GLIMT_MONGO_URI` for huben. Databasen er `GlimtpanelE2E`, ny for hver kjøring. `global-teardown.ts` stopper
