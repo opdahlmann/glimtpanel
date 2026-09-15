@@ -185,8 +185,9 @@ docker build -f apps/glimt-agent/Dockerfile.sidecar -t glimt-agent-sidecar .   #
   omitted`), seksjonen utelates og resten av meldingen sendes likevel.
 - **Cache over gjenoppkobling.** Vedlikeholdsseksjonen og journal-tellerne bor i objekter som lever like lenge som
   prosessen; en ny tilkobling innen intervallet kjører ikke `apt-get` og `journalctl` på nytt.
-- **Injiserbar klokke.** `sched.Clock` (tikkere og timere) byttes ut i testene, så kadens, debounce og
-  gjenbruk testes uten å vente.
+- **Tid i testene.** `sched_test.go` kjører hver test i en `testing/synctest`-boble (Go 1.25): `time.Sleep` flytter
+  boblens klokke og `synctest.Wait()` lar planleggeren tikke ferdig, så kadens, debounce og gjenbruk testes på
+  millisekunder uten egen klokke-abstraksjon.
 
 ## Docker (`internal/docker`)
 

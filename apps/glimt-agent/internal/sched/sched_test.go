@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/opdahlmann/glimtpanel/apps/glimt-agent/internal/protocol"
@@ -190,20 +191,16 @@ func (h *countingHandler) count() int {
 	return h.warns
 }
 
-func waitFor(t *testing.T, cond func() bool) {
+// settle lets every goroutine in the bubble run until it blocks, then checks cond.
+func settle(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if cond() {
-			return
-		}
-		time.Sleep(2 * time.Millisecond)
+	synctest.Wait()
+	if !cond() {
+		t.Fatal("condition not met")
 	}
-	t.Fatal("condition not met in time")
 }
 
 type fixture struct {
-	clock  *fakeClock
 	sys    *fakeSystem
 	docker *fakeContainers
 	per    *fakePeriodic
@@ -216,13 +213,13 @@ type fixture struct {
 
 func newFixture(t *testing.T, tweak func(*Config)) *fixture {
 	t.Helper()
-	f := &fixture{clock: newFakeClock(), sys: &fakeSystem{}, docker: &fakeContainers{}, rec: &recorder{}, logs: &countingHandler{}}
-	f.per = &fakePeriodic{now: f.clock.Now}
-	f.cache = NewMaintenanceCache(f.sys, f.clock.Now)
+	f := &fixture{sys: &fakeSystem{}, docker: &fakeContainers{}, rec: &recorder{}, logs: &countingHandler{}}
+	f.per = &fakePeriodic{now: time.Now}
+	f.cache = NewMaintenanceCache(f.sys, time.Now)
 	cfg := Config{
 		SnapshotInterval: 30 * time.Second, MaintenanceInterval: 10 * time.Minute,
 		System: f.sys, Containers: f.docker, Maintenance: f.cache, Periodics: []Periodic{f.per},
-		Sink: f.rec, Clock: f.clock, Logger: slog.New(f.logs),
+		Sink: f.rec, Logger: slog.New(f.logs),
 	}
 	if tweak != nil {
 		tweak(&cfg)
@@ -230,215 +227,221 @@ func newFixture(t *testing.T, tweak func(*Config)) *fixture {
 	f.s = New(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	f.cancel = cancel
-	t.Cleanup(cancel)
 	go f.s.Run(ctx)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 1 })
-	waitFor(t, func() bool { n, _ := f.clock.counts(); return n >= 2 })
+	settle(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 1 })
 	return f
 }
 
 func TestSnapshotCadenceAndMaintenance(t *testing.T) {
-	f := newFixture(t, nil)
-	snap := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
-	if snap.TS != f.clock.Now().UnixMilli() || snap.Host.CPU.Total != 12.5 {
-		t.Errorf("snapshot payload %+v", snap)
-	}
-	if snap.Maintenance == nil || snap.Maintenance.Updates != 1 || snap.Services == nil || snap.Security == nil {
-		t.Errorf("sections missing: maintenance=%+v services=%+v security=%+v", snap.Maintenance, snap.Services, snap.Security)
-	}
-	if len(snap.Containers) != 2 || snap.Containers[0].CPUPct != 5 || snap.Containers[0].MemBytes != 1000 || snap.Containers[1].CPUPct != 0 {
-		t.Errorf("containers %+v", snap.Containers)
-	}
-	if f.per.count() != 1 || f.sys.get(&f.sys.maintenance) != 1 {
-		t.Errorf("periodic=%d maintenance=%d at start", f.per.count(), f.sys.get(&f.sys.maintenance))
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFixture(t, nil)
+		defer f.cancel()
+		snap := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
+		if snap.TS != time.Now().UnixMilli() || snap.Host.CPU.Total != 12.5 {
+			t.Errorf("snapshot payload %+v", snap)
+		}
+		if snap.Maintenance == nil || snap.Maintenance.Updates != 1 || snap.Services == nil || snap.Security == nil {
+			t.Errorf("sections missing: maintenance=%+v services=%+v security=%+v", snap.Maintenance, snap.Services, snap.Security)
+		}
+		if len(snap.Containers) != 2 || snap.Containers[0].CPUPct != 5 || snap.Containers[0].MemBytes != 1000 || snap.Containers[1].CPUPct != 0 {
+			t.Errorf("containers %+v", snap.Containers)
+		}
+		if f.per.count() != 1 || f.sys.get(&f.sys.maintenance) != 1 {
+			t.Errorf("periodic=%d maintenance=%d at start", f.per.count(), f.sys.get(&f.sys.maintenance))
+		}
 
-	f.clock.Advance(30 * time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
-	f.clock.Advance(30 * time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 3 })
-	if f.sys.get(&f.sys.maintenance) != 1 || f.docker.get(&f.docker.lists) != 3 || f.sys.get(&f.sys.services) != 3 {
-		t.Errorf("maintenance=%d lists=%d services=%d after two ticks", f.sys.get(&f.sys.maintenance), f.docker.get(&f.docker.lists), f.sys.get(&f.sys.services))
-	}
-	if f.rec.count(protocol.TypeStream) != 0 {
-		t.Error("stream without subscription")
-	}
+		time.Sleep(30 * time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
+		time.Sleep(30 * time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 3 })
+		if f.sys.get(&f.sys.maintenance) != 1 || f.docker.get(&f.docker.lists) != 3 || f.sys.get(&f.sys.services) != 3 {
+			t.Errorf("maintenance=%d lists=%d services=%d after two ticks", f.sys.get(&f.sys.maintenance), f.docker.get(&f.docker.lists), f.sys.get(&f.sys.services))
+		}
+		if f.rec.count(protocol.TypeStream) != 0 {
+			t.Error("stream without subscription")
+		}
 
-	// The maintenance tick at 10 min refreshes the cache and the periodic.
-	f.clock.Advance(9 * time.Minute)
-	waitFor(t, func() bool { return f.sys.get(&f.sys.maintenance) == 2 && f.per.count() == 2 })
-	f.clock.Advance(30 * time.Second)
-	waitFor(t, func() bool {
-		s, _ := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
-		return s != nil && s.Maintenance != nil && s.Maintenance.Updates == 2
+		// The maintenance tick at 10 min refreshes the cache and the periodic.
+		time.Sleep(9 * time.Minute)
+		settle(t, func() bool { return f.sys.get(&f.sys.maintenance) == 2 && f.per.count() == 2 })
+		time.Sleep(30 * time.Second)
+		settle(t, func() bool {
+			s, _ := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
+			return s != nil && s.Maintenance != nil && s.Maintenance.Updates == 2
+		})
 	})
 }
 
 func TestStreamOnlyWhileSubscribed(t *testing.T) {
-	f := newFixture(t, nil)
-	f.s.Subscribe(time.Second, 10)
-	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 3 })
-	f.clock.Advance(time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 1 })
-	f.clock.Advance(time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 2 })
-	st := f.rec.last(protocol.TypeStream).(*protocol.Stream)
-	if len(st.Processes) != 1 || st.ProcessTotals == nil || st.ProcessTotals.Total != 42 || len(st.Containers) != 2 || st.Containers[0].CPUPct != 5 || st.Host.CPU.Total != 12.5 {
-		t.Errorf("stream payload %+v", st)
-	}
-	f.sys.mu.Lock()
-	topN := append([]int(nil), f.sys.topN...)
-	f.sys.mu.Unlock()
-	if len(topN) != 2 || topN[0] != 10 {
-		t.Errorf("topN %v", topN)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFixture(t, nil)
+		defer f.cancel()
+		f.s.Subscribe(time.Second, 10)
+		synctest.Wait()
+		time.Sleep(time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeStream) == 1 })
+		time.Sleep(time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeStream) == 2 })
+		st := f.rec.last(protocol.TypeStream).(*protocol.Stream)
+		if len(st.Processes) != 1 || st.ProcessTotals == nil || st.ProcessTotals.Total != 42 || len(st.Containers) != 2 || st.Containers[0].CPUPct != 5 || st.Host.CPU.Total != 12.5 {
+			t.Errorf("stream payload %+v", st)
+		}
+		f.sys.mu.Lock()
+		topN := append([]int(nil), f.sys.topN...)
+		f.sys.mu.Unlock()
+		if len(topN) != 2 || topN[0] != 10 {
+			t.Errorf("topN %v", topN)
+		}
 
-	f.s.Unsubscribe()
-	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 2 })
-	f.clock.Advance(time.Second)
-	f.clock.Advance(time.Second)
-	time.Sleep(20 * time.Millisecond)
-	if f.rec.count(protocol.TypeStream) != 2 {
-		t.Errorf("stream continued after unsubscribe: %d", f.rec.count(protocol.TypeStream))
-	}
+		f.s.Unsubscribe()
+		synctest.Wait()
+		time.Sleep(time.Second)
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if f.rec.count(protocol.TypeStream) != 2 {
+			t.Errorf("stream continued after unsubscribe: %d", f.rec.count(protocol.TypeStream))
+		}
 
-	// Re-subscribe without topProcs uses the default 40.
-	f.s.Subscribe(5*time.Second, 0)
-	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 3 })
-	f.clock.Advance(5 * time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 3 })
-	f.sys.mu.Lock()
-	lastTop := f.sys.topN[len(f.sys.topN)-1]
-	f.sys.mu.Unlock()
-	if lastTop != 40 {
-		t.Errorf("default topProcs = %d", lastTop)
-	}
+		// Re-subscribe without topProcs uses the default 40.
+		f.s.Subscribe(5*time.Second, 0)
+		synctest.Wait()
+		time.Sleep(5 * time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeStream) == 3 })
+		f.sys.mu.Lock()
+		lastTop := f.sys.topN[len(f.sys.topN)-1]
+		f.sys.mu.Unlock()
+		if lastTop != 40 {
+			t.Errorf("default topProcs = %d", lastTop)
+		}
+	})
 }
 
 func TestMeasurementReusedWhenSnapshotAndStreamCoincide(t *testing.T) {
-	f := newFixture(t, nil)
-	f.s.Subscribe(time.Second, 40)
-	waitFor(t, func() bool { n, _ := f.clock.counts(); return n == 3 })
-	f.clock.Advance(time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeStream) == 1 })
-	hostCalls := f.sys.get(&f.sys.hostCalls)
-	// A snapshot at the same instant reuses the stream's reading.
-	snap := f.s.Snapshot(context.Background())
-	if f.sys.get(&f.sys.hostCalls) != hostCalls || snap.Containers[0].CPUPct != 5 {
-		t.Errorf("host calls %d → %d; snapshot should reuse the measurement", hostCalls, f.sys.get(&f.sys.hostCalls))
-	}
-	// Half a second later (stream interval 1 s → window 500 ms) it measures again.
-	f.clock.Advance(500 * time.Millisecond)
-	f.s.Snapshot(context.Background())
-	if f.sys.get(&f.sys.hostCalls) != hostCalls+1 {
-		t.Errorf("host calls %d, want %d", f.sys.get(&f.sys.hostCalls), hostCalls+1)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFixture(t, nil)
+		defer f.cancel()
+		f.s.Subscribe(time.Second, 40)
+		synctest.Wait()
+		time.Sleep(time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeStream) == 1 })
+		hostCalls := f.sys.get(&f.sys.hostCalls)
+		// A snapshot at the same instant reuses the stream's reading.
+		snap := f.s.Snapshot(context.Background())
+		if f.sys.get(&f.sys.hostCalls) != hostCalls || snap.Containers[0].CPUPct != 5 {
+			t.Errorf("host calls %d → %d; snapshot should reuse the measurement", hostCalls, f.sys.get(&f.sys.hostCalls))
+		}
+		// Half a second later (stream interval 1 s → window 500 ms) it measures again.
+		time.Sleep(500 * time.Millisecond)
+		f.s.Snapshot(context.Background())
+		if f.sys.get(&f.sys.hostCalls) != hostCalls+1 {
+			t.Errorf("host calls %d, want %d", f.sys.get(&f.sys.hostCalls), hostCalls+1)
+		}
+	})
 }
 
 func TestCollectorErrorsAreRateLimitedAndSectionsOmitted(t *testing.T) {
-	f := newFixture(t, func(c *Config) { c.System.(*fakeSystem).failServices = true; c.System.(*fakeSystem).failHost = true })
-	snap := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
-	if snap.Services != nil || snap.Security == nil || snap.Host.CPU.Total != 12.5 {
-		t.Errorf("services should be omitted, the rest kept: %+v", snap)
-	}
-	if f.logs.count() != 2 {
-		t.Errorf("%d warnings after the first snapshot, want 2 (host, services)", f.logs.count())
-	}
-	f.clock.Advance(30 * time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
-	f.clock.Advance(30 * time.Second)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 3 })
-	if f.logs.count() != 2 {
-		t.Errorf("%d warnings after three snapshots, want still 2", f.logs.count())
-	}
-	f.clock.Advance(time.Hour)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) >= 4 })
-	waitFor(t, func() bool { return f.logs.count() == 4 })
+	synctest.Test(t, func(t *testing.T) {
+		f := newFixture(t, func(c *Config) { c.System.(*fakeSystem).failServices = true; c.System.(*fakeSystem).failHost = true })
+		defer f.cancel()
+		snap := f.rec.last(protocol.TypeSnapshot).(*protocol.Snapshot)
+		if snap.Services != nil || snap.Security == nil || snap.Host.CPU.Total != 12.5 {
+			t.Errorf("services should be omitted, the rest kept: %+v", snap)
+		}
+		if f.logs.count() != 2 {
+			t.Errorf("%d warnings after the first snapshot, want 2 (host, services)", f.logs.count())
+		}
+		time.Sleep(30 * time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
+		time.Sleep(30 * time.Second)
+		settle(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 3 })
+		if f.logs.count() != 2 {
+			t.Errorf("%d warnings after three snapshots, want still 2", f.logs.count())
+		}
+		time.Sleep(time.Hour)
+		settle(t, func() bool { return f.rec.count(protocol.TypeSnapshot) >= 4 })
+		settle(t, func() bool { return f.logs.count() == 4 })
+	})
 }
 
 func TestDockerEventDebounce(t *testing.T) {
-	f := newFixture(t, nil)
-	if f.docker.get(&f.docker.lists) != 1 {
-		t.Fatalf("lists = %d", f.docker.get(&f.docker.lists))
-	}
-	// settled waits until the run loop has consumed the pending events (each
-	// one creates a timer) and returns the number of timers so far.
-	settled := func(min int) int {
-		t.Helper()
-		waitFor(t, func() bool { _, timers := f.clock.counts(); return timers >= min })
-		time.Sleep(20 * time.Millisecond)
-		_, timers := f.clock.counts()
-		return timers
-	}
-	f.s.DockerChanged()
-	f.s.DockerChanged()
-	f.s.DockerChanged()
-	n := settled(1)
-	f.clock.Advance(time.Second)
-	time.Sleep(20 * time.Millisecond)
-	if f.rec.count(protocol.TypeSnapshot) != 1 {
-		t.Errorf("snapshot before the debounce elapsed")
-	}
-	// Another event restarts the debounce: due 2 s from now, not 1 s.
-	f.s.DockerChanged()
-	settled(n + 1)
-	f.clock.Advance(1500 * time.Millisecond)
-	time.Sleep(20 * time.Millisecond)
-	if f.rec.count(protocol.TypeSnapshot) != 1 {
-		t.Errorf("snapshot before the restarted debounce elapsed")
-	}
-	f.clock.Advance(500 * time.Millisecond)
-	waitFor(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
-	if f.docker.get(&f.docker.lists) != 2 {
-		t.Errorf("lists = %d after the event snapshot", f.docker.get(&f.docker.lists))
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFixture(t, nil)
+		defer f.cancel()
+		if f.docker.get(&f.docker.lists) != 1 {
+			t.Fatalf("lists = %d", f.docker.get(&f.docker.lists))
+		}
+		f.s.DockerChanged()
+		f.s.DockerChanged()
+		f.s.DockerChanged()
+		synctest.Wait()
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if f.rec.count(protocol.TypeSnapshot) != 1 {
+			t.Errorf("snapshot before the debounce elapsed")
+		}
+		// Another event restarts the debounce: due 2 s from now, not 1 s.
+		f.s.DockerChanged()
+		synctest.Wait()
+		time.Sleep(1500 * time.Millisecond)
+		synctest.Wait()
+		if f.rec.count(protocol.TypeSnapshot) != 1 {
+			t.Errorf("snapshot before the restarted debounce elapsed")
+		}
+		time.Sleep(500 * time.Millisecond)
+		settle(t, func() bool { return f.rec.count(protocol.TypeSnapshot) == 2 })
+		if f.docker.get(&f.docker.lists) != 2 {
+			t.Errorf("lists = %d after the event snapshot", f.docker.get(&f.docker.lists))
+		}
+	})
 }
 
 func TestMaintenanceCacheSurvivesReconnect(t *testing.T) {
-	clock := newFakeClock()
-	sys := &fakeSystem{}
-	cache := NewMaintenanceCache(sys, clock.Now)
-	if cache.Value() != nil || !cache.RefreshedAt().IsZero() {
-		t.Fatal("empty cache should have no value")
-	}
-	if err := cache.Refresh(context.Background()); err != nil || cache.Value().Updates != 1 {
-		t.Fatalf("refresh: %v %+v", err, cache.Value())
-	}
-	// A new connection one minute later does not re-run the check.
-	clock.Advance(time.Minute)
-	rec := &recorder{}
-	s := New(Config{System: sys, Maintenance: cache, Sink: rec, Clock: clock})
-	ctx, cancel := context.WithCancel(context.Background())
-	go s.Run(ctx)
-	waitFor(t, func() bool { return rec.count(protocol.TypeSnapshot) == 1 })
-	cancel()
-	if sys.get(&sys.maintenance) != 1 {
-		t.Errorf("maintenance re-run on reconnect: %d", sys.get(&sys.maintenance))
-	}
-	// Ten minutes later it is stale and refreshed before the first snapshot.
-	clock.Advance(10 * time.Minute)
-	rec2 := &recorder{}
-	s2 := New(Config{System: sys, Maintenance: cache, Sink: rec2, Clock: clock})
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer cancel2()
-	go s2.Run(ctx2)
-	waitFor(t, func() bool { return rec2.count(protocol.TypeSnapshot) == 1 })
-	if sys.get(&sys.maintenance) != 2 || rec2.last(protocol.TypeSnapshot).(*protocol.Snapshot).Maintenance.Updates != 2 {
-		t.Errorf("stale cache not refreshed: %d", sys.get(&sys.maintenance))
-	}
+	synctest.Test(t, func(t *testing.T) {
+		sys := &fakeSystem{}
+		cache := NewMaintenanceCache(sys, time.Now)
+		if cache.Value() != nil || !cache.RefreshedAt().IsZero() {
+			t.Fatal("empty cache should have no value")
+		}
+		if err := cache.Refresh(context.Background()); err != nil || cache.Value().Updates != 1 {
+			t.Fatalf("refresh: %v %+v", err, cache.Value())
+		}
+		// A new connection one minute later does not re-run the check.
+		time.Sleep(time.Minute)
+		rec := &recorder{}
+		s := New(Config{System: sys, Maintenance: cache, Sink: rec})
+		ctx, cancel := context.WithCancel(context.Background())
+		go s.Run(ctx)
+		settle(t, func() bool { return rec.count(protocol.TypeSnapshot) == 1 })
+		cancel()
+		if sys.get(&sys.maintenance) != 1 {
+			t.Errorf("maintenance re-run on reconnect: %d", sys.get(&sys.maintenance))
+		}
+		// Ten minutes later it is stale and refreshed before the first snapshot.
+		time.Sleep(10 * time.Minute)
+		rec2 := &recorder{}
+		s2 := New(Config{System: sys, Maintenance: cache, Sink: rec2})
+		ctx2, cancel2 := context.WithCancel(context.Background())
+		defer cancel2()
+		go s2.Run(ctx2)
+		settle(t, func() bool { return rec2.count(protocol.TypeSnapshot) == 1 })
+		if sys.get(&sys.maintenance) != 2 || rec2.last(protocol.TypeSnapshot).(*protocol.Snapshot).Maintenance.Updates != 2 {
+			t.Errorf("stale cache not refreshed: %d", sys.get(&sys.maintenance))
+		}
+	})
 }
 
 func TestPrimeAndStreamWithoutContainers(t *testing.T) {
-	clock := newFakeClock()
-	sys := &fakeSystem{}
-	s := New(Config{System: sys, Sink: &recorder{}, Clock: clock})
-	s.Prime(context.Background())
-	clock.Advance(time.Second)
-	st := s.Stream(context.Background(), 0)
-	if st.Host.CPU.Total != 12.5 || len(st.Containers) != 0 || st.ProcessTotals == nil {
-		t.Errorf("stream %+v", st)
-	}
-	if sys.get(&sys.hostCalls) != 2 {
-		t.Errorf("host calls %d", sys.get(&sys.hostCalls))
-	}
+	synctest.Test(t, func(t *testing.T) {
+		sys := &fakeSystem{}
+		s := New(Config{System: sys, Sink: &recorder{}})
+		s.Prime(context.Background())
+		time.Sleep(time.Second)
+		st := s.Stream(context.Background(), 0)
+		if st.Host.CPU.Total != 12.5 || len(st.Containers) != 0 || st.ProcessTotals == nil {
+			t.Errorf("stream %+v", st)
+		}
+		if sys.get(&sys.hostCalls) != 2 {
+			t.Errorf("host calls %d", sys.get(&sys.hostCalls))
+		}
+	})
 }

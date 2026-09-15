@@ -44,7 +44,6 @@ type Config struct {
 	OnMaintenance       func(ctx context.Context)
 	Sink                Sink
 	Logger              *slog.Logger
-	Clock               Clock
 
 	ErrorLogInterval time.Duration // a failing collector is logged this often, default 1 h
 	CollectTimeout   time.Duration // per collector call, default 10 s
@@ -55,9 +54,8 @@ type Config struct {
 
 // Scheduler runs the tickers for one connection.
 type Scheduler struct {
-	cfg   Config
-	log   *slog.Logger
-	clock Clock
+	cfg Config
+	log *slog.Logger
 
 	mu       sync.Mutex
 	interval time.Duration // stream interval, 0 = unsubscribed
@@ -90,9 +88,6 @@ func New(cfg Config) *Scheduler {
 	if cfg.MaintenanceInterval <= 0 {
 		cfg.MaintenanceInterval = 10 * time.Minute
 	}
-	if cfg.Clock == nil {
-		cfg.Clock = RealClock{}
-	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
@@ -111,7 +106,7 @@ func New(cfg Config) *Scheduler {
 	if cfg.DefaultTopProcs <= 0 {
 		cfg.DefaultTopProcs = 40
 	}
-	return &Scheduler{cfg: cfg, log: cfg.Logger, clock: cfg.Clock, changed: make(chan struct{}, 1), docker: make(chan struct{}, 1), errLog: map[string]time.Time{}}
+	return &Scheduler{cfg: cfg, log: cfg.Logger, changed: make(chan struct{}, 1), docker: make(chan struct{}, 1), errLog: map[string]time.Time{}}
 }
 
 // Subscribe starts (or re-times) the stream ticker.
@@ -155,11 +150,11 @@ func (s *Scheduler) Run(ctx context.Context) {
 	s.refreshStale(ctx)
 	s.sendSnapshot(ctx)
 
-	snap := s.clock.NewTicker(s.cfg.SnapshotInterval)
+	snap := time.NewTicker(s.cfg.SnapshotInterval)
 	defer snap.Stop()
-	maint := s.clock.NewTicker(s.cfg.MaintenanceInterval)
+	maint := time.NewTicker(s.cfg.MaintenanceInterval)
 	defer maint.Stop()
-	var debounce Timer
+	var debounce *time.Timer
 	var debounceC <-chan time.Time
 	defer func() {
 		if debounce != nil {
@@ -170,16 +165,16 @@ func (s *Scheduler) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-snap.C():
+		case <-snap.C:
 			s.sendSnapshot(ctx)
-		case <-maint.C():
+		case <-maint.C:
 			s.maintenance(ctx)
 		case <-s.docker:
 			if debounce != nil {
 				debounce.Stop()
 			}
-			debounce = s.clock.NewTimer(s.cfg.DockerDebounce)
-			debounceC = debounce.C()
+			debounce = time.NewTimer(s.cfg.DockerDebounce)
+			debounceC = debounce.C
 		case <-debounceC:
 			debounce, debounceC = nil, nil
 			s.log.Debug("docker changed; sending snapshot")
@@ -189,7 +184,7 @@ func (s *Scheduler) Run(ctx context.Context) {
 }
 
 func (s *Scheduler) streamLoop(ctx context.Context) {
-	var ticker Ticker
+	var ticker *time.Ticker
 	var tick <-chan time.Time
 	stop := func() {
 		if ticker != nil {
@@ -209,8 +204,8 @@ func (s *Scheduler) streamLoop(ctx context.Context) {
 			stop()
 			if iv > 0 {
 				s.log.Debug("stream subscribed", "interval", iv)
-				ticker = s.clock.NewTicker(iv)
-				tick = ticker.C()
+				ticker = time.NewTicker(iv)
+				tick = ticker.C
 			} else {
 				s.log.Debug("stream unsubscribed")
 			}
@@ -233,7 +228,7 @@ func (s *Scheduler) periodics() []Periodic {
 // refreshStale refreshes periodic data older than the maintenance interval
 // (a reconnect within the interval keeps the cached values).
 func (s *Scheduler) refreshStale(ctx context.Context) {
-	now := s.clock.Now()
+	now := time.Now()
 	for _, p := range s.periodics() {
 		if now.Sub(p.RefreshedAt()) >= s.cfg.MaintenanceInterval {
 			s.refresh(ctx, p)
@@ -271,7 +266,7 @@ func (s *Scheduler) refresh(ctx context.Context, p Periodic) {
 
 // fail logs a collector error at most once per ErrorLogInterval per name.
 func (s *Scheduler) fail(name string, err error) {
-	now := s.clock.Now()
+	now := time.Now()
 	s.errMu.Lock()
 	last, seen := s.errLog[name]
 	if !seen || now.Sub(last) >= s.cfg.ErrorLogInterval {
@@ -293,7 +288,7 @@ func (s *Scheduler) withTimeout(ctx context.Context) (context.Context, context.C
 func (s *Scheduler) measure(ctx context.Context) *measurement {
 	s.measureMu.Lock()
 	defer s.measureMu.Unlock()
-	now := s.clock.Now()
+	now := time.Now()
 	window := s.cfg.ReuseWindow
 	s.mu.Lock()
 	if s.interval > 0 && s.interval/2 < window {
@@ -345,7 +340,7 @@ func (s *Scheduler) refreshContainers(ctx context.Context) {
 func (s *Scheduler) Snapshot(ctx context.Context) *protocol.Snapshot {
 	s.refreshContainers(ctx)
 	m := s.measure(ctx)
-	msg := &protocol.Snapshot{TS: s.clock.Now().UnixMilli(), Host: m.host}
+	msg := &protocol.Snapshot{TS: time.Now().UnixMilli(), Host: m.host}
 
 	s.measureMu.Lock()
 	if len(s.containers) > 0 {
@@ -388,7 +383,7 @@ func (s *Scheduler) Stream(ctx context.Context, topProcs int) *protocol.Stream {
 		topProcs = s.cfg.DefaultTopProcs
 	}
 	m := s.measure(ctx)
-	msg := &protocol.Stream{TS: s.clock.Now().UnixMilli(), Host: m.host, Containers: m.stats}
+	msg := &protocol.Stream{TS: time.Now().UnixMilli(), Host: m.host, Containers: m.stats}
 	cctx, cancel := s.withTimeout(ctx)
 	defer cancel()
 	procs, totals, err := s.cfg.System.Processes(cctx, topProcs)

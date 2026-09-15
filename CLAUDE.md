@@ -127,8 +127,8 @@ Ruter i `app.routes.ts` er alle lazy; innloggede sider under `ShellComponent`, a
 Sti-alias: `@core/*`, `@shared/*`, `@i18n/*`, `@features/*`.
 
 **Agent.** `cmd/glimt-agent` (run, check, snapshot, stream, logs, uninstall) og `internal/` (collect fra /proc og
-systemctl, docker via socket/proxy og cgroup v2, journal, logs-manager, ws-klient med backoff og sendekø, sched med
-injiserbar klokke, protocol som speiler skjemaet, health for helse-URL og TCP-sjekker). `--kind auto|server|container`:
+systemctl, docker via socket/proxy og cgroup v2, journal, logs-manager, ws-klient med backoff og sendekø, sched (testet
+med `testing/synctest`), protocol som speiler skjemaet, health for helse-URL og TCP-sjekker). `--kind auto|server|container`:
 containerprofilen (fase 12) leser `GLIMT_TOKEN` fra miljøet, måler cgroup eller summerer prosesser (`approx`), haler filer
 fra `GLIMT_LOG_PATHS` og sender `bye` ved stopp; `Dockerfile.sidecar` er `FROM scratch` med uid 65532. Parsere testes mot fixtures i `internal/collect/testdata/`.
 Dev-containeren (`Dockerfile.dev`) er Ubuntu 24.04 med systemd som PID 1, fordi macOS mangler /proc, journald og cgroup v2.
