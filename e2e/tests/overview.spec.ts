@@ -159,6 +159,9 @@ test.describe('oversikten', () => {
       await expect(page.locator('gp-sidebar .role')).toHaveText('Reader');
     }
     await expectMobileRules(page, testInfo);
+    // «… · shared by dev@…» bryter til to linjer på 390 px avhengig av det levende oppetidstallet; masken skjuler
+    // pikslene, men ikke høyden, så linjen låses til én linje før bildet.
+    await page.addStyleTag({ content: 'gp-server-card .info { white-space: nowrap; overflow: hidden; }' });
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(700);
     await expect(page).toHaveScreenshot('overview-reader.png', { fullPage: true, mask: liveMasks(page) });
