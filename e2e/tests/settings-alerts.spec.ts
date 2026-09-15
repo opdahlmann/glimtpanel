@@ -3,30 +3,17 @@
 // overstyring og «Mute all alerts for this server». Hvert prosjekt får sin egen eier og sin egen falske server, så
 // prosjektene ikke skriver over hverandres innstillinger mens de kjører parallelt.
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { loginViaApi } from '../helpers/auth';
-import { enrolFakeAgent, ensureEmptyOwner, forceLang, triggerE2E, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
+import { ownerWithServer } from '../helpers/auth';
+import { triggerE2E } from '../helpers/e2e-api';
 import { expectMobileRules, navMasks } from '../helpers/mobile-rules';
 
 const ruleRow = (page: Page, rule: string) => page.locator(`.rrow[data-rule="${rule}"]`);
-
-/** En fersk eier med én falsk server (den får `svc_failed` når testen ber om det). */
-async function ownerWithServer(page: Page, testInfo: TestInfo, prefix: string): Promise<{ serverId: string; hostname: string; email: string }> {
-  const owner = await ensureEmptyOwner(page, uniqueEmail(prefix, testInfo));
-  await forceLang(page, 'en');
-  const token = await loginViaApi(page, owner);
-  const keyRes = await page.request.post('/api/servers/enrol-key', { headers: { authorization: `Bearer ${token}` }, data: { dockerMode: 'none' } });
-  expect(keyRes.ok()).toBeTruthy();
-  const { key } = (await keyRes.json()) as { key: string };
-  const hostname = uniqueHostname(testInfo);
-  const serverId = await enrolFakeAgent(page, key, hostname);
-  return { serverId, hostname, email: owner.email };
-}
 
 test.describe('innstillinger › varsler', () => {
   test('skjerm 10: terskler, kanaler og oppsummering; Save kun ved endring', async ({ page }, testInfo) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    const { email } = await ownerWithServer(page, testInfo, 'settings');
+    const { owner } = await ownerWithServer(page, testInfo, 'settings');
     await page.goto('/settings/alerts');
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await expect(page.locator('gp-segment [role="radio"]')).toHaveText(['EN', 'NO', 'Account', 'Alerts', 'Servers', 'Access', 'Subscription', 'Data']);
@@ -44,7 +31,7 @@ test.describe('innstillinger › varsler', () => {
     // Kanaler: push-enheter, e-post med «alltid på», webhook-felt, hemmelighet skjult, oppsummering 08:00.
     await expect(page.getByTestId('push-devices')).toBeVisible();
     await expect(page.getByText('Always on for server down and disk full')).toBeVisible();
-    await expect(page.getByTestId('email-line')).toContainText(email);
+    await expect(page.getByTestId('email-line')).toContainText(owner.email);
     await expect(page.getByTestId('webhook-secret')).toHaveText('••••••••••••');
     await page.getByRole('button', { name: 'Show' }).click();
     await expect(page.getByTestId('webhook-secret')).toHaveText(/^whs_[0-9a-f]{48}$/);

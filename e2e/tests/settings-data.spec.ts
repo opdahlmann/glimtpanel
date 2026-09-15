@@ -1,20 +1,14 @@
 // Innstillinger › Abonnement og Data (IMPLEMENTERINGSPLAN steg 8.5–8.7, skjerm 13) i tre prosjekter: det grønne
 // beta-kortet med tre chips, «What it would cost today» og nedlasting av eksporten som JSON-fil.
 import { test, expect } from '@playwright/test';
-import { loginViaApi } from '../helpers/auth';
-import { enrolFakeAgent, ensureEmptyOwner, forceLang, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
+import { ownerWithServer } from '../helpers/auth';
 import { expectMobileRules, navMasks } from '../helpers/mobile-rules';
 
 test.describe('innstillinger › abonnement og data', () => {
   test('skjerm 13: beta-kortet, prisen i dag og eksport som fil', async ({ page }, testInfo) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    const owner = await ensureEmptyOwner(page, uniqueEmail('sub', testInfo));
-    await forceLang(page, 'en');
-    const token = await loginViaApi(page, owner);
-    const keyRes = await page.request.post('/api/servers/enrol-key', { headers: { authorization: `Bearer ${token}` }, data: { dockerMode: 'none' } });
-    const hostname = uniqueHostname(testInfo);
-    await enrolFakeAgent(page, ((await keyRes.json()) as { key: string }).key, hostname);
+    const { hostname, token, owner } = await ownerWithServer(page, testInfo, 'sub');
 
     await page.goto('/settings/subscription');
     await expect(page.getByTestId('beta-card')).toContainText('Free in beta');

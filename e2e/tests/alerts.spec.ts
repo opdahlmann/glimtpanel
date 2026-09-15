@@ -2,8 +2,8 @@
 // varsler) i tre prosjekter, badgen i navigasjonen, og ende til ende: en server som forsvinner gir «Server down» i
 // listen uten omlasting. Radene lever (varsler utløses etter hvert), så listen får fast høyde og maskeres i skjermbildet.
 import { test, expect, type Page } from '@playwright/test';
-import { loginViaApi } from '../helpers/auth';
-import { enrolFakeAgent, ensureEmptyOwner, forceLang, triggerE2E, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
+import { loginViaApi, ownerWithServer } from '../helpers/auth';
+import { ensureEmptyOwner, forceLang, triggerE2E } from '../helpers/e2e-api';
 import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
 // Fase 12: «Node down» og den åttende regelen «Health check failing».
@@ -103,14 +103,7 @@ test.describe('varselsiden', () => {
   });
 
   test('ende til ende: en server som forsvinner gir «Server down» i listen og badgen uten omlasting', async ({ page }, testInfo) => {
-    const owner = await ensureEmptyOwner(page, uniqueEmail('down', testInfo));
-    await forceLang(page, 'en');
-    const token = await loginViaApi(page, owner);
-    const keyRes = await page.request.post('/api/servers/enrol-key', { headers: { authorization: `Bearer ${token}` }, data: { dockerMode: 'none' } });
-    expect(keyRes.ok()).toBeTruthy();
-    const { key } = (await keyRes.json()) as { key: string };
-    const hostname = uniqueHostname(testInfo);
-    const serverId = await enrolFakeAgent(page, key, hostname);
+    const { serverId, hostname } = await ownerWithServer(page, testInfo, 'down');
 
     await page.goto('/alerts');
     await expect(page.getByTestId('no-active')).toBeVisible();

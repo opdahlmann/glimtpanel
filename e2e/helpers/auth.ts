@@ -1,6 +1,6 @@
 // Innlogging i e2e. Dev-brukeren seedes av huben (GLIMT_DEV_USER_EMAIL/PASSWORD, satt i playwright.config.ts).
-import { expect, type Page } from '@playwright/test';
-import { ensureReader } from './e2e-api';
+import { expect, type Page, type TestInfo } from '@playwright/test';
+import { type E2eUser, enrolFakeAgent, ensureEmptyOwner, ensureReader, forceLang, uniqueEmail, uniqueHostname } from './e2e-api';
 
 export const DEV_USER = {
   email: process.env.GLIMT_DEV_USER_EMAIL ?? 'dev@glimtpanel.local',
@@ -61,6 +61,21 @@ export async function loginAs(page: Page, role: 'owner' | 'reader' | 'demo'): Pr
   const user = role === 'owner' ? DEV_USER : await ensureReader(page);
   await loginViaApi(page, user);
   return user;
+}
+
+/**
+ * En fersk eier med én falsk server (steg 11.1): konto uten servere → innlogget → engangsnøkkel → en falsk agent bruker
+ * den. `token` er tilgangstokenet for `page.request` mot eier-endepunkter, `owner` kontoen (for en ny innlogging).
+ */
+export async function ownerWithServer(page: Page, testInfo: TestInfo, prefix: string): Promise<{ serverId: string; hostname: string; owner: E2eUser; token: string }> {
+  const owner = await ensureEmptyOwner(page, uniqueEmail(prefix, testInfo));
+  await forceLang(page, 'en');
+  const token = await loginViaApi(page, owner);
+  const keyRes = await page.request.post('/api/servers/enrol-key', { headers: { authorization: `Bearer ${token}` }, data: { dockerMode: 'none' } });
+  expect(keyRes.ok(), `enrol-key: ${keyRes.status()}`).toBeTruthy();
+  const { key } = (await keyRes.json()) as { key: string };
+  const hostname = uniqueHostname(testInfo);
+  return { serverId: await enrolFakeAgent(page, key, hostname), hostname, owner, token };
 }
 
 /** Innlogget og på oversikten (venter på skallet). */

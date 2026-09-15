@@ -3,21 +3,16 @@
 // uten eierknapper, og får 403 fra huben på eierhandlinger; «Remove access» tar den bort igjen. Ugyldig akseptlenke
 // viser en forklaring.
 import { test, expect } from '@playwright/test';
-import { loginViaApi } from '../helpers/auth';
-import { enrolFakeAgent, ensureEmptyOwner, forceLang, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
+import { loginViaApi, ownerWithServer } from '../helpers/auth';
+import { ensureEmptyOwner, forceLang, uniqueEmail } from '../helpers/e2e-api';
 import { expectMobileRules, navMasks } from '../helpers/mobile-rules';
 
 test.describe('innstillinger › tilganger', () => {
   test('skjerm 12 og 18: inviter en leser, leseren ser serveren uten eierknapper, fjern tilgangen', async ({ page, browser }, testInfo) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    const owner = await ensureEmptyOwner(page, uniqueEmail('inviter', testInfo));
     const reader = await ensureEmptyOwner(page, uniqueEmail('invitee', testInfo));
-    await forceLang(page, 'en');
-    const token = await loginViaApi(page, owner);
-    const keyRes = await page.request.post('/api/servers/enrol-key', { headers: { authorization: `Bearer ${token}` }, data: { dockerMode: 'none' } });
-    const hostname = uniqueHostname(testInfo);
-    const serverId = await enrolFakeAgent(page, ((await keyRes.json()) as { key: string }).key, hostname);
+    const { serverId, hostname, token, owner } = await ownerWithServer(page, testInfo, 'inviter');
 
     await page.goto('/settings/access');
     await expect(page.getByTestId('invite-card')).toBeVisible();

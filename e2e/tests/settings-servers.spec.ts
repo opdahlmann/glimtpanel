@@ -2,19 +2,13 @@
 // begge nodetypene, tagger i rad-dialog, «Rotate key» (token én gang for containernoder) og «Remove» med
 // avinstalleringskommando eller compose-hint. Hver test får sin egen eier med én server og én containernode.
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { loginViaApi } from '../helpers/auth';
-import { connectFakeContainer, enrolFakeAgent, ensureEmptyOwner, forceLang, uniqueEmail, uniqueHostname } from '../helpers/e2e-api';
+import { ownerWithServer } from '../helpers/auth';
+import { connectFakeContainer } from '../helpers/e2e-api';
 import { expectMobileRules, isMobileProject, navMasks } from '../helpers/mobile-rules';
 
 async function ownerWithNodes(page: Page, testInfo: TestInfo): Promise<{ hostname: string; nodeName: string }> {
-  const owner = await ensureEmptyOwner(page, uniqueEmail('srvset', testInfo));
-  await forceLang(page, 'en');
-  const token = await loginViaApi(page, owner);
+  const { hostname, token } = await ownerWithServer(page, testInfo, 'srvset');
   const headers = { authorization: `Bearer ${token}` };
-  const keyRes = await page.request.post('/api/servers/enrol-key', { headers, data: { dockerMode: 'none' } });
-  const { key } = (await keyRes.json()) as { key: string };
-  const hostname = uniqueHostname(testInfo);
-  await enrolFakeAgent(page, key, hostname);
   const nodeName = `node-${testInfo.project.name.replace(/[^a-z0-9]+/g, '-')}`;
   const created = await page.request.post('/api/servers', { headers, data: { kind: 'container', name: nodeName } });
   expect(created.ok()).toBeTruthy();
