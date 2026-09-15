@@ -47,7 +47,8 @@ Innlogging trenger MongoDB (dev-brukeren `dev@glimtpanel.local` / `GlimtDev-2026
 
 Testene i `tests/auth.spec.ts` (innlogging, sesjon over omlasting, utlogging, `/login?next=`, språkbytte) logger inn
 gjennom skjemaet eller gjennom `helpers/auth.ts` (`loginViaApi` setter cookien i nettleserkonteksten). Skjermbildet
-`login.png` sammenlignes med `tests/auth.spec.ts-snapshots/` (`--update-snapshots` etter designendringer).
+`login.png` sammenlignes med `tests/auth.spec.ts-snapshots/` (`--update-snapshots` etter designendringer). Snapshotene
+er tatt på macOS (`-darwin.png`); i CI (`CI=1`, Linux) hoppes alle skjermbildesammenligninger over (`ignoreSnapshots`).
 
 ## Fase 4: oversikten og legg til server
 

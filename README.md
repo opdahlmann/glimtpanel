@@ -158,7 +158,7 @@ containernoden `sidecar-dev` på dev-kontoen via `GLIMT_DEV_CONTAINER_TOKEN`).
 | `node scripts/loadtest/run.mjs` | Lasttest: 100 falske agenter + 10 nettlesere, måler huben |
 
 CI (`.github/workflows/ci.yml`): lint, kontrakt, unit-tester, `npm audit`/`dotnet list package --vulnerable`/
-`govulncheck`, Docker-imagene, hele e2e-suiten mot bygget hub og web, og agentutgivelse (binærer, `SHA256SUMS` og
+`govulncheck`, Docker-imagene, hele e2e-suiten mot bygget hub og web (uten skjermbildesammenligning, snapshotene er fra macOS), og agentutgivelse (binærer, `SHA256SUMS` og
 sidecar-image til ghcr.io) ved tag `agent/v*`. `nightly.yml` kjører skjerm 4, 5 og 7 mot den ekte agenten i
 Ubuntu-containeren.
 

@@ -42,6 +42,9 @@ export default defineConfig({
   reporter: process.env.CI ? [['html', { open: 'never' }], ['github']] : [['html', { open: 'never' }], ['list']],
   timeout: 30_000,
   expect: { timeout: 10_000, toHaveScreenshot: { maxDiffPixelRatio: 0.01 } },
+  // Skjermbildene i tests/*-snapshots er tatt på macOS (-darwin.png); Linux-runneren i CI har ingen og tegner fonter
+  // annerledes, så CI sjekker atferd, ikke piksler. ponytail: egne -linux-snapshots om CI skal fange designavvik.
+  ignoreSnapshots: !!process.env.CI,
   use: { baseURL, trace: 'on-first-retry', screenshot: 'only-on-failure' },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
