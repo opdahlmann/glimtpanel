@@ -1,22 +1,18 @@
 # Glimtpanel
 
-## Utviklingsbrukere i GlimtpanelDev
-
-Kontoer som er opprettet i utviklingsdatabasen `GlimtpanelDev`. Passordene gjelder kun denne databasen. Tabellen ryddes av eier før beta.
-
-| E-post | Passord | Rolle | Merknad |
-|---|---|---|---|
-| dev@glimtpanel.local | GlimtDev-2026! | eier | Seedes automatisk av huben når `GLIMT_ENV=development` (fra `GLIMT_DEV_USER_*` i `.env`) |
-
----
-
-# Glimtpanel
-
 Ett nettleservindu som viser hva alle Ubuntu-serverne dine gjør akkurat nå. En liten agent på hver server (og i hver
 container du vil følge), ett dashboard for alle: CPU, minne, disk, nettverk, prosesser, containere, tjenester,
 oppdateringer, sikkerhet og logger, live hvert sekund, med varsler på telefonen når noe går galt. Agenten kan bare lese.
 
 ![Oversikten i 1440 og 390 px](docs/overview.png)
+
+## Utviklingsbrukere i GlimtpanelDev
+
+Kontoer i utviklingsdatabasen `GlimtpanelDev`. Passordene gjelder kun der. Tabellen ryddes av eier før beta.
+
+| E-post | Passord | Rolle | Merknad |
+|---|---|---|---|
+| dev@glimtpanel.local | GlimtDev-2026! | eier | Seedes av huben når `GLIMT_ENV=development` (`GLIMT_DEV_USER_*` i `.env`) |
 
 ## Legg til en server
 
@@ -34,8 +30,25 @@ syscall-filter) og starter den. Serveren står i dashbordet innen 30 sekunder. C
 
 ### Overvåke en container
 
-En container (sidecar i Compose, eller binæren i ditt eget image) legges til med «Add container» i dashbordet, som gir et
-token og denne snutten:
+«Add container» i dashbordet gir et token (`agt_…`). Agenten kan ligge i appens eget image eller kjøre som sidecar.
+
+**Binær i eget image** (anbefalt; virker også på Cloud Run, Fargate, Railway, Render). Agenten deler cgroup med appen
+og får ekte CPU- og minnetall. Krever `/bin/sh` i imaget:
+
+```Dockerfile
+COPY --from=ghcr.io/opdahlmann/glimt-agent:latest /glimt-agent /usr/local/bin/glimt-agent
+ENV GLIMT_HUB=wss://api.glimtpanel.com/agent/ws GLIMT_NODE_NAME=api-1
+ENTRYPOINT ["/bin/sh", "-c", "glimt-agent run & exec \"$0\" \"$@\""]
+CMD ["node", "server.js"]        # appens egen startkommando, f.eks. ["dotnet", "Api.dll"] eller ["nginx", "-g", "daemon off;"]
+```
+
+`CMD` er kommandoen imaget startet med fra før; `ENTRYPOINT` starter agenten i bakgrunnen og kjører deretter `CMD`
+som PID 1 via `exec`, så appen oppfører seg som før og agenten dør med containeren. Har imaget allerede en
+`ENTRYPOINT`, sett den inn som `CMD` i stedet. `GLIMT_TOKEN` settes som hemmelighet ved kjøring, ikke i imaget.
+Noden vises i dashbordet med navnet fra `GLIMT_NODE_NAME`, og kommandoen dukker opp i prosesslisten.
+
+**Sidecar i Compose.** Appimaget røres ikke. Med Dockers standard ser sidecaren bare sin egen cgroup og summerer
+prosesser (`approx`); legg `cgroup: host` på sidecaren for ekte tall.
 
 ```yaml
 services:
@@ -52,9 +65,10 @@ services:
       GLIMT_NODE_NAME: api-1
 ```
 
-Se `apps/glimt-agent/README.md` («Containernoder») for valgfrie variabler og hva agenten ser inne i en container.
-Noder kan samles i personlige **grupper** (⋯ på et kort → «Add to group…»); gruppevisningen viser hver gruppe som ett
-kort med summene til medlemmene. `/demo` viser hele dashbordet uten innlogging, med falske servere.
+Stdout-logger krever en vertsagent på maskinen; ellers pekes `GLIMT_LOG_PATHS` på appens loggfiler. Valgfrie variabler
+(`GLIMT_HEALTH_URL`, `GLIMT_CHECKS`, `GLIMT_LOG_PATHS`) og hva agenten ser inne i en container: `apps/glimt-agent/README.md`
+(«Containernoder»). Noder kan samles i personlige **grupper** (⋯ på et kort → «Add to group…»); gruppevisningen viser
+hver gruppe som ett kort med summene til medlemmene. `/demo` viser hele dashbordet uten innlogging, med falske servere.
 
 ## Målte tall
 
@@ -63,7 +77,7 @@ kort med summene til medlemmene. `/demo` viser hele dashbordet uten innlogging, 
 | Agent i hvile, tilkoblet, `snapshot` hvert 30. s | 15 MB RSS, 0,08 % av én kjerne | `apps/glimt-agent/README.md` («Målt ressursbruk») |
 | Agent, oppstart (første snapshot, vedlikehold, journal-tellere) | ≈ 1 s CPU | samme |
 | Sidecar-image (`ghcr.io/opdahlmann/glimt-agent`) | under 15 MB, `FROM scratch` | CI-sjekk `build-images` |
-| Hub med 100 agenter og 10 nettlesere på oversikten (`scripts/loadtest/run.mjs`) | 340 MB RSS på topp, 6,6 % av én kjerne i snitt (topp 23 %), 100/100 agenter tilkoblet hele tiden, 0 droppede `stream`, 3 min | målt 2026-09-15 på Apple Silicon, `dotnet run` |
+| Hub med 100 agenter og 10 nettlesere på oversikten (`scripts/loadtest/run.mjs`) | 340 MB RSS på topp, 6,6 % av én kjerne i snitt (topp 23 %), 100/100 agenter tilkoblet, 0 droppede `stream`, 3 min | målt 2026-09-15 på Apple Silicon, `dotnet run` |
 | Lagring av 100 fulle 24-timersbuffere (288 000 punkter) | under 1 s | `BufferTests.A_hundred_full_buffers_are_saved_in_under_a_second` |
 | Web, første last | 94 kB gzip initial bundle | `apps/glimt-web/README.md` (fase 9) |
 
@@ -98,32 +112,35 @@ Questions: post@kodetank.no.
 
 ## Prosjekter
 
-- **glimt-agent** (`apps/glimt-agent`) – liten Go-binær på serveren som kun leser CPU, minne, disk, nettverk, prosesser, containere og logger, og sender dem til huben.
-- **glimt-hub** (`apps/glimt-hub`) – .NET 10-tjeneste som håndterer innlogging, servere, tilganger, 24-timersminne og varsler, og videresender sanntidsstrømmen til dashbordet.
-- **glimt-web** (`apps/glimt-web`) – Angular-dashbord (PWA) der brukeren ser alle servere, detaljer per server og varsler.
-- **glimt-site** (`apps/glimt-site`) – nettsiden i Astro. Kun et skall i denne omgangen; utvikles senere.
-- **packages/design-tokens** – delte designtokens og Inter-fonter. **packages/protocol** – JSON Schema for agent ↔ hub.
-- **e2e** – Playwright-tester i tre prosjekter (desktop, mobil WebKit, mobil Chromium).
+| Del | Sti | Hva |
+|---|---|---|
+| glimt-agent | `apps/glimt-agent` | Go-binær på serveren. Leser CPU, minne, disk, nettverk, prosesser, containere og logger og sender dem til huben. |
+| glimt-hub | `apps/glimt-hub` | .NET 10-tjeneste: innlogging, servere, tilganger, 24-timersminne, varsler og sanntidsstrømmen til dashbordet. |
+| glimt-web | `apps/glimt-web` | Angular-dashbord (PWA): alle servere, detaljer per server, logger og varsler. |
+| glimt-site | `apps/glimt-site` | Nettsiden i Astro. Kun et skall foreløpig. |
+| protocol | `packages/protocol` | JSON Schema for agent ↔ hub, med eksempler begge sider testes mot. |
+| design-tokens | `packages/design-tokens` | Delte designtokens og Inter-fonter. |
+| e2e | `e2e` | Playwright i tre prosjekter: `desktop-chromium`, `mobile-webkit`, `mobile-chromium`. |
 
 Hver mappe har en README som beskriver hva som er bygget og hvordan det testes.
 
 ## Komme i gang (utvikling)
 
-Krav: Node 22+, .NET SDK 10, Docker Desktop (for agent-containeren). Go trengs ikke, agenten bygges i Docker.
+Krav: Node 22+, .NET SDK 10, Docker Desktop. Go trengs ikke, agenten bygges og testes i Docker.
 
 ```sh
 git config core.hooksPath .githooks   # nekter commit av markdown (utenom README.md og CLAUDE.md) og .env-filer
 npm install
-cp example.env .env                   # standard for Docker-containere lokalt
+cp example.env .env                   # Docker-containere lokalt
 cp example.env .env.dev               # hub og web direkte på maskinen; sett GLIMT_MONGO_URI
 npm run doctor                        # sjekker verktøyene
 npm run dev                           # hub (dotnet watch) + Ubuntu-container med agenten + web (ng serve)
 ```
 
-`npm run dev` åpner dashbordet på http://localhost:4200, huben lytter på http://localhost:5080, og agent-containeren
-`glimt-agent-dev` kobler seg til huben med `GLIMT_DEV_ENROL_KEY`. Flagg: `--no-agent`, `--no-web`, `--no-hub`, `--site`, `--plain-agent`, `--sidecar`
-(starter i tillegg nginx-containeren `glimt-app-dev` med agenten som sidecar `glimt-sidecar-dev`, som containernoden
-`sidecar-dev` på dev-kontoen via `GLIMT_DEV_CONTAINER_TOKEN`).
+Dashbordet svarer på http://localhost:4200 og huben på http://localhost:5080. Agent-containeren `glimt-agent-dev`
+kobler seg til huben med `GLIMT_DEV_ENROL_KEY`. Flagg til `npm run dev`: `--no-agent`, `--no-web`, `--no-hub`, `--site`,
+`--plain-agent` og `--sidecar` (starter i tillegg nginx-containeren `glimt-app-dev` med agenten som sidecar, synlig som
+containernoden `sidecar-dev` på dev-kontoen via `GLIMT_DEV_CONTAINER_TOKEN`).
 
 | Kommando | Gjør |
 |---|---|
@@ -132,24 +149,24 @@ npm run dev                           # hub (dotnet watch) + Ubuntu-container me
 | `npm test` | Unit-tester for web (Vitest), hub (xUnit) og agent (`go test` i Docker) |
 | `npm run test:e2e` | Playwright (`GLIMT_E2E_BUILT=1` for bygget hub og web som i CI) |
 | `npm run lint` | ESLint og `dotnet format` |
+| `npm run build` | Bygger web, hub (Release) og site |
 | `npm run build:images` | Bygger Docker-imagene slik Dokploy gjør det |
 | `npm run dev:agent -- --logs` / `--shell` / `--measure` | Journal, shell eller ressursmåling i agent-containeren |
-| `node scripts/agent-container.mjs --sidecar` / `--sidecar-logs` / `--sidecar-snapshot` / `--sidecar-stop` | Sidecar-containeren (fase 12) mot den lokale huben |
+| `node scripts/agent-container.mjs --sidecar` / `--sidecar-check` / `--sidecar-logs` / `--sidecar-snapshot` / `--sidecar-stop` | Sidecar-containeren mot den lokale huben |
+| `node scripts/live-tail.mjs --dev-token dev@glimtpanel.local` | Følger SignalR-strømmen i terminalen uten web |
 | `node scripts/loadtest/run.mjs` | Lasttest: 100 falske agenter + 10 nettlesere, måler huben |
 
 CI (`.github/workflows/ci.yml`): lint, kontrakt, unit-tester, `npm audit`/`dotnet list package --vulnerable`/
-`govulncheck`, Docker-imagene, hele e2e-suiten mot bygget hub og web, og agentutgivelse ved tag `agent/v*`.
-`nightly.yml` kjører skjerm 4, 5 og 7 mot den ekte agenten i Ubuntu-containeren.
+`govulncheck`, Docker-imagene, hele e2e-suiten mot bygget hub og web, og agentutgivelse (binærer, `SHA256SUMS` og
+sidecar-image til ghcr.io) ved tag `agent/v*`. `nightly.yml` kjører skjerm 4, 5 og 7 mot den ekte agenten i
+Ubuntu-containeren.
 
-## Miljøfiler
+## Miljøfiler og git
 
-Kun `example.env` sjekkes inn. `.env` er standard for Docker-containere lokalt, `.env.dev` overstyrer når hub og web kjører
-direkte på maskinen, `.env.prod` limes inn i Dokploy. Alle nøkler har prefiks `GLIMT_` og er dokumentert i `example.env`.
-
-## Regler for git
-
-- Kun `README.md` og `CLAUDE.md` (instruksjoner til Claude Code) av markdown-filer sjekkes inn. Kun `example.env` av env-filer sjekkes inn. Håndheves av `.githooks/pre-commit`.
-- Måledata lagres aldri i databasen. Agenten har ingen skrivekommandoer.
+- Alle nøkler har prefiks `GLIMT_` og er dokumentert i `example.env`, den eneste env-filen som sjekkes inn. `.env` gjelder
+  Docker-containere lokalt, `.env.dev` overstyrer når hub og web kjører direkte på maskinen, `.env.prod` limes inn i Dokploy.
+- Av markdown-filer sjekkes kun `README.md` og `CLAUDE.md` (instruksjoner til Claude Code) inn. `.githooks/pre-commit`
+  håndhever begge reglene.
 
 ## Lisens
 
